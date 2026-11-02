@@ -72,12 +72,51 @@ public final class CoreRepository {
         return upgraded;
     }
 
-    public synchronized CoreRecord registerHit(long islandIndex, long now, long comboWindowMillis) {
+    public synchronized CoreRecord spendEnergy(long islandIndex, double cost) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null) {
             return null;
         }
-        CoreRecord updated = current.withHit(now, comboWindowMillis);
+        CoreRecord updated = current.spendEnergy(cost);
+        if (updated != null) {
+            cores.put(islandIndex, updated);
+            save();
+        }
+        return updated;
+    }
+
+    public synchronized void restoreEnergy(long islandIndex, double amount) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null || !Double.isFinite(amount) || amount <= 0) {
+            return;
+        }
+        cores.put(islandIndex, new CoreRecord(
+                current.islandIndex(),
+                current.worldId(),
+                current.x(),
+                current.y(),
+                current.z(),
+                current.itemDisplayId(),
+                current.interactionId(),
+                current.textDisplayId(),
+                current.level(),
+                current.energy() + amount,
+                current.hits(),
+                current.lastHitAt()));
+        save();
+    }
+
+    public synchronized CoreRecord registerHit(long islandIndex, long now, long comboWindowMillis) {
+        return registerHit(islandIndex, now, comboWindowMillis, 1.0);
+    }
+
+    public synchronized CoreRecord registerHit(
+            long islandIndex, long now, long comboWindowMillis, double yieldRatio) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null) {
+            return null;
+        }
+        CoreRecord updated = current.withHit(now, comboWindowMillis, yieldRatio);
         cores.put(islandIndex, updated);
         save();
         return updated;

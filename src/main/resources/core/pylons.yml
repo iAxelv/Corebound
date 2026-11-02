@@ -1,0 +1,19 @@
+pylon:
+  item:
+    material: SEA_LANTERN
+    display-name: "&bPilón de Resonancia"
+    lore:
+      - "&7Estructura de extracción pasiva."
+      - "&7Dispara pulsos de energía hacia el Núcleo."
+      - ""
+      - "&eColócalo entre 3 y 12 bloques del Núcleo."
+  display:
+    base-material: SEA_LANTERN
+    material: END_ROD
+    scale: 1.2
+  interval-ticks: 60
+  min-distance: 3.0
+  max-distance: 12.0
+  base-yield-ratio: 0.4
+  purchase-cost: 150.0
+  pulse-sound: "minecraft:block.amethyst_block.chime"

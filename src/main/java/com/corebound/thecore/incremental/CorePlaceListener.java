@@ -22,14 +22,16 @@ import org.bukkit.inventory.EquipmentSlot;
 public final class CorePlaceListener implements Listener {
     private final TheCorePlugin plugin;
     private final CoreService coreService;
+    private final PylonService pylonService;
     private final Set<InteractionAttempt> interactionAttempts = ConcurrentHashMap.newKeySet();
 
     private record InteractionAttempt(UUID playerId, UUID entityId) {
     }
 
-    public CorePlaceListener(TheCorePlugin plugin, CoreService coreService) {
+    public CorePlaceListener(TheCorePlugin plugin, CoreService coreService, PylonService pylonService) {
         this.plugin = plugin;
         this.coreService = coreService;
+        this.pylonService = pylonService;
     }
 
     @EventHandler
@@ -44,25 +46,33 @@ public final class CorePlaceListener implements Listener {
 
     @EventHandler
     public void onEntitiesLoad(EntitiesLoadEvent event) {
-        event.getEntities().forEach(coreService::onEntityLoad);
+        event.getEntities().forEach(entity -> {
+            coreService.onEntityLoad(entity);
+            pylonService.onEntityLoad(entity);
+        });
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onCoreItemUse(PlayerInteractEvent event) {
         if (event.getHand() == EquipmentSlot.OFF_HAND) {
-            if (coreService.isCoreItem(event.getItem())) {
+            if (coreService.isCoreItem(event.getItem()) || pylonService.isPylonItem(event.getItem())) {
                 event.setCancelled(true);
             }
             return;
         }
-        if (!coreService.isCoreItem(event.getItem())) {
+        if (coreService.isCoreItem(event.getItem())) {
+            event.setCancelled(true);
+            if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
+                coreService.placeCore(event.getPlayer(), event.getClickedBlock());
+            }
             return;
         }
-        event.setCancelled(true);
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) {
-            return;
+        if (pylonService.isPylonItem(event.getItem())) {
+            event.setCancelled(true);
+            if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
+                pylonService.place(event.getPlayer(), event.getClickedBlock());
+            }
         }
-        coreService.placeCore(event.getPlayer(), event.getClickedBlock());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -96,6 +106,8 @@ public final class CorePlaceListener implements Listener {
                     coreService.openCoreMenu(player, entity);
                 }
             }
+        } else if (pylonService.isPylonEntity(entity)) {
+            event.setCancelled(true);
         }
     }
 
@@ -111,7 +123,7 @@ public final class CorePlaceListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onCoreEntityDamage(EntityDamageEvent event) {
-        if (coreService.isCoreEntity(event.getEntity())) {
+        if (coreService.isCoreEntity(event.getEntity()) || pylonService.isPylonEntity(event.getEntity())) {
             event.setCancelled(true);
         }
     }

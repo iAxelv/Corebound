@@ -41,6 +41,17 @@ class CoreRecordTest {
     }
 
     @Test
+    void passiveHitAddsConfiguredFractionAndKeepsComboAlive() {
+        CoreRecord core = createCore(1);
+        CoreRecord manualHit = core.withHit(1000, COMBO_WINDOW_MILLIS);
+        CoreRecord passiveHit = manualHit.withHit(2000, COMBO_WINDOW_MILLIS, 0.4);
+
+        assertEquals(1.08, passiveHit.combo(2000, COMBO_WINDOW_MILLIS), 0.0001);
+        assertEquals(1.04 + 0.432, passiveHit.energy(), 0.0001);
+        assertEquals(2, passiveHit.hits());
+    }
+
+    @Test
     void upgradesLevelAndDeductsTheExponentialCost() {
         CoreRecord levelTwoCore = createCore(2, 300.0);
 
@@ -57,6 +68,13 @@ class CoreRecordTest {
         CoreRecord core = createCore(1, 99.99);
 
         assertNull(core.upgrade(core.upgradeCost()));
+    }
+
+    @Test
+    void pylonCapacityGrowsByOnePerCoreLevelAfterUnlock() {
+        assertEquals(0, createCore(1).pylonCapacity());
+        assertEquals(1, createCore(2).pylonCapacity());
+        assertEquals(4, createCore(5).pylonCapacity());
     }
 
     private CoreRecord createCore(int level) {

@@ -10,6 +10,19 @@ items:
       - "&7Energía actual: &6%energy%⚡"
       - "&7Producción base: &a+%base_energy%⚡/golpe"
       - "&7Multiplicador máximo de combo: &bx3.0"
+  pylon:
+    material: SEA_LANTERN
+    slot: 13
+    display-name: "&bForjar Pilón I"
+    lore:
+      - "&7Costo: &6%cost%⚡"
+      - "&7Pilones permitidos: &e%pylons%"
+      - ""
+      - "&eHaz clic para forjar."
+    locked-material: BARRIER
+    locked-name: "&cPilón bloqueado"
+    locked-lore:
+      - "&cRequiere Núcleo Nivel 2."
   upgrade:
     material: NETHER_STAR
     slot: 15

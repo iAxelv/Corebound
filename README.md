@@ -58,8 +58,9 @@ weather and time are refreshed only on island entry or settings changes.
   redstone, mob and spawner controls
 - Island Core with persistent animation, combo-reactive scaling, hit feedback,
   combo actionbar, and an upgrade menu; configured in `plugins/Corebound/core/`.
-  The owner can sneak-right-click to pick it up, preserving its level and
-  stored energy
+  Level 2 unlocks purchasable extraction pylons with persistent, periodic
+  energy pulses. The owner can sneak-right-click the core to pick it up,
+  preserving its level and stored energy.
 - Closed islands deny visits unless the visitor has enabled bypass. Old island
   records remain open by default.
 - Island protection covers the full square island border. Grant `thecore.*` to

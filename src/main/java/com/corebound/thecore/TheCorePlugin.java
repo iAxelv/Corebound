@@ -5,6 +5,9 @@ import com.corebound.thecore.gui.IslandMenuManager;
 import com.corebound.thecore.incremental.CorePlaceListener;
 import com.corebound.thecore.incremental.CoreRepository;
 import com.corebound.thecore.incremental.CoreService;
+import com.corebound.thecore.incremental.CoreMenu;
+import com.corebound.thecore.incremental.PylonRepository;
+import com.corebound.thecore.incremental.PylonService;
 import com.corebound.thecore.island.IslandRepository;
 import com.corebound.thecore.island.IslandSounds;
 import com.corebound.thecore.island.IslandService;
@@ -21,6 +24,7 @@ public final class TheCorePlugin extends JavaPlugin {
     private IslandRepository islandRepository;
     private IslandService islandService;
     private CoreService coreService;
+    private PylonService pylonService;
     private Messages messages;
 
     @Override
@@ -32,6 +36,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("is/is_perms.yml");
         saveResourceIfMissing("core/core.yml");
         saveResourceIfMissing("core/core_menu.yml");
+        saveResourceIfMissing("core/pylons.yml");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");
@@ -63,14 +68,24 @@ public final class TheCorePlugin extends JavaPlugin {
         IslandSounds sounds = new IslandSounds(this);
         islandService = new IslandService(this, islandWorld, islandRepository, messages, sounds);
         try {
+            CoreRepository coreRepository = new CoreRepository(new File(getDataFolder(), "data/cores.yml"), this);
             coreService = new CoreService(
                     this,
                     islandService,
-                    new CoreRepository(new File(getDataFolder(), "data/cores.yml"), this),
+                    coreRepository,
                     messages,
                     new File(getDataFolder(), "core/core.yml"));
+            pylonService = new PylonService(
+                    this,
+                    islandService,
+                    coreService,
+                    coreRepository,
+                    new PylonRepository(new File(getDataFolder(), "data/pylons.yml"), this),
+                    messages,
+                    new File(getDataFolder(), "core/pylons.yml"));
+            coreService.attachPylonService(pylonService);
         } catch (IllegalArgumentException exception) {
-            getLogger().severe("Could not initialize the core module: " + exception.getMessage());
+            getLogger().severe("Could not initialize the core modules: " + exception.getMessage());
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -85,10 +100,12 @@ public final class TheCorePlugin extends JavaPlugin {
         getCommand("is").setTabCompleter(coreCommand);
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
-        getServer().getPluginManager().registerEvents(new CorePlaceListener(this, coreService), this);
+        getServer().getPluginManager().registerEvents(
+                new CorePlaceListener(this, coreService, pylonService), this);
         getServer().getPluginManager().registerEvents(coreService.menuListener(), this);
         getServer().getPluginManager().registerEvents(menus, this);
         coreService.initializeLoadedEntities();
+        pylonService.initializeLoadedEntities();
         getLogger().info("Corebound island foundation enabled.");
     }
 
@@ -106,6 +123,13 @@ public final class TheCorePlugin extends JavaPlugin {
                 coreService.flush();
             } catch (IOException exception) {
                 getLogger().severe("Could not save core data: " + exception.getMessage());
+            }
+            if (pylonService != null) {
+                try {
+                    pylonService.flush();
+                } catch (IOException exception) {
+                    getLogger().severe("Could not save pylon data: " + exception.getMessage());
+                }
             }
         }
     }

@@ -57,7 +57,21 @@ public final class CoreService {
     private final Sound hitSound;
     private final float hitSoundVolume;
     private final Set<UUID> itemDeliveries = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> rotatingDisplays = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, DisplayAnimation> displayAnimations = new ConcurrentHashMap<>();
     private final CoreMenu coreMenu;
+
+    private static final class DisplayAnimation {
+        private float yaw;
+        private float currentScale;
+        private float targetScale;
+        private int scaleTransitionTicks;
+
+        private DisplayAnimation(float scale) {
+            currentScale = scale;
+            targetScale = scale;
+        }
+    }
 
     public CoreService(
             TheCorePlugin plugin,
@@ -109,6 +123,7 @@ public final class CoreService {
         coreEntityKey = new NamespacedKey(plugin, "core_entity");
         islandIndexKey = new NamespacedKey(plugin, "core_island_index");
         coreMenu = new CoreMenu(
+                plugin,
                 messages,
                 this,
                 new File(plugin.getDataFolder(), "core/core_menu.yml"));
@@ -178,6 +193,10 @@ public final class CoreService {
 
     public CoreMenu menuListener() {
         return coreMenu;
+    }
+
+    public void attachPylonService(PylonService pylonService) {
+        coreMenu.attachPylonService(pylonService);
     }
 
     public void openCoreMenu(Player player, org.bukkit.entity.Entity entity) {
@@ -423,6 +442,18 @@ public final class CoreService {
         }, null, delayTicks);
     }
 
+    public CoreRecord addPassiveEnergy(long islandIndex, double yieldRatio, long now) {
+        CoreRecord updated = repository.registerHit(islandIndex, now, comboWindowMillis, yieldRatio);
+        if (updated != null) {
+            updateCoreVisuals(updated, now);
+        }
+        return updated;
+    }
+
+    public void refreshCore(CoreRecord core, long now) {
+        updateCoreVisuals(core, now);
+    }
+
     private void sendHitActionBar(Player player, CoreRecord core, double gainedEnergy, long now) {
         int filledSegments = (int) Math.round(Math.min(core.hits(), 50) / 50.0 * 10);
         String bar = "&a" + "|".repeat(filledSegments)
@@ -478,7 +509,8 @@ public final class CoreService {
             float comboScale = displayScale * (1.0f + (activeHits / 50.0f) * 0.35f);
             org.bukkit.entity.Entity itemEntity = world.getEntity(core.itemDisplayId());
             if (itemEntity instanceof ItemDisplay itemDisplay) {
-                applyDisplayScale(itemDisplay, comboScale, activeHits == 0 ? 5 : 2);
+                startRotation(itemDisplay);
+                setDisplayScale(itemDisplay, comboScale, activeHits == 0 ? 5 : 2);
             }
             org.bukkit.entity.Entity textEntity = world.getEntity(core.textDisplayId());
             if (textEntity instanceof TextDisplay textDisplay) {
@@ -488,15 +520,13 @@ public final class CoreService {
         });
     }
 
-    private void applyDisplayScale(ItemDisplay display, float scale, int interpolationTicks) {
-        Transformation current = display.getTransformation();
-        display.setInterpolationDelay(0);
-        display.setInterpolationDuration(interpolationTicks);
-        display.setTransformation(new Transformation(
-                new Vector3f(current.getTranslation()),
-                new Quaternionf(current.getLeftRotation()),
-                new Vector3f(scale, scale, scale),
-                new Quaternionf(current.getRightRotation())));
+    private void setDisplayScale(ItemDisplay display, float scale, int transitionTicks) {
+        display.getScheduler().run(plugin, task -> {
+            DisplayAnimation animation = displayAnimations.computeIfAbsent(
+                    display.getUniqueId(), ignored -> new DisplayAnimation(display.getTransformation().getScale().x));
+            animation.targetScale = scale;
+            animation.scaleTransitionTicks = transitionTicks;
+        }, null);
     }
 
     private void updateHologram(TextDisplay display, CoreRecord core, long now) {
@@ -540,26 +570,49 @@ public final class CoreService {
     }
 
     private void startRotation(ItemDisplay display) {
-        display.getScheduler().runAtFixedRate(plugin, new java.util.function.Consumer<>() {
-            private int quarterTurn;
-
-            @Override
-            public void accept(io.papermc.paper.threadedregions.scheduler.ScheduledTask task) {
+        UUID displayId = display.getUniqueId();
+        if (!rotatingDisplays.add(displayId)) {
+            return;
+        }
+        display.getScheduler().run(plugin, task -> {
+            Transformation transformation = display.getTransformation();
+            displayAnimations.putIfAbsent(displayId, new DisplayAnimation(transformation.getScale().x));
+            display.getScheduler().runAtFixedRate(plugin, animationTask -> {
                 if (!display.isValid()) {
-                    task.cancel();
+                    animationTask.cancel();
+                    rotatingDisplays.remove(displayId);
+                    displayAnimations.remove(displayId);
                     return;
                 }
+                DisplayAnimation state = displayAnimations.get(displayId);
+                if (state == null) {
+                    animationTask.cancel();
+                    rotatingDisplays.remove(displayId);
+                    return;
+                }
+                if (state.scaleTransitionTicks > 0) {
+                    state.currentScale += (state.targetScale - state.currentScale) / state.scaleTransitionTicks;
+                    state.scaleTransitionTicks--;
+                } else {
+                    state.currentScale = state.targetScale;
+                }
+                state.yaw += (float) (Math.PI / (2.0 * rotationSpeedTicks));
                 Transformation current = display.getTransformation();
-                Quaternionf rotation = new Quaternionf().rotateY((float) Math.toRadians(90 * ++quarterTurn));
                 display.setInterpolationDelay(0);
-                display.setInterpolationDuration(rotationSpeedTicks);
+                display.setInterpolationDuration(1);
                 display.setTransformation(new Transformation(
                         new Vector3f(current.getTranslation()),
                         new Quaternionf(current.getLeftRotation()),
-                        new Vector3f(current.getScale()),
-                        rotation));
-            }
-        }, null, 1L, rotationSpeedTicks);
+                        new Vector3f(state.currentScale, state.currentScale, state.currentScale),
+                        new Quaternionf().rotateY(state.yaw)));
+            }, () -> {
+                rotatingDisplays.remove(displayId);
+                displayAnimations.remove(displayId);
+            }, 1L, 1L);
+        }, () -> {
+            rotatingDisplays.remove(displayId);
+            displayAnimations.remove(displayId);
+        });
     }
 
     private void markCoreEntity(org.bukkit.entity.Entity entity, long islandIndex) {
