@@ -1,0 +1,16 @@
+name: TheCore
+version: '${version}'
+main: com.corebound.thecore.TheCorePlugin
+api-version: '26.2'
+description: Corebound island foundation
+author: Corebound
+depend: [WorldEdit]
+commands:
+  core:
+    description: Create and manage your Corebound island
+    usage: /core <create|home|visit|trust>
+    aliases: [island]
+permissions:
+  thecore.admin:
+    description: Allows administrative access to TheCore
+    default: op
