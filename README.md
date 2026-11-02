@@ -25,13 +25,17 @@ From the project directory, run:
 ```
 
 The `runServer` task downloads and starts Paper 26.2 in the project's `run/`
-directory, installs the plugin, and downloads WorldEdit 7.4.6. If prompted,
-accept the Minecraft EULA in `run/eula.txt` before starting the server.
-WorldEdit is required to load `.schem` files.
+directory, installs the plugin, and downloads FastAsyncWorldEdit (FAWE) 2.16.2.
+If prompted, accept the Minecraft EULA in `run/eula.txt` before starting the
+server. FAWE provides the WorldEdit API and is required to load `.schem` files.
 
-The default structure is `clipboard.schem` in
+The default structure is `default.schem` in
 `run/plugins/TheCore/schematics/`. Minecraft structure `.nbt` files are also
 supported through Paper's built-in `StructureManager`.
+
+Schematic files are loaded and pasted asynchronously through FAWE so large
+creations do not block the server's main tick. Paste duration still depends on
+schematic volume and the server's available CPU and storage performance.
 
 ## Current features
 

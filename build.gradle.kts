@@ -40,7 +40,7 @@ tasks {
     runServer {
         minecraftVersion("26.2")
         downloadPlugins {
-            modrinth("worldedit", "YFnqiUlL")
+            modrinth("fastasyncworldedit", "JOyEqKdC")
         }
     }
 

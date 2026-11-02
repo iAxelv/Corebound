@@ -4,7 +4,7 @@ main: com.corebound.thecore.TheCorePlugin
 api-version: '26.2'
 description: Corebound island foundation
 author: Corebound
-depend: [WorldEdit]
+depend: [FastAsyncWorldEdit]
 commands:
   core:
     description: Create and manage your Corebound island

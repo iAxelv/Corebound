@@ -18,9 +18,13 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -38,6 +42,8 @@ public final class IslandService {
     private final World world;
     private final IslandRepository repository;
     private final Messages messages;
+    private final Set<UUID> pendingOwners = new HashSet<>();
+    private final Set<String> pendingNames = new HashSet<>();
 
     public IslandService(
             TheCorePlugin plugin, World world, IslandRepository repository, Messages messages) {
@@ -52,16 +58,18 @@ public final class IslandService {
             messages.send(player, "invalid-island-name");
             return false;
         }
-        if (repository.byOwner(player.getUniqueId()).isPresent()) {
+        UUID owner = player.getUniqueId();
+        String normalizedName = islandName.toLowerCase(Locale.ROOT);
+        if (repository.byOwner(owner).isPresent() || pendingOwners.contains(owner)) {
             messages.send(player, "already-has-island");
             return false;
         }
-        if (repository.byName(islandName).isPresent()) {
+        if (repository.byName(islandName).isPresent() || pendingNames.contains(normalizedName)) {
             messages.send(player, "island-name-taken");
             return false;
         }
 
-        String schematicName = plugin.getConfig().getString("world.default-schematic", "clipboard.schem");
+        String schematicName = plugin.getConfig().getString("world.default-schematic", "default.schem");
         Path schematicsFolder = new File(plugin.getDataFolder(), "schematics").toPath().toAbsolutePath().normalize();
         Path schematicPath = schematicsFolder.resolve(schematicName).normalize();
         if (!schematicPath.startsWith(schematicsFolder)) {
@@ -82,21 +90,10 @@ public final class IslandService {
             return false;
         }
 
-        Structure structure;
-        Clipboard clipboard = null;
+        Structure structure = null;
         try {
             if (isNbt) {
                 structure = Bukkit.getStructureManager().loadStructure(schematic);
-            } else {
-                ClipboardFormat format = ClipboardFormats.findByFile(schematic);
-                if (format == null) {
-                    messages.send(player, "schematic-format");
-                    return false;
-                }
-                try (ClipboardReader reader = format.getReader(Files.newInputStream(schematic.toPath()))) {
-                    clipboard = reader.read();
-                }
-                structure = null;
             }
         } catch (IOException | IllegalArgumentException exception) {
             plugin.getLogger().severe("Could not load island structure '" + schematic.getName() + "': "
@@ -109,69 +106,133 @@ public final class IslandService {
             messages.send(player, "structure-load-failed");
             return false;
         }
-        if (isSchematic && clipboard == null) {
-            plugin.getLogger().severe("WorldEdit returned no clipboard for " + schematic.getAbsolutePath() + ".");
-            messages.send(player, "structure-load-failed");
-            return false;
-        }
-
+        pendingOwners.add(owner);
+        pendingNames.add(normalizedName);
         long index;
         try {
             index = repository.reserveNextIndex();
         } catch (IOException exception) {
+            releasePending(owner, normalizedName);
             plugin.getLogger().severe("Could not reserve an island grid slot: " + exception.getMessage());
             messages.send(player, "data-save-failed");
             return false;
         }
         IslandCoordinates coordinates = IslandGrid.coordinates(
                 index, plugin.getConfig().getLong("world.distance-between-islands", 3000));
+        if (isSchematic) {
+            try {
+                pasteSchematicAsync(owner, islandName, normalizedName, index, coordinates, schematic);
+            } catch (IllegalArgumentException | IllegalStateException exception) {
+                releasePending(owner, normalizedName);
+                plugin.getLogger().severe("Could not schedule island structure paste: " + exception.getMessage());
+                messages.send(player, "structure-place-failed");
+                return false;
+            }
+            messages.send(player, "island-creating", java.util.Map.of("name", islandName));
+            return true;
+        }
+
         try {
-            if (isNbt) {
-                structure.place(
-                        new Location(world, coordinates.x(), 100, coordinates.z()),
-                        true,
-                        StructureRotation.NONE,
-                        Mirror.NONE,
-                        0,
-                        1.0f,
-                        new Random());
-            } else {
-                try (EditSession editSession = WorldEdit.getInstance()
-                        .newEditSession(BukkitAdapter.adapt(world))) {
+            structure.place(
+                    new Location(world, coordinates.x(), 100, coordinates.z()),
+                    true,
+                    StructureRotation.NONE,
+                    Mirror.NONE,
+                    0,
+                    1.0f,
+                    new Random());
+        } catch (IllegalArgumentException exception) {
+            plugin.getLogger().severe("Could not place island structure '" + schematic.getName() + "': "
+                    + exception.getMessage());
+            messages.send(player, "structure-place-failed");
+            releasePending(owner, normalizedName);
+            return false;
+        }
+        try {
+            return finishCreation(owner, islandName, index, coordinates);
+        } finally {
+            releasePending(owner, normalizedName);
+        }
+    }
+
+    private void pasteSchematicAsync(
+            UUID owner, String islandName, String normalizedName, long index,
+            IslandCoordinates coordinates, File schematic) {
+        com.sk89q.worldedit.world.World editWorld = BukkitAdapter.adapt(world);
+        BlockVector3 target = BlockVector3.at(
+                Math.toIntExact(coordinates.x()), 100, Math.toIntExact(coordinates.z()));
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                ClipboardFormat format = ClipboardFormats.findByFile(schematic);
+                if (format == null) {
+                    throw new IOException("No WorldEdit clipboard format recognized " + schematic.getName() + ".");
+                }
+
+                Clipboard clipboard;
+                try (ClipboardReader reader = format.getReader(Files.newInputStream(schematic.toPath()))) {
+                    clipboard = reader.read();
+                }
+
+                try (EditSession editSession = WorldEdit.getInstance().newEditSession(editWorld)) {
                     Operation operation = new ClipboardHolder(clipboard)
                             .createPaste(editSession)
-                            .to(BlockVector3.at(coordinates.x(), 100, coordinates.z()))
+                            .to(target)
                             .ignoreAirBlocks(false)
                             .build();
                     Operations.complete(operation);
                 }
+
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    try {
+                        finishCreation(owner, islandName, index, coordinates);
+                    } finally {
+                        releasePending(owner, normalizedName);
+                    }
+                });
+            } catch (IOException | WorldEditException | RuntimeException exception) {
+                plugin.getLogger().log(
+                        Level.SEVERE,
+                        "Could not asynchronously paste island structure '" + islandName + "'.",
+                        exception);
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    Player player = Bukkit.getPlayer(owner);
+                    if (player != null) {
+                        messages.send(player, "structure-place-failed");
+                    }
+                    releasePending(owner, normalizedName);
+                });
             }
-        } catch (IllegalArgumentException | WorldEditException exception) {
-            plugin.getLogger().severe("Could not place island structure '" + schematic.getName() + "': "
-                    + exception.getMessage());
-            messages.send(player, "structure-place-failed");
-            return false;
-        }
+        });
+    }
+
+    private boolean finishCreation(UUID owner, String islandName, long index, IslandCoordinates coordinates) {
         IslandData island = new IslandData(
-                player.getUniqueId(),
-                islandName,
-                index,
-                coordinates.x(),
-                coordinates.z(),
-                java.util.Set.of());
+                owner, islandName, index, coordinates.x(), coordinates.z(), java.util.Set.of());
         try {
             repository.add(island);
         } catch (IOException exception) {
             plugin.getLogger().severe("Could not persist island '" + islandName + "': " + exception.getMessage());
-            messages.send(player, "data-save-failed");
+            Player player = Bukkit.getPlayer(owner);
+            if (player != null) {
+                messages.send(player, "data-save-failed");
+            }
             return false;
         }
-        if (teleport(player, island)) {
-            messages.send(player, "island-created", java.util.Map.of("name", islandName));
-        } else {
+        Player player = Bukkit.getPlayer(owner);
+        if (player != null && !teleport(player, island)) {
             messages.send(player, "teleport-failed");
+            return true;
+        }
+        if (player != null) {
+            messages.send(player, "island-created", java.util.Map.of("name", islandName));
         }
         return true;
+    }
+
+    private void releasePending(UUID owner, String normalizedName) {
+        pendingOwners.remove(owner);
+        pendingNames.remove(normalizedName);
     }
 
     public Optional<IslandData> islandAt(Location location) {

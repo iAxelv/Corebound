@@ -2,7 +2,7 @@ world:
   name: "core_void_world"
   distance-between-islands: 3000
   island-radius: 35
-  default-schematic: "clipboard.schem"
+  default-schematic: "default.schem"
 
 protection:
   prevent-fall-damage-on-join: true
