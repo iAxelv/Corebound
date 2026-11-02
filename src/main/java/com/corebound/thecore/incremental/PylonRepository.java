@@ -106,6 +106,11 @@ public final class PylonRepository {
                     yaml.set(path + ".text-display", pylon.textDisplayId().toString());
                 }
                 yaml.set(path + ".tier", pylon.tier());
+                for (Map.Entry<Integer, CellRecord> cell : pylon.equippedCells().entrySet()) {
+                    String cellPath = path + ".cells." + cell.getKey();
+                    yaml.set(cellPath + ".type", cell.getValue().type().name());
+                    yaml.set(cellPath + ".tier", cell.getValue().tier());
+                }
             }
             Path target = file.toPath();
             Files.createDirectories(target.getParent());
@@ -139,6 +144,20 @@ public final class PylonRepository {
                 continue;
             }
             UUID pylonId = UUID.fromString(id);
+            Map<Integer, CellRecord> equippedCells = new HashMap<>();
+            ConfigurationSection cells = pylon.getConfigurationSection("cells");
+            if (cells != null) {
+                for (String slotKey : cells.getKeys(false)) {
+                    ConfigurationSection cell = cells.getConfigurationSection(slotKey);
+                    if (cell != null) {
+                        equippedCells.put(
+                                Integer.parseInt(slotKey),
+                                new CellRecord(
+                                        CellType.valueOf(cell.getString("type")),
+                                        cell.getInt("tier")));
+                    }
+                }
+            }
             pylons.put(pylonId, new PylonRecord(
                     pylon.getLong("island-index"),
                     pylonId,
@@ -152,7 +171,8 @@ public final class PylonRepository {
                     pylon.getString("text-display") == null
                             ? null
                             : UUID.fromString(pylon.getString("text-display")),
-                    pylon.getInt("tier", 1)));
+                    pylon.getInt("tier", 1),
+                    equippedCells));
         }
     }
 

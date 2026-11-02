@@ -128,7 +128,7 @@ public final class CorePlaceListener implements Listener {
             }
         } else if (pylonService.isPylonEntity(entity)) {
             event.setCancelled(true);
-            if (hand == EquipmentSlot.HAND && event.getPlayer().isSneaking()) {
+            if (hand == EquipmentSlot.HAND) {
                 Player player = event.getPlayer();
                 InteractionAttempt attempt = new InteractionAttempt(player.getUniqueId(), entity.getUniqueId());
                 if (interactionAttempts.add(attempt)) {
@@ -137,7 +137,11 @@ public final class CorePlaceListener implements Listener {
                             task -> interactionAttempts.remove(attempt),
                             () -> interactionAttempts.remove(attempt),
                             1L);
-                    pylonService.pickupPylon(player, entity);
+                    if (player.isSneaking()) {
+                        pylonService.pickupPylon(player, entity);
+                    } else {
+                        pylonService.openPylonMenu(player, entity);
+                    }
                 }
             }
         }

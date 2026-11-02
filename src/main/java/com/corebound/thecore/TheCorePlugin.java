@@ -102,6 +102,7 @@ public final class TheCorePlugin extends JavaPlugin {
                 new IslandListener(this, islandService, messages), this);
         getServer().getPluginManager().registerEvents(
                 new CorePlaceListener(this, coreService, pylonService), this);
+        getServer().getPluginManager().registerEvents(pylonService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.menuListener(), this);
         getServer().getPluginManager().registerEvents(menus, this);
         coreService.initializeLoadedEntities();

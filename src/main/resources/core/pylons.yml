@@ -16,3 +16,12 @@ pylon:
   max-distance: 12.0
   base-yield-ratio: 0.4
   purchase-cost: 150.0
+  tier-upgrade-costs:
+    '2': 500.0
+    '3': 2000.0
+  cells:
+    refresh-cost: 75.0
+    costs:
+      FIRE: 100.0
+      LIGHTNING: 100.0
+      VOID: 150.0

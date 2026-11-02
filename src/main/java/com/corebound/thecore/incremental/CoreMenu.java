@@ -25,7 +25,10 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class CoreMenu implements Listener {
-    private static final int UPGRADE_SLOT = 15;
+    private static final int STATISTICS_SLOT = 10;
+    private static final int CELL_FORGE_SLOT = 12;
+    private static final int PYLON_SLOT = 14;
+    private static final int UPGRADE_SLOT = 16;
 
     private final CoreService coreService;
     private final Messages messages;
@@ -64,10 +67,14 @@ public final class CoreMenu implements Listener {
         if (config.getInt("rows", 3) != 3) {
             throw new IllegalArgumentException("core_menu.yml rows must be 3.");
         }
-        validateItem("items.statistics", 11);
-        validateItem("items.pylon", 13);
+        validateItem("items.statistics", STATISTICS_SLOT);
+        validateItem("items.pylon", PYLON_SLOT);
+        validateItem("items.cell-forge", CELL_FORGE_SLOT);
         if (Material.matchMaterial(config.getString("items.pylon.locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.pylon.locked-material must be valid.");
+        }
+        if (Material.matchMaterial(config.getString("items.cell-forge.locked-material", "BARRIER")) == null) {
+            throw new IllegalArgumentException("core_menu.yml items.cell-forge.locked-material must be valid.");
         }
         validateItem("items.upgrade", UPGRADE_SLOT);
     }
@@ -80,8 +87,10 @@ public final class CoreMenu implements Listener {
         MenuHolder holder = new MenuHolder(core.islandIndex());
         holder.inventory = Bukkit.createInventory(
                 holder, 27, color(config.getString("title", "&5Gestión del Núcleo")));
-        holder.inventory.setItem(11, createItem(config.getConfigurationSection("items.statistics"), core, false));
-        holder.inventory.setItem(13, createPylonItem(core));
+        holder.inventory.setItem(STATISTICS_SLOT,
+                createItem(config.getConfigurationSection("items.statistics"), core, false));
+        holder.inventory.setItem(CELL_FORGE_SLOT, createCellForgeItem(core));
+        holder.inventory.setItem(PYLON_SLOT, createPylonItem(core));
         holder.inventory.setItem(UPGRADE_SLOT, createItem(
                 config.getConfigurationSection("items.upgrade"), core, core.energy() >= core.upgradeCost()));
         player.openInventory(holder.inventory);
@@ -97,9 +106,11 @@ public final class CoreMenu implements Listener {
                 || !(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        if (event.getRawSlot() == 13 && pylonService != null) {
+        if (event.getRawSlot() == PYLON_SLOT && pylonService != null) {
             pylonService.buy(player, holder.islandIndex);
             coreService.openCoreMenu(player, holder.islandIndex);
+        } else if (event.getRawSlot() == CELL_FORGE_SLOT && pylonService != null) {
+            pylonService.openCellForge(player, holder.islandIndex);
         } else if (event.getRawSlot() == UPGRADE_SLOT && coreService.upgradeCore(player, holder.islandIndex)) {
             coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == UPGRADE_SLOT) {
@@ -161,6 +172,24 @@ public final class CoreMenu implements Listener {
         meta.lore(lore.stream()
                 .map(line -> color(replace(line, placeholders)))
                 .toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createCellForgeItem(CoreRecord core) {
+        ConfigurationSection itemConfig = config.getConfigurationSection("items.cell-forge");
+        boolean unlocked = core.level() >= 3;
+        String material = unlocked
+                ? itemConfig.getString("material", "ENCHANTING_TABLE")
+                : itemConfig.getString("locked-material", "BARRIER");
+        String displayName = unlocked
+                ? itemConfig.getString("display-name", "&5Forja Elemental")
+                : itemConfig.getString("locked-name", "&cForja bloqueada");
+        List<String> lore = itemConfig.getStringList(unlocked ? "lore" : "locked-lore");
+        ItemStack item = new ItemStack(Material.matchMaterial(material));
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(color(displayName));
+        meta.lore(lore.stream().map(this::color).toList());
         item.setItemMeta(meta);
         return item;
     }

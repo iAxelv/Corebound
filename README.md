@@ -59,11 +59,17 @@ weather and time are refreshed only on island entry or settings changes.
 - Island Core with persistent animation, combo-reactive scaling, hit feedback,
   combo actionbar, and an upgrade menu; configured in `plugins/Corebound/core/`.
   Level 2 unlocks purchasable extraction pylons with persistent, periodic
-  energy pulses. The owner can sneak-right-click the core to pick it up,
-  preserving its level and stored energy.
+  energy pulses. Pylons can be upgraded to Tier III, fitted with up to three
+  elemental cells, and recovered with their tier and cells intact. The
+  Core's level-3 Elemental Forge offers three random Fire, Lightning, or Void
+  cells (duplicates are possible); each offer can be purchased once, and the
+  list can be rerolled for a configurable energy cost. Cell lore describes
+  installation and effects, while matching cells fuse up to Tier V. The owner
+  can sneak-right-click the Core to pick it up, preserving its level and stored
+  energy.
 - Closed islands deny visits unless the visitor has enabled bypass. Old island
   records remain open by default.
 - Island protection covers the full square island border. Grant `thecore.*` to
   staff who should bypass protection and visit closed islands.
 
-Cells, pylons, and prestige are not implemented yet.
+Prestige and the Void talent tree are not implemented yet.
