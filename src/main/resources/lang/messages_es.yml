@@ -159,3 +159,4 @@ pylon-limit-reached: "&cYa colocaste el máximo de Pilones permitido por el nive
 pylon-distance-invalid: "&cEl Pilón debe estar entre %min% y %max% bloques del Núcleo."
 pylon-place-failed: "&cNo se pudo colocar el Pilón. El objeto no se consumió."
 pylon-placed: "&aPilón colocado. Comenzará a extraer energía en unos segundos."
+pylon-picked-up: "&aHas recogido el Pilón de Resonancia."

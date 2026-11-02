@@ -50,6 +50,22 @@ public final class PylonRepository {
         save();
     }
 
+    public synchronized void update(PylonRecord pylon) {
+        if (!pylons.containsKey(pylon.pylonId())) {
+            throw new IllegalStateException("Pylon is not registered: " + pylon.pylonId());
+        }
+        pylons.put(pylon.pylonId(), pylon);
+        save();
+    }
+
+    public synchronized PylonRecord remove(UUID pylonId) {
+        PylonRecord removed = pylons.remove(pylonId);
+        if (removed != null) {
+            save();
+        }
+        return removed;
+    }
+
     public synchronized void flush() throws IOException {
         writeSnapshot(snapshot(), version.incrementAndGet());
     }
@@ -86,6 +102,9 @@ public final class PylonRepository {
                 yaml.set(path + ".item-display", pylon.itemDisplayId().toString());
                 yaml.set(path + ".rod-display", pylon.rodDisplayId().toString());
                 yaml.set(path + ".interaction", pylon.interactionId().toString());
+                if (pylon.textDisplayId() != null) {
+                    yaml.set(path + ".text-display", pylon.textDisplayId().toString());
+                }
                 yaml.set(path + ".tier", pylon.tier());
             }
             Path target = file.toPath();
@@ -130,6 +149,9 @@ public final class PylonRepository {
                     UUID.fromString(pylon.getString("item-display")),
                     UUID.fromString(pylon.getString("rod-display")),
                     UUID.fromString(pylon.getString("interaction")),
+                    pylon.getString("text-display") == null
+                            ? null
+                            : UUID.fromString(pylon.getString("text-display")),
                     pylon.getInt("tier", 1)));
         }
     }

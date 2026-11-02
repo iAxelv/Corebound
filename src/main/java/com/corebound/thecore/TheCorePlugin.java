@@ -106,6 +106,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(menus, this);
         coreService.initializeLoadedEntities();
         pylonService.initializeLoadedEntities();
+        pylonService.initializeRangeGuides();
         getLogger().info("Corebound island foundation enabled.");
     }
 

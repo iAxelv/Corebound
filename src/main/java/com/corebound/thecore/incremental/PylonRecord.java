@@ -12,5 +12,6 @@ public record PylonRecord(
         UUID itemDisplayId,
         UUID rodDisplayId,
         UUID interactionId,
+        UUID textDisplayId,
         int tier) {
 }

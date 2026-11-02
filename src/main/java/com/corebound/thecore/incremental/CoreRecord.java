@@ -30,6 +30,12 @@ public record CoreRecord(
                 level, updatedEnergy, updatedHits, now);
     }
 
+    public CoreRecord withPassiveEnergy(double amount) {
+        return new CoreRecord(
+                islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
+                level, energy + amount, hits, lastHitAt);
+    }
+
     public CoreRecord withoutCombo() {
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,

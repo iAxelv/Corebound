@@ -41,14 +41,15 @@ class CoreRecordTest {
     }
 
     @Test
-    void passiveHitAddsConfiguredFractionAndKeepsComboAlive() {
+    void passiveEnergyDoesNotChangeManualCombo() {
         CoreRecord core = createCore(1);
         CoreRecord manualHit = core.withHit(1000, COMBO_WINDOW_MILLIS);
-        CoreRecord passiveHit = manualHit.withHit(2000, COMBO_WINDOW_MILLIS, 0.4);
+        CoreRecord passiveEnergy = manualHit.withPassiveEnergy(0.4);
 
-        assertEquals(1.08, passiveHit.combo(2000, COMBO_WINDOW_MILLIS), 0.0001);
-        assertEquals(1.04 + 0.432, passiveHit.energy(), 0.0001);
-        assertEquals(2, passiveHit.hits());
+        assertEquals(1.04, passiveEnergy.combo(2000, COMBO_WINDOW_MILLIS), 0.0001);
+        assertEquals(1.04 + 0.4, passiveEnergy.energy(), 0.0001);
+        assertEquals(manualHit.hits(), passiveEnergy.hits());
+        assertEquals(manualHit.lastHitAt(), passiveEnergy.lastHitAt());
     }
 
     @Test

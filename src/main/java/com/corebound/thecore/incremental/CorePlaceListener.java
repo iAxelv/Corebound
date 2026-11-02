@@ -20,10 +20,14 @@ import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.inventory.EquipmentSlot;
 
 public final class CorePlaceListener implements Listener {
+    private record PylonPlacementAttempt(UUID playerId, UUID worldId, int x, int y, int z) {
+    }
+
     private final TheCorePlugin plugin;
     private final CoreService coreService;
     private final PylonService pylonService;
     private final Set<InteractionAttempt> interactionAttempts = ConcurrentHashMap.newKeySet();
+    private final Set<PylonPlacementAttempt> pylonPlacementAttempts = ConcurrentHashMap.newKeySet();
 
     private record InteractionAttempt(UUID playerId, UUID entityId) {
     }
@@ -42,6 +46,7 @@ public final class CorePlaceListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         coreService.onPlayerJoin(event.getPlayer());
+        pylonService.onPlayerJoin(event.getPlayer());
     }
 
     @EventHandler
@@ -70,7 +75,22 @@ public final class CorePlaceListener implements Listener {
         if (pylonService.isPylonItem(event.getItem())) {
             event.setCancelled(true);
             if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
-                pylonService.place(event.getPlayer(), event.getClickedBlock());
+                Player player = event.getPlayer();
+                org.bukkit.block.Block block = event.getClickedBlock();
+                PylonPlacementAttempt attempt = new PylonPlacementAttempt(
+                        player.getUniqueId(),
+                        block.getWorld().getUID(),
+                        block.getX(),
+                        block.getY(),
+                        block.getZ());
+                if (pylonPlacementAttempts.add(attempt)) {
+                    player.getScheduler().runDelayed(
+                            plugin,
+                            task -> pylonPlacementAttempts.remove(attempt),
+                            () -> pylonPlacementAttempts.remove(attempt),
+                            1L);
+                    pylonService.place(player, block);
+                }
             }
         }
     }
@@ -108,6 +128,18 @@ public final class CorePlaceListener implements Listener {
             }
         } else if (pylonService.isPylonEntity(entity)) {
             event.setCancelled(true);
+            if (hand == EquipmentSlot.HAND && event.getPlayer().isSneaking()) {
+                Player player = event.getPlayer();
+                InteractionAttempt attempt = new InteractionAttempt(player.getUniqueId(), entity.getUniqueId());
+                if (interactionAttempts.add(attempt)) {
+                    player.getScheduler().runDelayed(
+                            plugin,
+                            task -> interactionAttempts.remove(attempt),
+                            () -> interactionAttempts.remove(attempt),
+                            1L);
+                    pylonService.pickupPylon(player, entity);
+                }
+            }
         }
     }
 

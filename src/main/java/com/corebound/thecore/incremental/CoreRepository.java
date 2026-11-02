@@ -122,6 +122,17 @@ public final class CoreRepository {
         return updated;
     }
 
+    public synchronized CoreRecord addPassiveEnergy(long islandIndex, double amount) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null) {
+            return null;
+        }
+        CoreRecord updated = current.withPassiveEnergy(amount);
+        cores.put(islandIndex, updated);
+        save();
+        return updated;
+    }
+
     public synchronized CoreRecord expireCombo(long islandIndex, long expectedLastHitAt) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null || current.lastHitAt() != expectedLastHitAt || current.hits() == 0) {

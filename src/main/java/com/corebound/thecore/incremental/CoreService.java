@@ -442,10 +442,15 @@ public final class CoreService {
         }, null, delayTicks);
     }
 
-    public CoreRecord addPassiveEnergy(long islandIndex, double yieldRatio, long now) {
-        CoreRecord updated = repository.registerHit(islandIndex, now, comboWindowMillis, yieldRatio);
+    public CoreRecord addPassiveEnergy(long islandIndex, double yieldRatio) {
+        CoreRecord core = repository.core(islandIndex);
+        if (core == null) {
+            return null;
+        }
+        double amount = core.baseEnergy() * yieldRatio;
+        CoreRecord updated = repository.addPassiveEnergy(islandIndex, amount);
         if (updated != null) {
-            updateCoreVisuals(updated, now);
+            updateCoreVisuals(updated, System.currentTimeMillis());
         }
         return updated;
     }
