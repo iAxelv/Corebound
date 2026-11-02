@@ -57,7 +57,7 @@ public final class IslandService {
     private final Set<String> pendingNames = new HashSet<>();
     private final Set<UUID> islandBypass = new HashSet<>();
     private final Map<UUID, IslandInvite> invites = new HashMap<>();
-    private final Map<UUID, UUID> islandChats = new ConcurrentHashMap<>();
+    private final Set<UUID> islandChats = ConcurrentHashMap.newKeySet();
     private final Set<UUID> deletingIslands = new HashSet<>();
 
     private record IslandInvite(UUID inviter, UUID islandOwner, String islandName, BukkitTask expiry) {
@@ -432,8 +432,6 @@ public final class IslandService {
             messages.send(actor, "data-save-failed");
             return false;
         }
-        islandChats.replaceAll((playerId, islandOwner) ->
-                islandOwner.equals(island.owner()) ? newOwnerId : islandOwner);
         cancelInvitesForIsland(island.owner());
         Player newOwner = Bukkit.getPlayer(newOwnerId);
         String oldOwnerName = actor.getName();
@@ -506,13 +504,11 @@ public final class IslandService {
             messages.send(player, "island-not-created");
             return false;
         }
-        UUID islandOwner = found.get().owner();
-        if (islandOwner.equals(islandChats.get(playerId))) {
+        if (!islandChats.add(playerId)) {
             islandChats.remove(playerId);
             messages.send(player, "island-chat-disabled");
             return false;
         }
-        islandChats.put(playerId, islandOwner);
         messages.send(player, "island-chat-enabled");
         return true;
     }
@@ -522,14 +518,14 @@ public final class IslandService {
     }
 
     public boolean isIslandChatEnabled(UUID playerId) {
-        return islandChats.containsKey(playerId);
+        return islandChats.contains(playerId);
     }
 
     public void sendIslandChat(UUID senderId, Component message) {
-        UUID islandOwner = islandChats.get(senderId);
         Player sender = Bukkit.getPlayer(senderId);
-        IslandData island = islandOwner == null ? null : repository.byOwner(islandOwner).orElse(null);
-        if (sender == null || island == null || !island.canBuild(senderId)) {
+        IslandData island = repository.forPlayer(senderId).orElse(null);
+        if (sender == null || island == null
+                || (!island.owner().equals(senderId) && !island.members().containsKey(senderId))) {
             islandChats.remove(senderId);
             return;
         }
@@ -537,13 +533,12 @@ public final class IslandService {
                 "rank", messages.component(island.rank(senderId).messageKey()),
                 "username", Component.text(sender.getName()),
                 "message", message));
-        if (island.owner().equals(senderId)) {
-            sender.sendMessage(formatted);
-        }
-        island.members().keySet().stream()
+        Set<UUID> recipients = new HashSet<>(island.members().keySet());
+        recipients.add(island.owner());
+        recipients.stream()
                 .map(Bukkit::getPlayer)
                 .filter(java.util.Objects::nonNull)
-                .forEach(member -> member.sendMessage(formatted));
+                .forEach(recipient -> recipient.sendMessage(formatted));
     }
 
     public boolean isDeleting(UUID islandOwner) {
