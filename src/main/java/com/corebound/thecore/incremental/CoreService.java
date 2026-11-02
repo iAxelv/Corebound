@@ -21,6 +21,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
 import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -56,6 +57,7 @@ public final class CoreService {
     private final Sound hitSound;
     private final float hitSoundVolume;
     private final Set<UUID> itemDeliveries = ConcurrentHashMap.newKeySet();
+    private final CoreMenu coreMenu;
 
     public CoreService(
             TheCorePlugin plugin,
@@ -106,6 +108,10 @@ public final class CoreService {
         hitSoundVolume = (float) configuredVolume;
         coreEntityKey = new NamespacedKey(plugin, "core_entity");
         islandIndexKey = new NamespacedKey(plugin, "core_island_index");
+        coreMenu = new CoreMenu(
+                messages,
+                this,
+                new File(plugin.getDataFolder(), "core/core_menu.yml"));
     }
 
     public void onIslandCreated(IslandCreatedEvent event) {
@@ -168,6 +174,61 @@ public final class CoreService {
 
     public boolean isCoreEntity(org.bukkit.entity.Entity entity) {
         return entity.getPersistentDataContainer().has(coreEntityKey, PersistentDataType.BYTE);
+    }
+
+    public CoreMenu menuListener() {
+        return coreMenu;
+    }
+
+    public void openCoreMenu(Player player, org.bukkit.entity.Entity entity) {
+        Long islandIndex = entity.getPersistentDataContainer().get(islandIndexKey, PersistentDataType.LONG);
+        if (islandIndex == null) {
+            return;
+        }
+        openCoreMenu(player, islandIndex);
+    }
+
+    public void openCoreMenu(Player player, long islandIndex) {
+        CoreRecord core = coreForPlayer(player, islandIndex);
+        if (core != null) {
+            coreMenu.open(player, core);
+        }
+    }
+
+    public boolean upgradeCore(Player player, long islandIndex) {
+        CoreRecord current = coreForPlayer(player, islandIndex);
+        if (current == null) {
+            return false;
+        }
+        double cost = current.upgradeCost();
+        if (current.energy() < cost) {
+            messages.send(player, "core-upgrade-insufficient");
+            return true;
+        }
+        CoreRecord upgraded = repository.upgradeCore(islandIndex, cost);
+        if (upgraded == null) {
+            messages.send(player, "core-upgrade-insufficient");
+            return true;
+        }
+        updateCoreVisuals(upgraded, System.currentTimeMillis());
+        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.2f);
+        messages.send(player, "core-upgrade-success", Map.of(
+                "level", Integer.toString(upgraded.level()),
+                "cost", formatEnergy(cost)));
+        return true;
+    }
+
+    private CoreRecord coreForPlayer(Player player, long islandIndex) {
+        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+        if (island == null || island.index() != islandIndex || !island.canBuild(player.getUniqueId())) {
+            messages.send(player, "core-menu-access-denied");
+            return null;
+        }
+        CoreRecord core = repository.core(islandIndex);
+        if (core == null) {
+            messages.send(player, "core-already-placed");
+        }
+        return core;
     }
 
     public void pickupCore(Player player, org.bukkit.entity.Entity clickedEntity) {
@@ -342,16 +403,34 @@ public final class CoreService {
         if (updated == null) {
             return;
         }
+        double gainedEnergy = updated.baseEnergy() * updated.combo(now, comboWindowMillis);
         float pitch = 1.0f + Math.min(updated.hits(), 50) / 50.0f;
         entity.getWorld().playSound(entity.getLocation(), hitSound, hitSoundVolume, pitch);
-        updateCoreEntities(updated, now);
+        entity.getWorld().spawnParticle(
+                Particle.WAX_OFF, entity.getLocation().add(0, 0.65, 0), 8, 0.2, 0.2, 0.2, 0.05);
+        if (updated.hits() >= 50) {
+            entity.getWorld().spawnParticle(
+                    Particle.ELECTRIC_SPARK, entity.getLocation().add(0, 0.65, 0), 24, 0.35, 0.35, 0.35, 0.1);
+        }
+        sendHitActionBar(player, updated, gainedEnergy, now);
+        updateCoreVisuals(updated, now);
         long delayTicks = Math.max(1L, (comboWindowMillis + 49L) / 50L);
         entity.getScheduler().runDelayed(plugin, task -> {
             CoreRecord expired = repository.expireCombo(islandIndex, updated.lastHitAt());
             if (expired != null) {
-                updateCoreEntities(expired, System.currentTimeMillis());
+                updateCoreVisuals(expired, System.currentTimeMillis());
             }
         }, null, delayTicks);
+    }
+
+    private void sendHitActionBar(Player player, CoreRecord core, double gainedEnergy, long now) {
+        int filledSegments = (int) Math.round(Math.min(core.hits(), 50) / 50.0 * 10);
+        String bar = "&a" + "|".repeat(filledSegments)
+                + "&8" + ".".repeat(10 - filledSegments);
+        String actionBar = "&6+" + formatEnergy(gainedEnergy) + "⚡"
+                + " &8| &bCombo x" + String.format(Locale.ROOT, "%.2f", core.combo(now, comboWindowMillis))
+                + " &7[" + bar + "&7]";
+        player.sendActionBar(messages.parseComponent(actionBar));
     }
 
     public void onEntityLoad(org.bukkit.entity.Entity entity) {
@@ -361,8 +440,8 @@ public final class CoreService {
         }
         if (entity instanceof ItemDisplay itemDisplay) {
             startRotation(itemDisplay);
-        } else if (entity instanceof TextDisplay textDisplay) {
-            updateHologram(textDisplay, repository.core(islandIndex), System.currentTimeMillis());
+        } else if (entity instanceof TextDisplay) {
+            updateCoreVisuals(repository.core(islandIndex), System.currentTimeMillis());
         }
     }
 
@@ -386,18 +465,38 @@ public final class CoreService {
         }
     }
 
-    private void updateCoreEntities(CoreRecord core, long now) {
+    private void updateCoreVisuals(CoreRecord core, long now) {
         org.bukkit.World world = plugin.getServer().getWorld(core.worldId());
         if (world == null) {
             return;
         }
         Location coreLocation = new Location(world, core.x(), core.y(), core.z());
         plugin.getServer().getRegionScheduler().run(plugin, coreLocation, task -> {
+            int activeHits = core.lastHitAt() != 0 && now - core.lastHitAt() <= comboWindowMillis
+                    ? Math.min(core.hits(), 50)
+                    : 0;
+            float comboScale = displayScale * (1.0f + (activeHits / 50.0f) * 0.35f);
+            org.bukkit.entity.Entity itemEntity = world.getEntity(core.itemDisplayId());
+            if (itemEntity instanceof ItemDisplay itemDisplay) {
+                applyDisplayScale(itemDisplay, comboScale, activeHits == 0 ? 5 : 2);
+            }
             org.bukkit.entity.Entity textEntity = world.getEntity(core.textDisplayId());
             if (textEntity instanceof TextDisplay textDisplay) {
+                textDisplay.teleport(coreLocation.clone().add(0, textOffset + (comboScale - displayScale), 0));
                 updateHologram(textDisplay, core, now);
             }
         });
+    }
+
+    private void applyDisplayScale(ItemDisplay display, float scale, int interpolationTicks) {
+        Transformation current = display.getTransformation();
+        display.setInterpolationDelay(0);
+        display.setInterpolationDuration(interpolationTicks);
+        display.setTransformation(new Transformation(
+                new Vector3f(current.getTranslation()),
+                new Quaternionf(current.getLeftRotation()),
+                new Vector3f(scale, scale, scale),
+                new Quaternionf(current.getRightRotation())));
     }
 
     private void updateHologram(TextDisplay display, CoreRecord core, long now) {

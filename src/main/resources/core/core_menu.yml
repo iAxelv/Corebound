@@ -1,0 +1,26 @@
+title: "&5Gestión del Núcleo"
+rows: 3
+items:
+  statistics:
+    material: CRYING_OBSIDIAN
+    slot: 11
+    display-name: "&dEstado del Núcleo"
+    lore:
+      - "&7Nivel: &e%level%"
+      - "&7Energía actual: &6%energy%⚡"
+      - "&7Producción base: &a+%base_energy%⚡/golpe"
+      - "&7Multiplicador máximo de combo: &bx3.0"
+  upgrade:
+    material: NETHER_STAR
+    slot: 15
+    display-name: "&aMejorar Núcleo &7(Nvl. %next_level%)"
+    lore-enough:
+      - "&7Costo: &6%cost%⚡"
+      - "&7Nueva base: &a+%next_base%⚡/golpe"
+      - " "
+      - "&e¡Haz clic para mejorar!"
+    lore-insufficient:
+      - "&7Costo: &6%cost%⚡"
+      - "&7Nueva base: &a+%next_base%⚡/golpe"
+      - " "
+      - "&cEnergía insuficiente."

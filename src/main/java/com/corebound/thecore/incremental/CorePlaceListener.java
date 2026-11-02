@@ -22,9 +22,9 @@ import org.bukkit.inventory.EquipmentSlot;
 public final class CorePlaceListener implements Listener {
     private final TheCorePlugin plugin;
     private final CoreService coreService;
-    private final Set<PickupAttempt> pickupAttempts = ConcurrentHashMap.newKeySet();
+    private final Set<InteractionAttempt> interactionAttempts = ConcurrentHashMap.newKeySet();
 
-    private record PickupAttempt(UUID playerId, UUID entityId) {
+    private record InteractionAttempt(UUID playerId, UUID entityId) {
     }
 
     public CorePlaceListener(TheCorePlugin plugin, CoreService coreService) {
@@ -79,18 +79,22 @@ public final class CorePlaceListener implements Listener {
             PlayerInteractEntityEvent event, org.bukkit.entity.Entity entity, EquipmentSlot hand) {
         if (coreService.isCoreEntity(entity)) {
             event.setCancelled(true);
-            if (hand == EquipmentSlot.HAND && event.getPlayer().isSneaking()) {
+            if (hand == EquipmentSlot.HAND) {
                 Player player = event.getPlayer();
-                PickupAttempt attempt = new PickupAttempt(player.getUniqueId(), entity.getUniqueId());
-                if (!pickupAttempts.add(attempt)) {
+                InteractionAttempt attempt = new InteractionAttempt(player.getUniqueId(), entity.getUniqueId());
+                if (!interactionAttempts.add(attempt)) {
                     return;
                 }
                 player.getScheduler().runDelayed(
                         plugin,
-                        task -> pickupAttempts.remove(attempt),
-                        () -> pickupAttempts.remove(attempt),
+                        task -> interactionAttempts.remove(attempt),
+                        () -> interactionAttempts.remove(attempt),
                         1L);
-                coreService.pickupCore(player, entity);
+                if (player.isSneaking()) {
+                    coreService.pickupCore(player, entity);
+                } else {
+                    coreService.openCoreMenu(player, entity);
+                }
             }
         }
     }

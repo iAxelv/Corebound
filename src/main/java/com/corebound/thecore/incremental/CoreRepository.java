@@ -59,6 +59,19 @@ public final class CoreRepository {
         return removed;
     }
 
+    public synchronized CoreRecord upgradeCore(long islandIndex, double cost) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null) {
+            return null;
+        }
+        CoreRecord upgraded = current.upgrade(cost);
+        if (upgraded != null) {
+            cores.put(islandIndex, upgraded);
+            save();
+        }
+        return upgraded;
+    }
+
     public synchronized CoreRecord registerHit(long islandIndex, long now, long comboWindowMillis) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null) {
