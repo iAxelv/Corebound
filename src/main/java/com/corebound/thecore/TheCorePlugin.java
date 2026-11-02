@@ -2,6 +2,9 @@ package com.corebound.thecore;
 
 import com.corebound.thecore.command.CoreCommand;
 import com.corebound.thecore.gui.IslandMenuManager;
+import com.corebound.thecore.incremental.CorePlaceListener;
+import com.corebound.thecore.incremental.CoreRepository;
+import com.corebound.thecore.incremental.CoreService;
 import com.corebound.thecore.island.IslandRepository;
 import com.corebound.thecore.island.IslandSounds;
 import com.corebound.thecore.island.IslandService;
@@ -17,6 +20,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class TheCorePlugin extends JavaPlugin {
     private IslandRepository islandRepository;
     private IslandService islandService;
+    private CoreService coreService;
     private Messages messages;
 
     @Override
@@ -26,6 +30,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("is/is_settings.yml");
         saveResourceIfMissing("is/is_members.yml");
         saveResourceIfMissing("is/is_perms.yml");
+        saveResourceIfMissing("core/core.yml");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");
@@ -56,6 +61,18 @@ public final class TheCorePlugin extends JavaPlugin {
 
         IslandSounds sounds = new IslandSounds(this);
         islandService = new IslandService(this, islandWorld, islandRepository, messages, sounds);
+        try {
+            coreService = new CoreService(
+                    this,
+                    islandService,
+                    new CoreRepository(new File(getDataFolder(), "data/cores.yml"), this),
+                    messages,
+                    new File(getDataFolder(), "core/core.yml"));
+        } catch (IllegalArgumentException exception) {
+            getLogger().severe("Could not initialize the core module: " + exception.getMessage());
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         IslandMenuManager menus = new IslandMenuManager(this, islandRepository, islandService, messages, sounds);
         CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages, menus);
         if (getCommand("is") == null) {
@@ -67,7 +84,9 @@ public final class TheCorePlugin extends JavaPlugin {
         getCommand("is").setTabCompleter(coreCommand);
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
+        getServer().getPluginManager().registerEvents(new CorePlaceListener(coreService), this);
         getServer().getPluginManager().registerEvents(menus, this);
+        coreService.initializeLoadedEntities();
         getLogger().info("Corebound island foundation enabled.");
     }
 
@@ -78,6 +97,13 @@ public final class TheCorePlugin extends JavaPlugin {
                 islandRepository.flush();
             } catch (IOException exception) {
                 getLogger().severe("Could not save island data: " + exception.getMessage());
+            }
+        }
+        if (coreService != null) {
+            try {
+                coreService.flush();
+            } catch (IOException exception) {
+                getLogger().severe("Could not save core data: " + exception.getMessage());
             }
         }
     }

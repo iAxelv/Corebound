@@ -55,10 +55,11 @@ public final class Messages {
     }
 
     public String text(String key) {
-        String message = messages.getString(key);
-        if (message == null) {
-            throw new IllegalArgumentException("Missing localized message: " + key);
-        }
+        return PlainTextComponentSerializer.plainText().serialize(
+                LegacyComponentSerializer.legacyAmpersand().deserialize(value(key)));
+    }
+
+    public String parseText(String message) {
         return PlainTextComponentSerializer.plainText().serialize(
                 LegacyComponentSerializer.legacyAmpersand().deserialize(message));
     }
@@ -80,10 +81,10 @@ public final class Messages {
     }
 
     public Component component(String key) {
-        String message = messages.getString(key);
-        if (message == null) {
-            throw new IllegalArgumentException("Missing localized message: " + key);
-        }
+        return LegacyComponentSerializer.legacyAmpersand().deserialize(value(key));
+    }
+
+    public Component parseComponent(String message) {
         return LegacyComponentSerializer.legacyAmpersand().deserialize(message);
     }
 
@@ -96,5 +97,13 @@ public final class Messages {
                     .build());
         }
         return formatted;
+    }
+
+    private String value(String key) {
+        String message = messages.getString(key);
+        if (message == null) {
+            throw new IllegalArgumentException("Missing localized message: " + key);
+        }
+        return message;
     }
 }

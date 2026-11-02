@@ -1,6 +1,7 @@
 package com.corebound.thecore.island;
 
 import com.corebound.thecore.TheCorePlugin;
+import com.corebound.thecore.incremental.IslandCreatedEvent;
 import com.corebound.thecore.message.Messages;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
@@ -253,6 +254,7 @@ public final class IslandService {
             }
             return false;
         }
+        Bukkit.getPluginManager().callEvent(new IslandCreatedEvent(island));
         Player player = Bukkit.getPlayer(owner);
         if (player != null) {
             player.getScheduler().run(plugin, task -> {
