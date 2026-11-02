@@ -144,3 +144,4 @@ core-placement-failed: "&cNo se pudo colocar el Núcleo. No se consumió el obje
 core-placed: "&aColocaste el Núcleo en la isla &f%island%&a."
 core-pickup-owner-only: "&cSolo el dueño de la isla puede recoger su Núcleo."
 core-picked-up: "&aRecogiste el Núcleo. Su nivel y energía se conservaron."
+core-hit-not-allowed: "&cSolo el dueño, los miembros y los jugadores de coop pueden extraer energía de este Núcleo."

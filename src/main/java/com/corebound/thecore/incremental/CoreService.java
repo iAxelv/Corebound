@@ -81,9 +81,9 @@ public final class CoreService {
         CoreItem.create(config, messages, coreItemKey, 1);
         displayMaterial = configuredBlock("display.material", "CRYING_OBSIDIAN");
         displayScale = positiveFloat("display.scale", 1.3f);
-        interactionWidth = positiveFloat("interaction.width", 1.5f);
-        interactionHeight = positiveFloat("interaction.height", 2.0f);
-        textOffset = config.getDouble("text-display.offset-y", 1.75);
+        interactionWidth = positiveFloat("interaction.width", 1.3f);
+        interactionHeight = positiveFloat("interaction.height", 1.3f);
+        textOffset = config.getDouble("text-display.offset-y", 1.4);
         textLineWidth = config.getInt("text-display.line-width", 200);
         rotationSpeedTicks = config.getInt("display.rotation-speed-ticks", 20);
         comboWindowMillis = config.getLong("combo.window-ms", 3000L);
@@ -263,7 +263,7 @@ public final class CoreService {
                 display.setPersistent(true);
                 markCoreEntity(display, island.index());
             });
-            Location interactionLocation = coreLocation.clone().add(0, 0.5, 0);
+            Location interactionLocation = coreLocation.clone().add(0, -0.1, 0);
             interaction = clickedBlock.getWorld().spawn(interactionLocation, Interaction.class, entity -> {
                 entity.setInteractionWidth(interactionWidth);
                 entity.setInteractionHeight(interactionHeight);
@@ -321,9 +321,17 @@ public final class CoreService {
         return true;
     }
 
-    public void onCoreHit(org.bukkit.entity.Entity entity) {
+    public void onCoreHit(Player player, org.bukkit.entity.Entity entity) {
         Long islandIndex = entity.getPersistentDataContainer().get(islandIndexKey, PersistentDataType.LONG);
         if (islandIndex == null) {
+            return;
+        }
+        IslandData island = islandService.islandAt(entity.getLocation()).orElse(null);
+        if (island == null || island.index() != islandIndex) {
+            return;
+        }
+        if (!island.canBuild(player.getUniqueId())) {
+            messages.send(player, "core-hit-not-allowed");
             return;
         }
         long now = System.currentTimeMillis();

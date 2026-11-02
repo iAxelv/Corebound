@@ -13,6 +13,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.entity.Interaction;
+import org.bukkit.entity.Player;
 
 public final class CorePlaceListener implements Listener {
     private final CoreService coreService;
@@ -78,7 +79,9 @@ public final class CorePlaceListener implements Listener {
     public void onCoreHit(EntityDamageByEntityEvent event) {
         if (event.getEntity() instanceof Interaction && coreService.isCoreEntity(event.getEntity())) {
             event.setCancelled(true);
-            coreService.onCoreHit(event.getEntity());
+            if (event.getDamager() instanceof Player player) {
+                coreService.onCoreHit(player, event.getEntity());
+            }
         }
     }
 
