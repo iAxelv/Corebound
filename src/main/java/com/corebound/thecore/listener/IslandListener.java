@@ -5,12 +5,14 @@ import com.corebound.thecore.island.IslandData;
 import com.corebound.thecore.island.IslandSettings;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.message.Messages;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -169,6 +171,19 @@ public final class IslandListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         islandService.clearBypass(event.getPlayer().getUniqueId());
+        islandService.clearIslandChat(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onIslandChat(AsyncChatEvent event) {
+        UUID senderId = event.getPlayer().getUniqueId();
+        if (!islandService.isIslandChatEnabled(senderId)) {
+            return;
+        }
+        event.setCancelled(true);
+        event.viewers().clear();
+        Component message = event.message();
+        plugin.getServer().getScheduler().runTask(plugin, () -> islandService.sendIslandChat(senderId, message));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

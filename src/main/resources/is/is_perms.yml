@@ -1,0 +1,137 @@
+title: "&8Island Permissions"
+user-title: "&8Permissions: %user%"
+rows: 4
+enabled-text: "&aEnabled"
+disabled-text: "&cDisabled"
+rank-enabled-text: "&a%rank%"
+rank-disabled-text: "&7%rank%"
+sounds:
+  open:
+    sound: "minecraft:block.note_block.pling"
+    volume: 1.0
+    pitch: 1.0
+  user-open:
+    sound: "minecraft:block.note_block.chime"
+    volume: 1.0
+    pitch: 1.0
+  change:
+    sound: "minecraft:block.amethyst_block.chime"
+    volume: 1.0
+    pitch: 1.2
+defaults:
+  invite: moderator
+  delete: administrator
+  rename: moderator
+  kick-users: moderator
+  open-close: member
+  promote: administrator
+  set-spawn: moderator
+  manage-perms: administrator
+  settings: administrator
+items:
+  invite:
+    material: WRITABLE_BOOK
+    slot: 10
+    display-name: "&bInvite members"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  delete:
+    material: TNT
+    slot: 11
+    display-name: "&cDelete island"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  rename:
+    material: NAME_TAG
+    slot: 12
+    display-name: "&eRename island"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  kick-users:
+    material: IRON_SWORD
+    slot: 13
+    display-name: "&cKick and ban users"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  open-close:
+    material: OAK_DOOR
+    slot: 14
+    display-name: "&6Open or close island"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  promote:
+    material: EXPERIENCE_BOTTLE
+    slot: 15
+    display-name: "&dPromote or demote"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  set-spawn:
+    material: ENDER_PEARL
+    slot: 16
+    display-name: "&aSet island spawn"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  manage-perms:
+    material: COMPARATOR
+    slot: 23
+    display-name: "&6Manage permissions"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+  settings:
+    material: REDSTONE
+    slot: 21
+    display-name: "&bChange island settings"
+    lore: ["&7Allowed ranks:", "", "%available-ranks%", "", "&eLeft click: raise rank", "&eRight click: lower rank"]
+user-items:
+  invite:
+    material: WRITABLE_BOOK
+    slot: 10
+    display-name: "&bInvite members"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  delete:
+    material: TNT
+    slot: 11
+    display-name: "&cDelete island"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  rename:
+    material: NAME_TAG
+    slot: 12
+    display-name: "&eRename island"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  kick-users:
+    material: IRON_SWORD
+    slot: 13
+    display-name: "&cKick and ban users"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  open-close:
+    material: OAK_DOOR
+    slot: 14
+    display-name: "&6Open or close island"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  promote:
+    material: EXPERIENCE_BOTTLE
+    slot: 15
+    display-name: "&dPromote or demote"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  set-spawn:
+    material: ENDER_PEARL
+    slot: 16
+    display-name: "&aSet island spawn"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  manage-perms:
+    material: COMPARATOR
+    slot: 23
+    display-name: "&6Manage permissions"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  settings:
+    material: REDSTONE
+    slot: 21
+    display-name: "&bChange island settings"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  all-permissions:
+    material: NETHER_STAR
+    slot: 22
+    display-name: "&dAll permissions"
+    lore-enabled: ["&7Status: %status%", "&eClick to grant all individual permissions"]
+    lore-disabled: ["&7Status: %status%", "&eClick to remove all individual permissions"]

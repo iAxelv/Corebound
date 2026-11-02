@@ -27,4 +27,48 @@ class IslandDataTest {
         assertTrue(island.bannedPlayers().contains(member));
         assertFalse(island.members().containsKey(member));
     }
+
+    @Test
+    void permissionMinimumsAreInheritedAndIndividualOverridesTakePrecedence() {
+        UUID owner = UUID.randomUUID();
+        UUID moderator = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        IslandData island = new IslandData(
+                owner, "home", 0, 0, 0, true, 1L, Map.of(), Set.of(), Set.of(),
+                IslandSettings.defaults())
+                .withMember(moderator, true, 2L)
+                .withRank(moderator, IslandRank.MODERATOR)
+                .withMember(member, true, 3L);
+
+        assertTrue(island.hasPermission(moderator, IslandPermission.INVITE));
+        assertFalse(island.hasPermission(member, IslandPermission.INVITE));
+        assertTrue(island.hasPermission(member, IslandPermission.OPEN_CLOSE));
+
+        island = island.withPermissionOverride(member, IslandPermission.INVITE, true);
+        assertTrue(island.hasPermission(member, IslandPermission.INVITE));
+        island = island.withPermissionOverride(member, IslandPermission.OPEN_CLOSE, false);
+        assertFalse(island.hasPermission(member, IslandPermission.OPEN_CLOSE));
+
+        island = island.withAllPermissions(member, true);
+        assertTrue(island.hasPermission(member, IslandPermission.DELETE));
+        island = island.withAllPermissions(member, false);
+        assertFalse(island.hasPermission(member, IslandPermission.DELETE));
+    }
+
+    @Test
+    void transferringOwnershipMakesTheFormerOwnerAnAdministrator() {
+        UUID owner = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        IslandData island = new IslandData(
+                owner, "home", 0, 0, 0, true, 1L, Map.of(), Set.of(), Set.of(),
+                IslandSettings.defaults())
+                .withMember(member, true, 2L);
+
+        IslandData transferred = island.withOwner(member, 3L);
+
+        assertTrue(transferred.owner().equals(member));
+        assertTrue(transferred.rank(member) == IslandRank.OWNER);
+        assertTrue(transferred.members().containsKey(owner));
+        assertTrue(transferred.rank(owner) == IslandRank.ADMINISTRATOR);
+    }
 }

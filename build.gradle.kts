@@ -21,6 +21,7 @@ dependencies {
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.6")
     testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("io.papermc.paper:paper-api:26.2.build.+")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

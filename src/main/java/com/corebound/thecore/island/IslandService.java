@@ -29,6 +29,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
@@ -40,20 +41,23 @@ import org.bukkit.block.structure.StructureRotation;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.structure.Structure;
+import net.kyori.adventure.text.Component;
 
 public final class IslandService {
     private static final String SCHEMATIC_ERROR =
-            "No se encontró el archivo de estructura base en plugins/TheCore/schematics/. Abortando creación.";
+            "No se encontró el archivo de estructura base en plugins/Corebound/schematics/. Abortando creación.";
 
     private final TheCorePlugin plugin;
     private final World world;
     private final IslandRepository repository;
     private final Messages messages;
     private final IslandSounds sounds;
+    private final IslandPermissions permissions;
     private final Set<UUID> pendingOwners = new HashSet<>();
     private final Set<String> pendingNames = new HashSet<>();
     private final Set<UUID> islandBypass = new HashSet<>();
     private final Map<UUID, IslandInvite> invites = new HashMap<>();
+    private final Map<UUID, UUID> islandChats = new ConcurrentHashMap<>();
     private final Set<UUID> deletingIslands = new HashSet<>();
 
     private record IslandInvite(UUID inviter, UUID islandOwner, String islandName, BukkitTask expiry) {
@@ -70,6 +74,8 @@ public final class IslandService {
         this.repository = repository;
         this.messages = messages;
         this.sounds = sounds;
+        this.permissions = IslandPermissions.load(
+                plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile());
     }
 
     public boolean create(Player player, String islandName) {
@@ -228,7 +234,9 @@ public final class IslandService {
     private boolean finishCreation(UUID owner, String islandName, long index, IslandCoordinates coordinates) {
         IslandData island = new IslandData(
                 owner, islandName, index, coordinates.x(), coordinates.z(), true, System.currentTimeMillis(),
-                java.util.Map.of(), java.util.Set.of(), java.util.Set.of(), IslandSettings.defaults());
+                java.util.Map.of(), java.util.Map.of(), java.util.Set.of(), java.util.Set.of(),
+                IslandSettings.defaults(), permissions.defaultsForIsland(), java.util.Map.of(),
+                java.util.Map.of(), null);
         try {
             repository.add(island);
         } catch (IOException exception) {
@@ -283,6 +291,259 @@ public final class IslandService {
 
     public boolean hasBypass(UUID playerId) {
         return islandBypass.contains(playerId);
+    }
+
+    public Optional<IslandData> islandForMember(UUID playerId) {
+        return repository.forPlayer(playerId);
+    }
+
+    public boolean hasPermission(IslandData island, UUID playerId, IslandPermission permission) {
+        return island.hasPermission(playerId, permission);
+    }
+
+    public boolean setPermissionMinimum(
+            Player actor, IslandData island, IslandPermission permission, IslandRank rank) {
+        try {
+            repository.replace(island.withPermissionMinimum(permission, rank));
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not update " + permission.configKey() + " permission for island '"
+                    + island.name() + "': " + exception.getMessage());
+            messages.send(actor, "data-save-failed");
+            return false;
+        }
+        logPermissionChange(actor, island, "island-permission-audit-minimum", Map.of(
+                "permission", messages.text("permission-" + permission.configKey()),
+                "rank", messages.legacy(rank.messageKey())));
+        return true;
+    }
+
+    public boolean setPermissionOverride(
+            Player actor, IslandData island, UUID target, IslandPermission permission, boolean enabled) {
+        try {
+            repository.replace(island.withPermissionOverride(target, permission, enabled));
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not update an individual permission for island '"
+                    + island.name() + "': " + exception.getMessage());
+            messages.send(actor, "data-save-failed");
+            return false;
+        }
+        logPermissionChange(actor, island, "island-permission-audit-user", Map.of(
+                "permission", messages.text("permission-" + permission.configKey()),
+                "target", playerName(target),
+                "status", messages.text(enabled ? "permission-enabled" : "permission-disabled")));
+        return true;
+    }
+
+    public boolean setAllPermissionsOverride(
+            Player actor, IslandData island, UUID target, boolean enabled) {
+        try {
+            repository.replace(island.withAllPermissions(target, enabled));
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not update all individual permissions for island '"
+                    + island.name() + "': " + exception.getMessage());
+            messages.send(actor, "data-save-failed");
+            return false;
+        }
+        logPermissionChange(actor, island, "island-permission-audit-all", Map.of(
+                "target", playerName(target),
+                "status", messages.text(enabled ? "permission-enabled" : "permission-disabled")));
+        return true;
+    }
+
+    private void logPermissionChange(
+            Player actor, IslandData island, String auditKey, Map<String, String> replacements) {
+        if (actor.getUniqueId().equals(island.owner())) {
+            return;
+        }
+        Player owner = Bukkit.getPlayer(island.owner());
+        if (owner != null) {
+            Map<String, String> auditReplacements = new HashMap<>(replacements);
+            auditReplacements.put("user", actor.getName());
+            messages.sendWithoutPrefix(owner, auditKey, auditReplacements);
+        }
+    }
+
+    public boolean setSpawn(Player actor, IslandData island) {
+        if (islandAt(actor.getLocation())
+                .filter(current -> current.owner().equals(island.owner()))
+                .isEmpty()) {
+            messages.send(actor, "island-spawn-must-be-on-island");
+            return false;
+        }
+        try {
+            repository.replace(island.withSpawn(IslandSpawn.from(actor.getLocation())));
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not set spawn for island '" + island.name() + "': "
+                    + exception.getMessage());
+            messages.send(actor, "data-save-failed");
+            return false;
+        }
+        messages.send(actor, "island-spawn-set");
+        return true;
+    }
+
+    public boolean teleportHome(Player player, IslandData island) {
+        if (isDeleting(island.owner())) {
+            return false;
+        }
+        Location destination = island.spawn() == null
+                ? new Location(world, island.centerX() + 0.5, 102, island.centerZ() + 0.5)
+                : island.spawn().toLocation(world);
+        boolean teleported = player.teleport(destination);
+        if (teleported) {
+            applyBorder(player, island);
+        }
+        return teleported;
+    }
+
+    public boolean renameIsland(Player actor, IslandData island, String name) {
+        if (!name.matches("[A-Za-z0-9_]{3,16}")) {
+            messages.send(actor, "invalid-island-name");
+            return false;
+        }
+        if (!island.name().equalsIgnoreCase(name) && repository.byName(name).isPresent()) {
+            messages.send(actor, "island-name-taken");
+            return false;
+        }
+        try {
+            repository.replace(island.withName(name));
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not rename island '" + island.name() + "': "
+                    + exception.getMessage());
+            messages.send(actor, "data-save-failed");
+            return false;
+        }
+        messages.send(actor, "island-renamed", Map.of("name", name));
+        return true;
+    }
+
+    public boolean transferOwnership(Player actor, IslandData island, UUID newOwnerId) {
+        if (!island.owner().equals(actor.getUniqueId()) || !island.members().containsKey(newOwnerId)
+                || island.owner().equals(newOwnerId)) {
+            messages.send(actor, "transfer-invalid-target");
+            return false;
+        }
+        IslandData updated = island.withOwner(newOwnerId, System.currentTimeMillis());
+        try {
+            repository.transferOwnership(island.owner(), updated);
+        } catch (IOException | IllegalStateException exception) {
+            plugin.getLogger().severe("Could not transfer island '" + island.name() + "' to "
+                    + newOwnerId + ": " + exception.getMessage());
+            messages.send(actor, "data-save-failed");
+            return false;
+        }
+        islandChats.replaceAll((playerId, islandOwner) ->
+                islandOwner.equals(island.owner()) ? newOwnerId : islandOwner);
+        cancelInvitesForIsland(island.owner());
+        Player newOwner = Bukkit.getPlayer(newOwnerId);
+        String oldOwnerName = actor.getName();
+        if (newOwner != null) {
+            messages.send(newOwner, "island-transfer-received", Map.of("name", oldOwnerName));
+        }
+        messages.send(actor, "island-transfer-sent", Map.of(
+                "name", playerName(newOwnerId),
+                "rank", messages.text(IslandRank.ADMINISTRATOR.messageKey())));
+        return true;
+    }
+
+    public boolean changeMemberRank(Player actor, IslandData island, UUID targetId, boolean promote) {
+        if (targetId.equals(island.owner()) || !island.members().containsKey(targetId)) {
+            messages.send(actor, "member-not-found");
+            return false;
+        }
+        IslandRank actorRank = island.rank(actor.getUniqueId());
+        IslandRank targetRank = island.rank(targetId);
+        if (actorRank.level() <= targetRank.level()) {
+            messages.send(actor, "rank-action-higher-only");
+            return false;
+        }
+        if (promote && targetRank.level() >= IslandRank.ADMINISTRATOR.level()) {
+            messages.send(actor, "rank-already-highest");
+            return false;
+        }
+        if (!promote && targetRank == IslandRank.MEMBER) {
+            messages.send(actor, "rank-already-lowest");
+            return false;
+        }
+        IslandRank updatedRank = IslandRank.values()[targetRank.ordinal() + (promote ? 1 : -1)];
+        try {
+            repository.replace(island.withRank(targetId, updatedRank));
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not change rank of " + playerName(targetId) + " on island '"
+                    + island.name() + "': " + exception.getMessage());
+            messages.send(actor, "data-save-failed");
+            return false;
+        }
+        String userName = playerName(targetId);
+        for (UUID memberId : island.members().keySet()) {
+            Player recipient = Bukkit.getPlayer(memberId);
+            if (recipient != null) {
+                messages.send(recipient, "island-member-rank-changed", Map.of(
+                        "actor", actor.getName(),
+                        "user", userName,
+                        "rank", messages.legacy(updatedRank.messageKey())));
+            }
+        }
+        Player owner = Bukkit.getPlayer(island.owner());
+        if (owner != null) {
+            messages.send(owner, "island-member-rank-changed", Map.of(
+                    "actor", actor.getName(),
+                    "user", userName,
+                    "rank", messages.legacy(updatedRank.messageKey())));
+        }
+        return true;
+    }
+
+    private String playerName(UUID playerId) {
+        return Optional.ofNullable(Bukkit.getOfflinePlayer(playerId).getName())
+                .orElse(playerId.toString());
+    }
+
+    public boolean toggleIslandChat(Player player) {
+        UUID playerId = player.getUniqueId();
+        Optional<IslandData> found = repository.forPlayer(playerId);
+        if (found.isEmpty()) {
+            messages.send(player, "island-not-created");
+            return false;
+        }
+        UUID islandOwner = found.get().owner();
+        if (islandOwner.equals(islandChats.get(playerId))) {
+            islandChats.remove(playerId);
+            messages.send(player, "island-chat-disabled");
+            return false;
+        }
+        islandChats.put(playerId, islandOwner);
+        messages.send(player, "island-chat-enabled");
+        return true;
+    }
+
+    public void clearIslandChat(UUID playerId) {
+        islandChats.remove(playerId);
+    }
+
+    public boolean isIslandChatEnabled(UUID playerId) {
+        return islandChats.containsKey(playerId);
+    }
+
+    public void sendIslandChat(UUID senderId, Component message) {
+        UUID islandOwner = islandChats.get(senderId);
+        Player sender = Bukkit.getPlayer(senderId);
+        IslandData island = islandOwner == null ? null : repository.byOwner(islandOwner).orElse(null);
+        if (sender == null || island == null || !island.canBuild(senderId)) {
+            islandChats.remove(senderId);
+            return;
+        }
+        Component formatted = messages.format("island-chat-format", Map.of(
+                "rank", messages.component(island.rank(senderId).messageKey()),
+                "username", Component.text(sender.getName()),
+                "message", message));
+        if (island.owner().equals(senderId)) {
+            sender.sendMessage(formatted);
+        }
+        island.members().keySet().stream()
+                .map(Bukkit::getPlayer)
+                .filter(java.util.Objects::nonNull)
+                .forEach(member -> member.sendMessage(formatted));
     }
 
     public boolean isDeleting(UUID islandOwner) {
@@ -375,7 +636,7 @@ public final class IslandService {
         if (inviter != null) {
             messages.send(inviter, "invite-accepted-owner", Map.of("name", player.getName()));
         }
-        if (!teleport(player, island)) {
+        if (!teleportHome(player, island)) {
             plugin.getLogger().warning("Could not teleport " + player.getName()
                     + " to island '" + island.name() + "' after accepting an invite.");
             messages.send(player, "teleport-failed");
@@ -415,6 +676,7 @@ public final class IslandService {
             messages.send(player, "data-save-failed");
             return false;
         }
+        clearIslandChat(playerId);
         Map<UUID, Player> recipients = new HashMap<>();
         Player owner = Bukkit.getPlayer(island.owner());
         if (owner != null) {
@@ -467,7 +729,7 @@ public final class IslandService {
     public void ejectFromIsland(Player player, IslandData island, String messageKey) {
         Optional<IslandData> home = repository.byOwner(player.getUniqueId())
                 .filter(homeIsland -> !homeIsland.owner().equals(island.owner()));
-        boolean teleported = home.isPresent() && teleport(player, home.get());
+        boolean teleported = home.isPresent() && teleportHome(player, home.get());
         if (!teleported) {
             World spawnWorld = Bukkit.getWorlds().stream()
                     .filter(candidate -> !candidate.getUID().equals(world.getUID()))
@@ -545,7 +807,7 @@ public final class IslandService {
             }
 
             Optional<IslandData> home = repository.byOwner(visitor.getUniqueId());
-            boolean teleported = home.isPresent() && teleport(visitor, home.get());
+            boolean teleported = home.isPresent() && teleportHome(visitor, home.get());
             if (!teleported) {
                 World spawnWorld = Bukkit.getWorlds().stream()
                         .filter(candidate -> !candidate.getUID().equals(world.getUID()))

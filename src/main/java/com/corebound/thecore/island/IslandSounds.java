@@ -20,7 +20,11 @@ public final class IslandSounds {
     }
 
     public void play(Player player, String soundPath) {
-        ConfigurationSection section = settings.getConfigurationSection(soundPath);
+        play(player, settings, soundPath);
+    }
+
+    public void play(Player player, YamlConfiguration config, String soundPath) {
+        ConfigurationSection section = config.getConfigurationSection(soundPath);
         String configuredSound = section == null ? null : section.getString("sound");
         NamespacedKey soundKey = configuredSound == null ? null : NamespacedKey.fromString(configuredSound);
         Sound sound = soundKey == null ? null : Registry.SOUNDS.get(soundKey);

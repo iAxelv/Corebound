@@ -25,6 +25,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("lang/messages_es.yml");
         saveResourceIfMissing("is/is_settings.yml");
         saveResourceIfMissing("is/is_members.yml");
+        saveResourceIfMissing("is/is_perms.yml");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");
@@ -67,7 +68,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
         getServer().getPluginManager().registerEvents(menus, this);
-        getLogger().info("TheCore island foundation enabled.");
+        getLogger().info("Corebound island foundation enabled.");
     }
 
     @Override

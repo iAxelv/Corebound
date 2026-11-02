@@ -27,6 +27,25 @@ public final class IslandRepository {
         load();
     }
 
+    public void transferOwnership(UUID previousOwner, IslandData updatedIsland) throws IOException {
+        IslandData previous = islands.remove(previousOwner);
+        if (previous == null || !previous.owner().equals(previousOwner)
+                || islands.containsKey(updatedIsland.owner())) {
+            if (previous != null) {
+                islands.put(previousOwner, previous);
+            }
+            throw new IllegalStateException("Could not transfer island ownership to an existing owner.");
+        }
+        islands.put(updatedIsland.owner(), updatedIsland);
+        try {
+            save();
+        } catch (IOException exception) {
+            islands.remove(updatedIsland.owner());
+            islands.put(previousOwner, previous);
+            throw exception;
+        }
+    }
+
     public Optional<IslandData> byOwner(UUID owner) {
         return Optional.ofNullable(islands.get(owner));
     }
@@ -128,6 +147,9 @@ public final class IslandRepository {
             yaml.set(path + ".members", null);
             island.members().forEach((member, joinedAt) ->
                     yaml.set(path + ".members." + member, joinedAt));
+            yaml.set(path + ".member-ranks", null);
+            island.memberRanks().forEach((member, rank) ->
+                    yaml.set(path + ".member-ranks." + member, rank.configName()));
             yaml.set(path + ".coops", island.coops().stream()
                     .map(UUID::toString)
                     .toList());
@@ -135,6 +157,22 @@ public final class IslandRepository {
                     .map(UUID::toString)
                     .toList());
             island.settings().save(yaml.createSection(path + ".settings"));
+            yaml.set(path + ".permission-minimums", null);
+            island.permissionMinimums().forEach((permission, rank) ->
+                    yaml.set(path + ".permission-minimums." + permission.configKey(), rank.configName()));
+            yaml.set(path + ".permission-overrides", null);
+            island.permissionOverrides().forEach((player, overrides) -> overrides.forEach((permission, enabled) ->
+                    yaml.set(path + ".permission-overrides." + player + "." + permission.configKey(), enabled)));
+            yaml.set(path + ".all-permission-overrides", null);
+            island.allPermissionOverrides().forEach((player, enabled) ->
+                    yaml.set(path + ".all-permission-overrides." + player, enabled));
+            if (island.spawn() != null) {
+                yaml.set(path + ".spawn.x", island.spawn().x());
+                yaml.set(path + ".spawn.y", island.spawn().y());
+                yaml.set(path + ".spawn.z", island.spawn().z());
+                yaml.set(path + ".spawn.yaw", island.spawn().yaw());
+                yaml.set(path + ".spawn.pitch", island.spawn().pitch());
+            }
         }
 
         Path target = file.toPath();
@@ -178,8 +216,63 @@ public final class IslandRepository {
                         members.put(UUID.fromString(memberKey), membersSection.getLong(memberKey));
                     }
                 }
+                Map<UUID, IslandRank> memberRanks = new LinkedHashMap<>();
+                ConfigurationSection ranksSection = islandSection.getConfigurationSection("member-ranks");
+                members.keySet().forEach(member -> memberRanks.put(member, IslandRank.MEMBER));
+                if (ranksSection != null) {
+                    for (String memberKey : ranksSection.getKeys(false)) {
+                        UUID memberId = UUID.fromString(memberKey);
+                        if (members.containsKey(memberId)) {
+                            memberRanks.put(memberId, IslandRank.fromConfig(
+                                    ranksSection.getString(memberKey), IslandRank.MEMBER));
+                        }
+                    }
+                }
                 Set<UUID> coops = readUuids(islandSection.getStringList("coops"));
                 coops.addAll(readUuids(islandSection.getStringList("trusted-members")));
+                Map<IslandPermission, IslandRank> permissionMinimums = IslandPermissions.defaults();
+                ConfigurationSection minimumsSection =
+                        islandSection.getConfigurationSection("permission-minimums");
+                if (minimumsSection != null) {
+                    for (String key : minimumsSection.getKeys(false)) {
+                        IslandPermission permission = IslandPermission.fromConfigKey(key);
+                        permissionMinimums.put(permission, IslandRank.fromConfig(
+                                minimumsSection.getString(key), permissionMinimums.get(permission)));
+                    }
+                }
+                Map<UUID, Map<IslandPermission, Boolean>> permissionOverrides = new LinkedHashMap<>();
+                ConfigurationSection permissionOverridesSection =
+                        islandSection.getConfigurationSection("permission-overrides");
+                if (permissionOverridesSection != null) {
+                    for (String memberKey : permissionOverridesSection.getKeys(false)) {
+                        UUID memberId = UUID.fromString(memberKey);
+                        ConfigurationSection memberOverrides = permissionOverridesSection.getConfigurationSection(memberKey);
+                        if (memberOverrides == null) {
+                            continue;
+                        }
+                        Map<IslandPermission, Boolean> overrides = new java.util.EnumMap<>(IslandPermission.class);
+                        for (String key : memberOverrides.getKeys(false)) {
+                            overrides.put(IslandPermission.fromConfigKey(key), memberOverrides.getBoolean(key));
+                        }
+                        permissionOverrides.put(memberId, overrides);
+                    }
+                }
+                Map<UUID, Boolean> allPermissionOverrides = new LinkedHashMap<>();
+                ConfigurationSection allOverridesSection =
+                        islandSection.getConfigurationSection("all-permission-overrides");
+                if (allOverridesSection != null) {
+                    for (String memberKey : allOverridesSection.getKeys(false)) {
+                        allPermissionOverrides.put(UUID.fromString(memberKey),
+                                allOverridesSection.getBoolean(memberKey));
+                    }
+                }
+                ConfigurationSection spawnSection = islandSection.getConfigurationSection("spawn");
+                IslandSpawn spawn = spawnSection == null ? null : new IslandSpawn(
+                        spawnSection.getDouble("x"),
+                        spawnSection.getDouble("y"),
+                        spawnSection.getDouble("z"),
+                        (float) spawnSection.getDouble("yaw"),
+                        (float) spawnSection.getDouble("pitch"));
                 IslandData island = new IslandData(
                         owner,
                         islandSection.getString("name", ""),
@@ -189,9 +282,14 @@ public final class IslandRepository {
                         islandSection.getBoolean("open", true),
                         islandSection.getLong("created-at", 0L),
                         members,
+                        memberRanks,
                         coops,
                         readUuids(islandSection.getStringList("banned")),
-                        IslandSettings.load(islandSection.getConfigurationSection("settings")));
+                        IslandSettings.load(islandSection.getConfigurationSection("settings")),
+                        permissionMinimums,
+                        permissionOverrides,
+                        allPermissionOverrides,
+                        spawn);
                 islands.put(owner, island);
             } catch (IllegalArgumentException exception) {
                 throw new IllegalStateException("Invalid UUID in island data for owner " + ownerKey + ".", exception);

@@ -8,6 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextReplacementConfig;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
@@ -31,7 +33,16 @@ public final class Messages {
     }
 
     public void send(CommandSender recipient, String key, Map<String, String> replacements) {
-        String prefix = messages.getString("prefix", "");
+        send(recipient, key, replacements, true);
+    }
+
+    public void sendWithoutPrefix(CommandSender recipient, String key, Map<String, String> replacements) {
+        send(recipient, key, replacements, false);
+    }
+
+    private void send(
+            CommandSender recipient, String key, Map<String, String> replacements, boolean includePrefix) {
+        String prefix = includePrefix ? messages.getString("prefix", "") : "";
         String message = messages.getString(key);
         if (message == null) {
             throw new IllegalArgumentException("Missing localized message: " + key);
@@ -52,11 +63,38 @@ public final class Messages {
                 LegacyComponentSerializer.legacyAmpersand().deserialize(message));
     }
 
+    public String legacy(String key) {
+        String message = messages.getString(key);
+        if (message == null) {
+            throw new IllegalArgumentException("Missing localized message: " + key);
+        }
+        return message;
+    }
+
     public String colored(String key) {
         String message = messages.getString(key);
         if (message == null) {
             throw new IllegalArgumentException("Missing localized message: " + key);
         }
         return org.bukkit.ChatColor.translateAlternateColorCodes('&', message);
+    }
+
+    public Component component(String key) {
+        String message = messages.getString(key);
+        if (message == null) {
+            throw new IllegalArgumentException("Missing localized message: " + key);
+        }
+        return LegacyComponentSerializer.legacyAmpersand().deserialize(message);
+    }
+
+    public Component format(String key, Map<String, Component> replacements) {
+        Component formatted = component(key);
+        for (Map.Entry<String, Component> replacement : replacements.entrySet()) {
+            formatted = formatted.replaceText(TextReplacementConfig.builder()
+                    .matchLiteral("%" + replacement.getKey() + "%")
+                    .replacement(replacement.getValue())
+                    .build());
+        }
+        return formatted;
     }
 }

@@ -1,6 +1,8 @@
 package com.corebound.thecore.gui;
 
 import com.corebound.thecore.island.IslandData;
+import com.corebound.thecore.island.IslandPermission;
+import com.corebound.thecore.island.IslandRank;
 import com.corebound.thecore.island.IslandRepository;
 import com.corebound.thecore.island.IslandSounds;
 import com.corebound.thecore.island.IslandService;
@@ -19,6 +21,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
@@ -44,7 +48,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class IslandMenuManager implements Listener {
     private enum MenuType {
         SETTINGS,
-        MEMBERS
+        MEMBERS,
+        PERMISSIONS
     }
 
     private static final DateTimeFormatter JOIN_DATE =
@@ -58,17 +63,24 @@ public final class IslandMenuManager implements Listener {
     private final Messages messages;
     private final YamlConfiguration settingsConfig;
     private final YamlConfiguration membersConfig;
+    private final YamlConfiguration permissionsConfig;
 
     private static final class MenuHolder implements InventoryHolder {
         private final MenuType type;
         private final UUID islandOwner;
         private final int page;
+        private final UUID target;
         private Inventory inventory;
 
         private MenuHolder(MenuType type, UUID islandOwner, int page) {
+            this(type, islandOwner, page, null);
+        }
+
+        private MenuHolder(MenuType type, UUID islandOwner, int page, UUID target) {
             this.type = type;
             this.islandOwner = islandOwner;
             this.page = page;
+            this.target = target;
         }
 
         @Override
@@ -92,6 +104,8 @@ public final class IslandMenuManager implements Listener {
                 plugin.getDataFolder().toPath().resolve("is/is_settings.yml").toFile());
         membersConfig = YamlConfiguration.loadConfiguration(
                 plugin.getDataFolder().toPath().resolve("is/is_members.yml").toFile());
+        permissionsConfig = YamlConfiguration.loadConfiguration(
+                plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile());
     }
 
     public void openSettings(Player player, IslandData island) {
@@ -123,13 +137,121 @@ public final class IslandMenuManager implements Listener {
         player.openInventory(holder.inventory);
     }
 
+    public void openPermissions(Player player, IslandData island, UUID target) {
+        if (!island.hasPermission(player.getUniqueId(), IslandPermission.MANAGE_PERMS)) {
+            messages.send(player, "island-permission-denied");
+            return;
+        }
+        if (target != null && !island.members().containsKey(target)) {
+            messages.send(player, "island-member-not-found");
+            return;
+        }
+        MenuHolder holder = new MenuHolder(MenuType.PERMISSIONS, island.owner(), 0, target);
+        String title = target == null
+                ? permissionsConfig.getString("title", "&8Island Permissions")
+                : permissionsConfig.getString("user-title", "&8Permissions: %user%")
+                        .replace("%user%", playerName(target));
+        int rows = menuRows(permissionsConfig, "is_perms.yml");
+        holder.inventory = Bukkit.createInventory(holder, rows * 9, color(title));
+        if (target == null) {
+            ConfigurationSection items = permissionsConfig.getConfigurationSection("items");
+            if (items == null) {
+                return;
+            }
+            for (IslandPermission permission : IslandPermission.values()) {
+                ConfigurationSection itemConfig = items.getConfigurationSection(permission.configKey());
+                if (itemConfig == null) {
+                    continue;
+                }
+                IslandRank minimum = island.permissionMinimums().getOrDefault(permission, IslandRank.MEMBER);
+                List<String> lore = new ArrayList<>();
+                for (String line : itemConfig.getStringList("lore")) {
+                    if (line.contains("%available-ranks%")) {
+                        for (IslandRank rank : List.of(
+                                IslandRank.ADMINISTRATOR, IslandRank.MODERATOR, IslandRank.MEMBER)) {
+                            String style = permissionsConfig.getString(
+                                    rank == minimum ? "rank-enabled-text" : "rank-disabled-text",
+                                    rank == minimum ? "&a%rank%" : "&7%rank%");
+                            lore.add(style.replace("%rank%", messages.text(rank.messageKey())));
+                        }
+                    } else {
+                        lore.add(line);
+                    }
+                }
+                setConfiguredItem(holder.inventory, itemConfig, itemConfig.getInt("slot", -1),
+                        itemConfig.getString("display-name", permission.configKey()), lore);
+            }
+            sounds.play(player, permissionsConfig, "sounds.open");
+        } else {
+            ConfigurationSection items = permissionUserItems();
+            if (items == null) {
+                return;
+            }
+            for (IslandPermission permission : IslandPermission.values()) {
+                ConfigurationSection itemConfig = items.getConfigurationSection(permission.configKey());
+                if (itemConfig == null) {
+                    continue;
+                }
+                boolean enabled = island.hasPermission(target, permission);
+                List<String> lore = itemConfig.getStringList(enabled ? "lore-enabled" : "lore-disabled")
+                        .stream()
+                        .map(line -> line.replace("%status%", permissionsConfig.getString(
+                                enabled ? "enabled-text" : "disabled-text",
+                                enabled ? "&aEnabled" : "&cDisabled")))
+                        .toList();
+                setConfiguredItem(holder.inventory, itemConfig,
+                        permissionUserSlot(permission.configKey()),
+                        itemConfig.getString("display-name", permission.configKey()), lore);
+            }
+            ConfigurationSection allItem = items.getConfigurationSection("all-permissions");
+            boolean allEnabled = island.hasAllPermissions(target);
+            if (allItem != null) {
+                List<String> lore = allItem.getStringList(allEnabled ? "lore-enabled" : "lore-disabled")
+                        .stream()
+                        .map(line -> line.replace("%status%", permissionsConfig.getString(
+                                allEnabled ? "enabled-text" : "disabled-text",
+                                allEnabled ? "&aEnabled" : "&cDisabled")))
+                        .toList();
+                setConfiguredItem(holder.inventory, allItem,
+                        permissionUserSlot("all-permissions"),
+                        allItem.getString("display-name", "All permissions"), lore);
+            }
+            sounds.play(player, permissionsConfig, "sounds.user-open");
+        }
+        player.openInventory(holder.inventory);
+    }
+
+    private ConfigurationSection permissionUserItems() {
+        ConfigurationSection items = permissionsConfig.getConfigurationSection("user-items");
+        return items == null ? permissionsConfig.getConfigurationSection("items.user-items") : items;
+    }
+
+    private int permissionUserSlot(String key) {
+        ConfigurationSection items = permissionUserItems();
+        ConfigurationSection item = items == null ? null : items.getConfigurationSection(key);
+        if (item != null && item.contains("slot")) {
+            return item.getInt("slot");
+        }
+        String path = "user-slots." + key;
+        if (permissionsConfig.contains(path)) {
+            return permissionsConfig.getInt(path);
+        }
+        return permissionsConfig.getInt("items." + path, -1);
+    }
+
+    private String playerName(UUID playerId) {
+        return Optional.ofNullable(Bukkit.getOfflinePlayer(playerId).getName())
+                .orElse(playerId.toString());
+    }
+
     public void openMembers(Player player, IslandData island, int page) {
         int rows = menuRows(membersConfig, "is_members.yml");
         List<Integer> slots = membersConfig.getIntegerList("member-slots");
         List<MemberEntry> entries = new ArrayList<>();
-        entries.add(new MemberEntry(island.owner(), island.createdAt(), true));
-        island.members().forEach((id, joinedAt) -> entries.add(new MemberEntry(id, joinedAt, false)));
-        entries.sort(Comparator.comparing(MemberEntry::owner).reversed()
+        entries.add(new MemberEntry(island.owner(), island.createdAt(), IslandRank.OWNER));
+        island.members().forEach((id, joinedAt) ->
+                entries.add(new MemberEntry(id, joinedAt, island.rank(id))));
+        entries.sort(Comparator.comparingInt((MemberEntry entry) -> entry.rank().level()).reversed()
                 .thenComparingLong(MemberEntry::joinedAt));
         int pageSize = slots.size();
         int lastPage = Math.max(0, (entries.size() - 1) / Math.max(pageSize, 1));
@@ -145,9 +267,7 @@ public final class IslandMenuManager implements Listener {
             MemberEntry member = entries.get(start + i);
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(member.playerId());
             String name = offlinePlayer.getName() == null ? member.playerId().toString() : offlinePlayer.getName();
-            String rank = member.owner()
-                    ? membersConfig.getString("owner-rank", "Owner")
-                    : membersConfig.getString("member-rank", "Member");
+            String rank = messages.text(member.rank().messageKey());
             String joinedDate = member.joinedAt() <= 0
                     ? membersConfig.getString("unknown-time", "Unknown")
                     : JOIN_DATE.format(Instant.ofEpochMilli(member.joinedAt()));
@@ -156,7 +276,10 @@ public final class IslandMenuManager implements Listener {
                     : JOIN_TIME.format(Instant.ofEpochMilli(member.joinedAt()));
             ItemStack head = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) head.getItemMeta();
-            meta.setOwningPlayer(offlinePlayer);
+            Player onlinePlayer = Bukkit.getPlayer(member.playerId());
+            if (onlinePlayer != null) {
+                meta.setPlayerProfile(onlinePlayer.getPlayerProfile());
+            }
             meta.displayName(text(membersConfig.getString("display-name", "&f%player%")
                     .replace("%player%", name)));
             meta.lore(membersConfig.getStringList("lore").stream()
@@ -177,8 +300,8 @@ public final class IslandMenuManager implements Listener {
     }
 
     public void openDeleteConfirmation(Player player, IslandData island) {
-        if (!island.owner().equals(player.getUniqueId())) {
-            messages.send(player, "delete-owner-only");
+        if (!island.hasPermission(player.getUniqueId(), IslandPermission.DELETE)) {
+            messages.send(player, "island-permission-denied");
             return;
         }
         ActionButton yesButton = ActionButton.builder(messageComponent("delete-yes"))
@@ -203,13 +326,13 @@ public final class IslandMenuManager implements Listener {
     }
 
     private void confirmDelete(Player player, UUID islandOwner) {
-        if (!player.getUniqueId().equals(islandOwner)) {
-            messages.send(player, "delete-owner-only");
-            return;
-        }
         IslandData island = repository.byOwner(islandOwner).orElse(null);
         if (island == null) {
             messages.send(player, "island-not-created");
+            return;
+        }
+        if (!island.hasPermission(player.getUniqueId(), IslandPermission.DELETE)) {
+            messages.send(player, "island-permission-denied");
             return;
         }
         if (islandService.isDeleting(islandOwner)) {
@@ -218,6 +341,35 @@ public final class IslandMenuManager implements Listener {
         }
         islandService.deleteIsland(island, success -> messages.send(
                 player, success ? "island-deleted" : "island-delete-failed"));
+    }
+
+    public void openTransferConfirmation(Player player, IslandData island, UUID target) {
+        if (!island.owner().equals(player.getUniqueId()) || !island.members().containsKey(target)) {
+            messages.send(player, "transfer-invalid-target");
+            return;
+        }
+        ActionButton yesButton = ActionButton.builder(messageComponent("transfer-confirm-yes"))
+                .action(DialogAction.customClick(
+                        (response, audience) -> {
+                            if (audience instanceof Player clicker
+                                    && clicker.getUniqueId().equals(island.owner())) {
+                                islandService.transferOwnership(clicker, island, target);
+                            }
+                        },
+                        ClickCallback.Options.builder()
+                                .uses(1)
+                                .lifetime(Duration.ofMinutes(5))
+                                .build()))
+                .build();
+        ActionButton noButton = ActionButton.builder(messageComponent("transfer-confirm-no")).build();
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(messages.format("transfer-confirm-title", Map.of(
+                                "user", Component.text(playerName(target)))))
+                        .body(List.of(DialogBody.plainMessage(messages.format("transfer-confirm-body", Map.of(
+                                "user", Component.text(playerName(target)))))))
+                        .build())
+                .type(DialogType.confirmation(yesButton, noButton)));
+        player.showDialog(dialog);
     }
 
     @EventHandler
@@ -236,8 +388,9 @@ public final class IslandMenuManager implements Listener {
             return;
         }
         if (holder.type == MenuType.SETTINGS) {
-            if (!island.owner().equals(player.getUniqueId())) {
+            if (!island.hasPermission(player.getUniqueId(), IslandPermission.SETTINGS)) {
                 player.closeInventory();
+                messages.send(player, "island-permission-denied");
                 return;
             }
             ConfigurationSection items = settingsConfig.getConfigurationSection("items");
@@ -267,6 +420,17 @@ public final class IslandMenuManager implements Listener {
             } else if (event.getRawSlot() == slotNext) {
                 openMembers(player, island, holder.page + 1);
             }
+        } else if (holder.type == MenuType.PERMISSIONS) {
+            if (!island.hasPermission(player.getUniqueId(), IslandPermission.MANAGE_PERMS)) {
+                player.closeInventory();
+                messages.send(player, "island-permission-denied");
+                return;
+            }
+            if (holder.target == null) {
+                handlePermissionRankClick(player, island, event.getRawSlot(), event.getClick());
+            } else {
+                handleMemberPermissionClick(player, island, holder.target, event.getRawSlot());
+            }
         }
     }
 
@@ -277,18 +441,84 @@ public final class IslandMenuManager implements Listener {
         }
     }
 
-    private record MemberEntry(UUID playerId, long joinedAt, boolean owner) {
+    private void handlePermissionRankClick(
+            Player player, IslandData island, int slot, org.bukkit.event.inventory.ClickType click) {
+        ConfigurationSection items = permissionsConfig.getConfigurationSection("items");
+        if (items == null) {
+            return;
+        }
+        for (IslandPermission permission : IslandPermission.values()) {
+            ConfigurationSection item = items.getConfigurationSection(permission.configKey());
+            if (item == null || item.getInt("slot", -1) != slot) {
+                continue;
+            }
+            IslandRank current = island.permissionMinimums().getOrDefault(permission, IslandRank.MEMBER);
+            int direction = click.isLeftClick() ? 1 : click.isRightClick() ? -1 : 0;
+            int nextLevel = Math.max(IslandRank.MEMBER.level(),
+                    Math.min(IslandRank.ADMINISTRATOR.level(), current.level() + direction));
+            IslandRank next = IslandRank.values()[nextLevel];
+            if (next != current && islandService.setPermissionMinimum(player, island, permission, next)) {
+                sounds.play(player, permissionsConfig, "sounds.change");
+                openPermissions(player, repository.byOwner(island.owner()).orElseThrow(), null);
+            }
+            return;
+        }
+    }
+
+    private void handleMemberPermissionClick(Player player, IslandData island, UUID target, int slot) {
+        if (!island.members().containsKey(target)) {
+            player.closeInventory();
+            messages.send(player, "island-member-not-found");
+            return;
+        }
+        if (island.rank(target) == IslandRank.ADMINISTRATOR) {
+            player.closeInventory();
+            messages.send(player, "administrator-has-all-permissions");
+            return;
+        }
+        ConfigurationSection items = permissionUserItems();
+        if (items == null) {
+            return;
+        }
+        if (permissionUserSlot("all-permissions") == slot) {
+            if (islandService.setAllPermissionsOverride(
+                    player, island, target, !island.hasAllPermissions(target))) {
+                sounds.play(player, permissionsConfig, "sounds.change");
+                openPermissions(player, repository.byOwner(island.owner()).orElseThrow(), target);
+            }
+            return;
+        }
+        for (IslandPermission permission : IslandPermission.values()) {
+            ConfigurationSection item = items.getConfigurationSection(permission.configKey());
+            if (item == null || permissionUserSlot(permission.configKey()) != slot) {
+                continue;
+            }
+            boolean enabled = !island.hasPermission(target, permission);
+            if (islandService.setPermissionOverride(player, island, target, permission, enabled)) {
+                sounds.play(player, permissionsConfig, "sounds.change");
+                openPermissions(player, repository.byOwner(island.owner()).orElseThrow(), target);
+            }
+            return;
+        }
+    }
+
+    private record MemberEntry(UUID playerId, long joinedAt, IslandRank rank) {
     }
 
     private void setConfiguredItem(
             Inventory inventory, YamlConfiguration config, String path, String slotPath, int fallbackSlot) {
         ConfigurationSection section = config.getConfigurationSection(path);
-        int slot = config.getInt(slotPath, fallbackSlot);
+        setConfiguredItem(inventory, section, config.getInt(slotPath, fallbackSlot),
+                section == null ? path : section.getString("display-name", path),
+                section == null ? List.of() : section.getStringList("lore"));
+    }
+
+    private void setConfiguredItem(
+            Inventory inventory, ConfigurationSection section, int slot, String name, List<String> lore) {
         if (section == null || slot < 0 || slot >= inventory.getSize()) {
             return;
         }
-        ItemStack item = item(section.getString("material", "ARROW"), slot,
-                section.getString("display-name", path), section.getStringList("lore"));
+        ItemStack item = item(section.getString("material", "ARROW"), slot, name, lore);
         if (item != null) {
             inventory.setItem(slot, item);
         }

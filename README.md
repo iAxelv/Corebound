@@ -43,10 +43,12 @@ schematic volume and the server's available CPU and storage performance.
 - Schematic and `.nbt` structure placement
 - Per-player world borders and island protection
 - `/is create`, `/is home`, `/is visit`, `/is coop`, `/is open`, `/is close`,
-  `/is leave`, and staff-only `/is bypass`
+  `/is leave`, `/is chat`, and staff-only `/is bypass`
 - Island invitations/membership (`invite`, `accept`, `members`), coop access,
   kick/ban/unban, and owner-confirmed island deletion using a native dialog
-- Configurable settings and member menus in `plugins/Corebound/is/`, with
+- Owner transfer, member ranks, rename, custom home spawn, and rank-based
+  permission menus with per-member overrides
+- Configurable settings, member, and permission menus in `plugins/Corebound/is/`, with
   ampersand-colored translations in `plugins/Corebound/lang/messages_es.yml`
 - Per-island combat, damage, weather/time visuals, explosions, fluids,
   redstone, mob and spawner controls

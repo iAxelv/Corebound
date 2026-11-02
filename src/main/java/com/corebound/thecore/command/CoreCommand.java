@@ -3,6 +3,7 @@ package com.corebound.thecore.command;
 import com.corebound.thecore.TheCorePlugin;
 import com.corebound.thecore.gui.IslandMenuManager;
 import com.corebound.thecore.island.IslandData;
+import com.corebound.thecore.island.IslandPermission;
 import com.corebound.thecore.island.IslandRepository;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.message.Messages;
@@ -24,7 +25,8 @@ import org.bukkit.entity.Player;
 public final class CoreCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBCOMMANDS = List.of(
             "create", "home", "visit", "invite", "accept", "coop", "open", "close",
-            "settings", "members", "delete", "leave", "kick", "ban", "unban", "bypass");
+            "settings", "members", "delete", "leave", "kick", "ban", "unban", "bypass",
+            "chat", "perms", "transfer", "promote", "demote", "setspawn", "rename");
     private final TheCorePlugin plugin;
     private final IslandService islandService;
     private final IslandRepository repository;
@@ -77,6 +79,13 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             case "kick" -> memberAction(player, args, MemberAction.KICK);
             case "ban" -> memberAction(player, args, MemberAction.BAN);
             case "unban" -> memberAction(player, args, MemberAction.UNBAN);
+            case "chat" -> islandChat(player, args);
+            case "perms" -> permissions(player, args);
+            case "transfer" -> transfer(player, args);
+            case "promote" -> changeRank(player, args, true);
+            case "demote" -> changeRank(player, args, false);
+            case "setspawn" -> setSpawn(player, args);
+            case "rename" -> rename(player, args);
             default -> messages.send(player, "usage");
         }
         return true;
@@ -101,6 +110,15 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT)))
                     .toList();
         }
+        if (args.length == 2 && List.of("transfer", "promote", "demote", "perms").contains(
+                args[0].toLowerCase(Locale.ROOT)) && sender instanceof Player player) {
+            return islandService.islandForMember(player.getUniqueId()).stream()
+                    .flatMap(island -> island.members().keySet().stream())
+                    .map(id -> Bukkit.getOfflinePlayer(id).getName())
+                    .filter(java.util.Objects::nonNull)
+                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT)))
+                    .toList();
+        }
         return List.of();
     }
 
@@ -112,7 +130,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         Optional<IslandData> island = repository.forPlayer(player.getUniqueId());
         if (island.isEmpty()) {
             messages.send(player, "island-not-created");
-        } else if (islandService.teleport(player, island.get())) {
+        } else if (islandService.teleportHome(player, island.get())) {
             messages.send(player, "teleported-home");
         } else {
             messages.send(player, "teleport-failed");
@@ -167,7 +185,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             messages.send(player, "invite-usage");
             return;
         }
-        IslandData island = ownedIsland(player);
+        IslandData island = islandWithPermission(player, IslandPermission.INVITE);
         if (island == null) {
             return;
         }
@@ -229,7 +247,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             messages.send(player, "usage");
             return;
         }
-        IslandData island = ownedIsland(player);
+        IslandData island = islandWithPermission(player, IslandPermission.OPEN_CLOSE);
         if (island == null) {
             return;
         }
@@ -265,11 +283,13 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             messages.send(player, "usage");
             return;
         }
-        Optional<IslandData> island = repository.byOwner(player.getUniqueId());
+        Optional<IslandData> island = islandService.islandForMember(player.getUniqueId());
         if (island.isEmpty()) {
-            messages.send(player, repository.byMember(player.getUniqueId()).isPresent()
-                    ? "settings-owner-only"
-                    : "island-not-created");
+            messages.send(player, "island-not-created");
+            return;
+        }
+        if (!island.get().hasPermission(player.getUniqueId(), IslandPermission.SETTINGS)) {
+            messages.send(player, "island-permission-denied");
             return;
         }
         menus.openSettings(player, island.get());
@@ -293,7 +313,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             messages.send(player, "usage");
             return;
         }
-        IslandData island = ownedIsland(player);
+        IslandData island = islandWithPermission(player, IslandPermission.DELETE);
         if (island != null) {
             menus.openDeleteConfirmation(player, island);
             messages.send(player, "delete-confirm-opened");
@@ -308,6 +328,91 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         islandService.leaveIsland(player);
     }
 
+    private void islandChat(Player player, String[] args) {
+        if (args.length != 1) {
+            messages.send(player, "usage");
+            return;
+        }
+        islandService.toggleIslandChat(player);
+    }
+
+    private void permissions(Player player, String[] args) {
+        if (args.length > 2) {
+            messages.send(player, "usage");
+            return;
+        }
+        IslandData island = islandWithPermission(player, IslandPermission.MANAGE_PERMS);
+        if (island == null) {
+            return;
+        }
+        UUID target = null;
+        if (args.length == 2) {
+            target = resolvePlayerId(args[1], island);
+            if (target == null || !island.members().containsKey(target)) {
+                messages.send(player, "island-member-not-found");
+                return;
+            }
+        }
+        menus.openPermissions(player, island, target);
+    }
+
+    private void transfer(Player player, String[] args) {
+        if (args.length != 2) {
+            messages.send(player, "transfer-usage");
+            return;
+        }
+        IslandData island = ownedIsland(player);
+        if (island == null) {
+            return;
+        }
+        UUID target = resolvePlayerId(args[1], island);
+        if (target == null || !island.members().containsKey(target)) {
+            messages.send(player, "transfer-invalid-target");
+            return;
+        }
+        menus.openTransferConfirmation(player, island, target);
+        messages.send(player, "transfer-confirm-opened");
+    }
+
+    private void changeRank(Player player, String[] args, boolean promote) {
+        if (args.length != 2) {
+            messages.send(player, "rank-command-usage");
+            return;
+        }
+        IslandData island = islandWithPermission(player, IslandPermission.PROMOTE);
+        if (island == null) {
+            return;
+        }
+        UUID target = resolvePlayerId(args[1], island);
+        if (target == null || !island.members().containsKey(target)) {
+            messages.send(player, "island-member-not-found");
+            return;
+        }
+        islandService.changeMemberRank(player, island, target, promote);
+    }
+
+    private void setSpawn(Player player, String[] args) {
+        if (args.length != 1) {
+            messages.send(player, "usage");
+            return;
+        }
+        IslandData island = islandWithPermission(player, IslandPermission.SET_SPAWN);
+        if (island != null) {
+            islandService.setSpawn(player, island);
+        }
+    }
+
+    private void rename(Player player, String[] args) {
+        if (args.length != 2) {
+            messages.send(player, "rename-usage");
+            return;
+        }
+        IslandData island = islandWithPermission(player, IslandPermission.RENAME);
+        if (island != null) {
+            islandService.renameIsland(player, island, args[1]);
+        }
+    }
+
     private enum MemberAction {
         KICK,
         BAN,
@@ -319,7 +424,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             messages.send(player, "member-usage");
             return;
         }
-        IslandData island = ownedIsland(player);
+        IslandData island = islandWithPermission(player, IslandPermission.KICK_USERS);
         if (island == null) {
             return;
         }
@@ -338,6 +443,11 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         }
         if (targetId.equals(player.getUniqueId())) {
             messages.send(player, "member-self-action");
+            return;
+        }
+        if (island.members().containsKey(targetId)
+                && island.rank(player.getUniqueId()).level() <= island.rank(targetId).level()) {
+            messages.send(player, "rank-action-higher-only");
             return;
         }
         if (action == MemberAction.KICK && !island.members().containsKey(targetId)) {
@@ -361,6 +471,9 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         }
         if (action == MemberAction.BAN) {
             islandService.cancelInvite(targetId, island.owner());
+        }
+        if (action == MemberAction.KICK || action == MemberAction.BAN) {
+            islandService.clearIslandChat(targetId);
         }
         String targetName = Optional.ofNullable(Bukkit.getOfflinePlayer(targetId).getName()).orElse(args[1]);
         if (action == MemberAction.KICK || action == MemberAction.BAN) {
@@ -405,6 +518,19 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             messages.send(player, repository.byMember(player.getUniqueId()).isPresent()
                     ? "members-owner-only"
                     : "island-not-created");
+            return null;
+        }
+        return island.get();
+    }
+
+    private IslandData islandWithPermission(Player player, IslandPermission permission) {
+        Optional<IslandData> island = islandService.islandForMember(player.getUniqueId());
+        if (island.isEmpty()) {
+            messages.send(player, "island-not-created");
+            return null;
+        }
+        if (!island.get().hasPermission(player.getUniqueId(), permission)) {
+            messages.send(player, "island-permission-denied");
             return null;
         }
         return island.get();
