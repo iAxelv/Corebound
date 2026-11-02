@@ -34,7 +34,8 @@ public final class TheCorePlugin extends JavaPlugin {
             return;
         }
 
-        messages = new Messages(new File(getDataFolder(), "messages_es.yml"));
+        messages = new Messages(
+                new File(getDataFolder(), "messages_es.yml"), getResource("messages_es.yml"));
         islandRepository = new IslandRepository(new File(getDataFolder(), "data/islands.yml"));
 
         String worldName = getConfig().getString("world.name", "core_void_world");
@@ -50,13 +51,13 @@ public final class TheCorePlugin extends JavaPlugin {
 
         islandService = new IslandService(this, islandWorld, islandRepository, messages);
         CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages);
-        if (getCommand("core") == null) {
-            getLogger().severe("The /core command is missing from plugin.yml.");
+        if (getCommand("is") == null) {
+            getLogger().severe("The /is command is missing from plugin.yml.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        getCommand("core").setExecutor(coreCommand);
-        getCommand("core").setTabCompleter(coreCommand);
+        getCommand("is").setExecutor(coreCommand);
+        getCommand("is").setTabCompleter(coreCommand);
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
         getLogger().info("TheCore island foundation enabled.");

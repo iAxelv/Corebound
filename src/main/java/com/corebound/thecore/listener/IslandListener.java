@@ -18,6 +18,9 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
 
 public final class IslandListener implements Listener {
     private final TheCorePlugin plugin;
@@ -37,7 +40,8 @@ public final class IslandListener implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         islandService.islandAt(event.getBlock().getLocation()).ifPresent(island -> {
-            boolean mayBreak = island.owner().equals(event.getPlayer().getUniqueId())
+            boolean mayBreak = hasBuildBypass(event.getPlayer())
+                    || island.owner().equals(event.getPlayer().getUniqueId())
                     || (plugin.getConfig().getBoolean("protection.allow-trusted-break", true)
                             && island.trustedMembers().contains(event.getPlayer().getUniqueId()));
             if (!mayBreak) {
@@ -59,6 +63,19 @@ public final class IslandListener implements Listener {
             return;
         }
         protectBlock(event.getPlayer(), event.getClickedBlock().getLocation(), event::setCancelled);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        protectBlock(
+                event.getPlayer(),
+                event.getBlockClicked().getRelative(event.getBlockFace()).getLocation(),
+                event::setCancelled);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBucketFill(PlayerBucketFillEvent event) {
+        protectBlock(event.getPlayer(), event.getBlockClicked().getLocation(), event::setCancelled);
     }
 
     @EventHandler
@@ -91,6 +108,11 @@ public final class IslandListener implements Listener {
         islandService.updateBorder(event.getPlayer());
     }
 
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        islandService.clearBypass(event.getPlayer().getUniqueId());
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFallDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player player
@@ -102,12 +124,16 @@ public final class IslandListener implements Listener {
 
     private void protectBlock(Player player, Location location, java.util.function.Consumer<Boolean> cancel) {
         islandService.islandAt(location).ifPresent(island -> {
-            boolean mayBuild = island.canBuild(player.getUniqueId());
+            boolean mayBuild = hasBuildBypass(player) || island.canBuild(player.getUniqueId());
             if (!mayBuild) {
                 cancel.accept(true);
                 messages.send(player, "island-protected");
             }
         });
+    }
+
+    private boolean hasBuildBypass(Player player) {
+        return player.hasPermission("thecore.build") || player.hasPermission("thecore.*");
     }
 
     private boolean sameBlock(Location first, Location second) {

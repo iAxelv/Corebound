@@ -98,6 +98,7 @@ public final class IslandRepository {
             yaml.set(path + ".index", island.index());
             yaml.set(path + ".center-x", island.centerX());
             yaml.set(path + ".center-z", island.centerZ());
+            yaml.set(path + ".open", island.open());
             yaml.set(path + ".trusted-members", island.trustedMembers().stream()
                     .map(UUID::toString)
                     .toList());
@@ -147,6 +148,7 @@ public final class IslandRepository {
                         islandSection.getLong("index"),
                         islandSection.getLong("center-x"),
                         islandSection.getLong("center-z"),
+                        islandSection.getBoolean("open", true),
                         trustedMembers);
                 islands.put(owner, island);
             } catch (IllegalArgumentException exception) {

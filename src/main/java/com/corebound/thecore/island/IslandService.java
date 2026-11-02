@@ -44,6 +44,7 @@ public final class IslandService {
     private final Messages messages;
     private final Set<UUID> pendingOwners = new HashSet<>();
     private final Set<String> pendingNames = new HashSet<>();
+    private final Set<UUID> islandBypass = new HashSet<>();
 
     public IslandService(
             TheCorePlugin plugin, World world, IslandRepository repository, Messages messages) {
@@ -208,7 +209,7 @@ public final class IslandService {
 
     private boolean finishCreation(UUID owner, String islandName, long index, IslandCoordinates coordinates) {
         IslandData island = new IslandData(
-                owner, islandName, index, coordinates.x(), coordinates.z(), java.util.Set.of());
+                owner, islandName, index, coordinates.x(), coordinates.z(), true, java.util.Set.of());
         try {
             repository.add(island);
         } catch (IOException exception) {
@@ -241,14 +242,63 @@ public final class IslandService {
         }
 
         double radius = plugin.getConfig().getDouble("world.island-radius", 35);
-        double radiusSquared = radius * radius;
         return repository.all().stream()
                 .filter(island -> {
-                    double deltaX = location.getX() - island.centerX();
-                    double deltaZ = location.getZ() - island.centerZ();
-                    return deltaX * deltaX + deltaZ * deltaZ <= radiusSquared;
+                    double deltaX = Math.abs(location.getBlockX() - island.centerX());
+                    double deltaZ = Math.abs(location.getBlockZ() - island.centerZ());
+                    return deltaX <= radius && deltaZ <= radius;
                 })
                 .findFirst();
+    }
+
+    public boolean toggleBypass(UUID playerId) {
+        if (islandBypass.remove(playerId)) {
+            return false;
+        }
+        islandBypass.add(playerId);
+        return true;
+    }
+
+    public boolean hasBypass(UUID playerId) {
+        return islandBypass.contains(playerId);
+    }
+
+    public void clearBypass(UUID playerId) {
+        islandBypass.remove(playerId);
+    }
+
+    public void ejectVisitors(IslandData island) {
+        for (Player visitor : Bukkit.getOnlinePlayers()) {
+            if (island.owner().equals(visitor.getUniqueId())
+                    || island.trustedMembers().contains(visitor.getUniqueId())
+                    || hasBypass(visitor.getUniqueId())
+                    || islandAt(visitor.getLocation())
+                            .filter(currentIsland -> currentIsland.owner().equals(island.owner()))
+                            .isEmpty()) {
+                continue;
+            }
+
+            Optional<IslandData> home = repository.byOwner(visitor.getUniqueId());
+            boolean teleported = home.isPresent() && teleport(visitor, home.get());
+            if (!teleported) {
+                World spawnWorld = Bukkit.getWorlds().stream()
+                        .filter(candidate -> !candidate.getUID().equals(world.getUID()))
+                        .findFirst()
+                        .orElse(world);
+                teleported = visitor.teleport(spawnWorld.getSpawnLocation());
+                if (teleported) {
+                    visitor.setWorldBorder(null);
+                }
+            }
+
+            if (teleported) {
+                messages.send(visitor, "island-visitor-ejected");
+            } else {
+                plugin.getLogger().warning("Could not eject visitor " + visitor.getName()
+                        + " from closed island '" + island.name() + "'.");
+                messages.send(visitor, "teleport-failed");
+            }
+        }
     }
 
     public boolean teleport(Player player, IslandData island) {

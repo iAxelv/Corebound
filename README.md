@@ -42,6 +42,11 @@ schematic volume and the server's available CPU and storage performance.
 - Void island world and square-spiral island allocation
 - Schematic and `.nbt` structure placement
 - Per-player world borders and island protection
-- `/core create`, `/core home`, `/core visit`, and `/core trust`
+- `/is create`, `/is home`, `/is visit`, `/is trust`, `/is open`, `/is close`,
+  and staff-only `/is bypass`
+- Closed islands deny visits unless the visitor has enabled bypass. Old island
+  records remain open by default.
+- Island protection covers the full square island border. Grant `thecore.*` to
+  staff who should bypass protection and visit closed islands.
 
 Incremental energy, cells, pylons, and prestige are not implemented yet.

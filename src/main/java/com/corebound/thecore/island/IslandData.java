@@ -10,6 +10,7 @@ public record IslandData(
         long index,
         long centerX,
         long centerZ,
+        boolean open,
         Set<UUID> trustedMembers) {
 
     public IslandData {
@@ -27,6 +28,10 @@ public record IslandData(
         } else {
             members.remove(playerId);
         }
-        return new IslandData(owner, name, index, centerX, centerZ, members);
+        return new IslandData(owner, name, index, centerX, centerZ, open, members);
+    }
+
+    public IslandData withOpen(boolean open) {
+        return new IslandData(owner, name, index, centerX, centerZ, open, trustedMembers);
     }
 }

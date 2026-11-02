@@ -6,11 +6,22 @@ description: Corebound island foundation
 author: Corebound
 depend: [FastAsyncWorldEdit]
 commands:
-  core:
+  is:
     description: Create and manage your Corebound island
-    usage: /core <create|home|visit|trust>
-    aliases: [island]
+    usage: /is <create|home|visit|trust|open|close|bypass>
 permissions:
+  thecore.*:
+    description: Allows staff to bypass island protection and closed-island access
+    default: false
+    children:
+      thecore.build: true
+      thecore.bypass: true
   thecore.admin:
     description: Allows administrative access to TheCore
+    default: op
+  thecore.build:
+    description: Allows building and interacting on any island
+    default: false
+  thecore.bypass:
+    description: Allows visiting islands that are closed
     default: op

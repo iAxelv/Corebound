@@ -61,6 +61,9 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             }
             case "visit" -> visit(player, args);
             case "trust" -> trust(player, args);
+            case "open" -> setOpen(player, args, true);
+            case "close" -> setOpen(player, args, false);
+            case "bypass" -> bypass(player, args);
             default -> messages.send(player, "usage");
         }
         return true;
@@ -70,7 +73,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(
             CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return List.of("create", "home", "visit", "trust").stream()
+            return List.of("create", "home", "visit", "trust", "open", "close", "bypass").stream()
                     .filter(option -> option.startsWith(args[0].toLowerCase(Locale.ROOT)))
                     .toList();
         }
@@ -115,13 +118,63 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             return;
         }
         IslandData destination = island.get();
+        if (!destination.open()
+                && !destination.owner().equals(player.getUniqueId())
+                && !islandService.hasBypass(player.getUniqueId())) {
+            messages.send(player, "island-closed");
+            return;
+        }
         if (!islandService.teleport(player, destination)) {
             messages.send(player, "teleport-failed");
             return;
         }
+
         String ownerName = Optional.ofNullable(Bukkit.getOfflinePlayer(destination.owner()).getName())
                 .orElse(destination.name());
         messages.send(player, "teleported-visit", Map.of("name", ownerName));
+    }
+
+    private void setOpen(Player player, String[] args, boolean open) {
+        if (args.length != 1) {
+            messages.send(player, "usage");
+            return;
+        }
+        Optional<IslandData> ownedIsland = repository.byOwner(player.getUniqueId());
+        if (ownedIsland.isEmpty()) {
+            messages.send(player, "island-not-created");
+            return;
+        }
+
+        IslandData island = ownedIsland.get();
+        if (island.open() == open) {
+            messages.send(player, open ? "island-already-open" : "island-already-closed");
+            return;
+        }
+        try {
+            repository.replace(island.withOpen(open));
+        } catch (java.io.IOException exception) {
+            plugin.getLogger().severe("Could not update access for island '" + island.name() + "': "
+                    + exception.getMessage());
+            messages.send(player, "data-save-failed");
+            return;
+        }
+        if (!open) {
+            islandService.ejectVisitors(island);
+        }
+        messages.send(player, open ? "island-opened" : "island-closed-by-owner");
+    }
+
+    private void bypass(Player player, String[] args) {
+        if (args.length != 1) {
+            messages.send(player, "usage");
+            return;
+        }
+        if (!player.hasPermission("thecore.bypass")) {
+            messages.send(player, "bypass-no-permission");
+            return;
+        }
+        boolean enabled = islandService.toggleBypass(player.getUniqueId());
+        messages.send(player, enabled ? "bypass-enabled" : "bypass-disabled");
     }
 
     private void trust(Player player, String[] args) {
