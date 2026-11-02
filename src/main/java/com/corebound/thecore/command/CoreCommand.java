@@ -261,6 +261,9 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             saveFailure(player, island, exception);
             return;
         }
+        islandService.broadcastIslandMessage(island, player.getUniqueId(),
+                open ? "island-opened-broadcast" : "island-closed-broadcast",
+                Map.of("actor", player.getName()));
         if (!open) {
             islandService.ejectVisitors(island);
         }
@@ -458,12 +461,12 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             messages.send(player, "member-not-banned");
             return;
         }
-        try {
-            IslandData updated = switch (action) {
+        IslandData updated = switch (action) {
                 case KICK -> island.withMember(targetId, false, 0).withCoop(targetId, false);
                 case BAN -> island.withBanned(targetId, true);
                 case UNBAN -> island.withBanned(targetId, false);
-            };
+        };
+        try {
             repository.replace(updated);
         } catch (IOException exception) {
             saveFailure(player, island, exception);
@@ -476,13 +479,33 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             islandService.clearIslandChat(targetId);
         }
         String targetName = Optional.ofNullable(Bukkit.getOfflinePlayer(targetId).getName()).orElse(args[1]);
+        String targetMessageKey = switch (action) {
+            case KICK -> "member-kicked-target";
+            case BAN -> "member-banned-target";
+            case UNBAN -> "member-unbanned-target";
+        };
+        Map<String, String> actionReplacements = Map.of(
+                "target", targetName,
+                "island", island.name(),
+                "actor", player.getName());
+        islandService.broadcastIslandMessage(updated, player.getUniqueId(), switch (action) {
+            case KICK -> "island-member-kicked";
+            case BAN -> "island-member-banned";
+            case UNBAN -> "island-member-unbanned";
+        }, actionReplacements);
+        Player targetPlayer = Bukkit.getPlayer(targetId);
+        boolean ejectTarget = targetPlayer != null
+                && (action == MemberAction.KICK || action == MemberAction.BAN)
+                && islandService.islandAt(targetPlayer.getLocation())
+                        .filter(current -> current.owner().equals(island.owner()))
+                        .isPresent();
         if (action == MemberAction.KICK || action == MemberAction.BAN) {
-            Player target = Bukkit.getPlayer(targetId);
-            if (target != null && islandService.islandAt(target.getLocation())
-                    .filter(current -> current.owner().equals(island.owner())).isPresent()) {
-                islandService.ejectFromIsland(target, island,
-                        action == MemberAction.BAN ? "member-banned-notice" : "member-kicked-notice");
+            if (ejectTarget) {
+                islandService.ejectFromIsland(targetPlayer, island, targetMessageKey, actionReplacements);
             }
+        }
+        if (targetPlayer != null && !ejectTarget) {
+            messages.send(targetPlayer, targetMessageKey, actionReplacements);
         }
         messages.send(player, switch (action) {
             case KICK -> "member-kicked";

@@ -414,7 +414,22 @@ public final class IslandService {
             return false;
         }
         messages.send(actor, "island-renamed", Map.of("name", name));
+        broadcastIslandMessage(island.withName(name), actor.getUniqueId(), "island-renamed-broadcast",
+                Map.of("actor", actor.getName(), "name", name));
         return true;
+    }
+
+    public void broadcastIslandMessage(
+            IslandData island, UUID excludedPlayer, String messageKey, Map<String, String> replacements) {
+        Set<UUID> recipients = new HashSet<>(island.members().keySet());
+        recipients.add(island.owner());
+        recipients.remove(excludedPlayer);
+        for (UUID recipientId : recipients) {
+            Player recipient = Bukkit.getPlayer(recipientId);
+            if (recipient != null) {
+                messages.send(recipient, messageKey, replacements);
+            }
+        }
     }
 
     public boolean transferOwnership(Player actor, IslandData island, UUID newOwnerId) {
@@ -722,6 +737,11 @@ public final class IslandService {
     }
 
     public void ejectFromIsland(Player player, IslandData island, String messageKey) {
+        ejectFromIsland(player, island, messageKey, Map.of());
+    }
+
+    public void ejectFromIsland(
+            Player player, IslandData island, String messageKey, Map<String, String> replacements) {
         Optional<IslandData> home = repository.byOwner(player.getUniqueId())
                 .filter(homeIsland -> !homeIsland.owner().equals(island.owner()));
         boolean teleported = home.isPresent() && teleportHome(player, home.get());
@@ -736,7 +756,7 @@ public final class IslandService {
             }
         }
         if (teleported) {
-            messages.send(player, messageKey);
+            messages.send(player, messageKey, replacements);
         } else {
             plugin.getLogger().warning("Could not eject " + player.getName() + " from island '" + island.name() + "'.");
             messages.send(player, "teleport-failed");
