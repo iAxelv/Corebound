@@ -30,7 +30,7 @@ If prompted, accept the Minecraft EULA in `run/eula.txt` before starting the
 server. FAWE provides the WorldEdit API and is required to load `.schem` files.
 
 The default structure is `default.schem` in
-`run/plugins/TheCore/schematics/`. Minecraft structure `.nbt` files are also
+`run/plugins/Corebound/schematics/`. Minecraft structure `.nbt` files are also
 supported through Paper's built-in `StructureManager`.
 
 Schematic files are loaded and pasted asynchronously through FAWE so large
@@ -43,11 +43,11 @@ schematic volume and the server's available CPU and storage performance.
 - Schematic and `.nbt` structure placement
 - Per-player world borders and island protection
 - `/is create`, `/is home`, `/is visit`, `/is coop`, `/is open`, `/is close`,
-  and staff-only `/is bypass`
+  `/is leave`, and staff-only `/is bypass`
 - Island invitations/membership (`invite`, `accept`, `members`), coop access,
-  kick/ban/unban, and owner-confirmed island deletion
-- Configurable settings and member menus in `plugins/TheCore/is/`, with
-  ampersand-colored translations in `plugins/TheCore/lang/messages_es.yml`
+  kick/ban/unban, and owner-confirmed island deletion using a native dialog
+- Configurable settings and member menus in `plugins/Corebound/is/`, with
+  ampersand-colored translations in `plugins/Corebound/lang/messages_es.yml`
 - Per-island combat, damage, weather/time visuals, explosions, fluids,
   redstone, mob and spawner controls
 - Closed islands deny visits unless the visitor has enabled bypass. Old island

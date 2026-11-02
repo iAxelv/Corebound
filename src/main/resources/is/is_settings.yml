@@ -1,7 +1,24 @@
 title: "&8Island Settings"
-rows: 4
+rows: 5
 enabled-text: "&aEnabled"
 disabled-text: "&cDisabled"
+sounds:
+  settings-toggle:
+    sound: "minecraft:block.note_block.pling"
+    volume: 1.0
+    pitch: 1.2
+  island-created:
+    sound: "minecraft:ui.toast.challenge_complete"
+    volume: 1.0
+    pitch: 1.0
+  invite-received:
+    sound: "minecraft:block.note_block.bell"
+    volume: 1.0
+    pitch: 1.25
+  member-joined:
+    sound: "minecraft:ui.toast.challenge_complete"
+    volume: 1.0
+    pitch: 1.15
 items:
   pvp:
     material: DIAMOND_SWORD
@@ -89,25 +106,25 @@ items:
     lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
   passiveMobs:
     material: PIG_SPAWN_EGG
-    slot: 28
+    slot: 29
     display-name: "&aPassive Mobs"
     lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
     lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
   hostileMobs:
     material: ZOMBIE_SPAWN_EGG
-    slot: 29
+    slot: 30
     display-name: "&cHostile Mobs"
     lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
     lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
   spawners:
     material: SPAWNER
-    slot: 30
+    slot: 31
     display-name: "&dSpawners"
     lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
     lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
   damage:
     material: IRON_CHESTPLATE
-    slot: 31
+    slot: 32
     display-name: "&cPlayer Damage"
     lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
     lore-disabled: ["&7Status: %status%", "&eClick to toggle"]

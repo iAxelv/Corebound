@@ -49,6 +49,7 @@ public final class IslandService {
     private final World world;
     private final IslandRepository repository;
     private final Messages messages;
+    private final IslandSounds sounds;
     private final Set<UUID> pendingOwners = new HashSet<>();
     private final Set<String> pendingNames = new HashSet<>();
     private final Set<UUID> islandBypass = new HashSet<>();
@@ -59,11 +60,16 @@ public final class IslandService {
     }
 
     public IslandService(
-            TheCorePlugin plugin, World world, IslandRepository repository, Messages messages) {
+            TheCorePlugin plugin,
+            World world,
+            IslandRepository repository,
+            Messages messages,
+            IslandSounds sounds) {
         this.plugin = plugin;
         this.world = world;
         this.repository = repository;
         this.messages = messages;
+        this.sounds = sounds;
     }
 
     public boolean create(Player player, String islandName) {
@@ -234,6 +240,9 @@ public final class IslandService {
             return false;
         }
         Player player = Bukkit.getPlayer(owner);
+        if (player != null) {
+            sounds.play(player, "sounds.island-created");
+        }
         if (player != null && !teleport(player, island)) {
             messages.send(player, "teleport-failed");
             return true;
@@ -325,6 +334,7 @@ public final class IslandService {
         invites.put(targetId, new IslandInvite(inviter.getUniqueId(), island.owner(), island.name(), expiry));
         messages.send(inviter, "invite-sent", Map.of("name", target.getName()));
         messages.send(target, "invite-received", Map.of("name", inviter.getName()));
+        sounds.play(target, "sounds.invite-received");
     }
 
     public boolean acceptInvite(Player player, String inviterName) {
@@ -365,6 +375,59 @@ public final class IslandService {
         if (inviter != null) {
             messages.send(inviter, "invite-accepted-owner", Map.of("name", player.getName()));
         }
+        if (!teleport(player, island)) {
+            plugin.getLogger().warning("Could not teleport " + player.getName()
+                    + " to island '" + island.name() + "' after accepting an invite.");
+            messages.send(player, "teleport-failed");
+        } else {
+            sounds.play(player, "sounds.member-joined");
+        }
+        return true;
+    }
+
+    public List<String> pendingInviterNames(UUID playerId) {
+        IslandInvite invite = invites.get(playerId);
+        if (invite == null) {
+            return List.of();
+        }
+        String inviterName = Optional.ofNullable(Bukkit.getOfflinePlayer(invite.inviter()).getName())
+                .orElse(invite.islandName());
+        return List.of(inviterName);
+    }
+
+    public boolean leaveIsland(Player player) {
+        UUID playerId = player.getUniqueId();
+        Optional<IslandData> found = repository.forPlayer(playerId);
+        if (found.isEmpty()) {
+            messages.send(player, "island-not-created");
+            return false;
+        }
+        IslandData island = found.get();
+        if (island.owner().equals(playerId)) {
+            messages.send(player, "leave-owner-only");
+            return false;
+        }
+        try {
+            repository.replace(island.withMember(playerId, false, 0));
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Could not remove " + player.getName() + " from island '"
+                    + island.name() + "': " + exception.getMessage());
+            messages.send(player, "data-save-failed");
+            return false;
+        }
+        Map<UUID, Player> recipients = new HashMap<>();
+        Player owner = Bukkit.getPlayer(island.owner());
+        if (owner != null) {
+            recipients.put(owner.getUniqueId(), owner);
+        }
+        island.members().keySet().stream()
+                .filter(memberId -> !memberId.equals(playerId))
+                .map(Bukkit::getPlayer)
+                .filter(java.util.Objects::nonNull)
+                .forEach(member -> recipients.put(member.getUniqueId(), member));
+        recipients.values().forEach(recipient ->
+                messages.send(recipient, "island-member-left", Map.of("user", player.getName())));
+        ejectFromIsland(player, island, "island-left");
         return true;
     }
 

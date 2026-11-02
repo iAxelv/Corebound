@@ -38,6 +38,7 @@ public final class Messages {
         }
         for (Map.Entry<String, String> replacement : replacements.entrySet()) {
             message = message.replace("<" + replacement.getKey() + ">", replacement.getValue());
+            message = message.replace("%" + replacement.getKey() + "%", replacement.getValue());
         }
         recipient.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(prefix + message));
     }

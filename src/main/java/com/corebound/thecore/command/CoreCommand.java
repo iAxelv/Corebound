@@ -24,7 +24,7 @@ import org.bukkit.entity.Player;
 public final class CoreCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBCOMMANDS = List.of(
             "create", "home", "visit", "invite", "accept", "coop", "open", "close",
-            "settings", "members", "delete", "kick", "ban", "unban", "bypass");
+            "settings", "members", "delete", "leave", "kick", "ban", "unban", "bypass");
     private final TheCorePlugin plugin;
     private final IslandService islandService;
     private final IslandRepository repository;
@@ -73,6 +73,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             case "settings" -> openSettings(player, args);
             case "members" -> openMembers(player, args);
             case "delete" -> delete(player, args);
+            case "leave" -> leave(player, args);
             case "kick" -> memberAction(player, args, MemberAction.KICK);
             case "ban" -> memberAction(player, args, MemberAction.BAN);
             case "unban" -> memberAction(player, args, MemberAction.UNBAN);
@@ -92,6 +93,11 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
                 args[0].toLowerCase(Locale.ROOT))) {
             return Bukkit.getOnlinePlayers().stream()
                     .map(Player::getName)
+                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT)))
+                    .toList();
+        }
+        if (args.length == 2 && args[0].equalsIgnoreCase("accept") && sender instanceof Player player) {
+            return islandService.pendingInviterNames(player.getUniqueId()).stream()
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT)))
                     .toList();
         }
@@ -292,6 +298,14 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             menus.openDeleteConfirmation(player, island);
             messages.send(player, "delete-confirm-opened");
         }
+    }
+
+    private void leave(Player player, String[] args) {
+        if (args.length != 1) {
+            messages.send(player, "leave-usage");
+            return;
+        }
+        islandService.leaveIsland(player);
     }
 
     private enum MemberAction {

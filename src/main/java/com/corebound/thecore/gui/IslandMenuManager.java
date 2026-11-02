@@ -2,8 +2,16 @@ package com.corebound.thecore.gui;
 
 import com.corebound.thecore.island.IslandData;
 import com.corebound.thecore.island.IslandRepository;
+import com.corebound.thecore.island.IslandSounds;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.message.Messages;
+import io.papermc.paper.dialog.Dialog;
+import io.papermc.paper.registry.data.dialog.ActionButton;
+import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
+import io.papermc.paper.registry.data.dialog.body.DialogBody;
+import io.papermc.paper.registry.data.dialog.type.DialogType;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -12,6 +20,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickCallback;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -33,15 +44,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class IslandMenuManager implements Listener {
     private enum MenuType {
         SETTINGS,
-        MEMBERS,
-        DELETE
+        MEMBERS
     }
 
     private static final DateTimeFormatter JOIN_DATE =
             DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT).withZone(ZoneId.systemDefault());
+    private static final DateTimeFormatter JOIN_TIME =
+            DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT).withZone(ZoneId.systemDefault());
     private final JavaPlugin plugin;
     private final IslandRepository repository;
     private final IslandService islandService;
+    private final IslandSounds sounds;
     private final Messages messages;
     private final YamlConfiguration settingsConfig;
     private final YamlConfiguration membersConfig;
@@ -65,11 +78,16 @@ public final class IslandMenuManager implements Listener {
     }
 
     public IslandMenuManager(
-            JavaPlugin plugin, IslandRepository repository, IslandService islandService, Messages messages) {
+            JavaPlugin plugin,
+            IslandRepository repository,
+            IslandService islandService,
+            Messages messages,
+            IslandSounds sounds) {
         this.plugin = plugin;
         this.repository = repository;
         this.islandService = islandService;
         this.messages = messages;
+        this.sounds = sounds;
         settingsConfig = YamlConfiguration.loadConfiguration(
                 plugin.getDataFolder().toPath().resolve("is/is_settings.yml").toFile());
         membersConfig = YamlConfiguration.loadConfiguration(
@@ -130,16 +148,21 @@ public final class IslandMenuManager implements Listener {
             String rank = member.owner()
                     ? membersConfig.getString("owner-rank", "Owner")
                     : membersConfig.getString("member-rank", "Member");
-            String joinedAt = member.joinedAt() <= 0
+            String joinedDate = member.joinedAt() <= 0
                     ? membersConfig.getString("unknown-time", "Unknown")
                     : JOIN_DATE.format(Instant.ofEpochMilli(member.joinedAt()));
+            String joinedTime = member.joinedAt() <= 0
+                    ? membersConfig.getString("unknown-time", "Unknown")
+                    : JOIN_TIME.format(Instant.ofEpochMilli(member.joinedAt()));
             ItemStack head = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) head.getItemMeta();
             meta.setOwningPlayer(offlinePlayer);
             meta.displayName(text(membersConfig.getString("display-name", "&f%player%")
                     .replace("%player%", name)));
             meta.lore(membersConfig.getStringList("lore").stream()
-                    .map(line -> text(line.replace("%rank%", rank).replace("%time%", joinedAt)))
+                    .map(line -> text(line.replace("%rank%", rank)
+                            .replace("%date%", joinedDate)
+                            .replace("%time%", joinedTime)))
                     .toList());
             head.setItemMeta(meta);
             holder.inventory.setItem(slot, head);
@@ -154,11 +177,47 @@ public final class IslandMenuManager implements Listener {
     }
 
     public void openDeleteConfirmation(Player player, IslandData island) {
-        MenuHolder holder = new MenuHolder(MenuType.DELETE, island.owner(), 0);
-        holder.inventory = Bukkit.createInventory(holder, 27, messages.colored("delete-title"));
-        holder.inventory.setItem(11, named(Material.LIME_CONCRETE, messages.colored("delete-yes")));
-        holder.inventory.setItem(15, named(Material.RED_CONCRETE, messages.colored("delete-no")));
-        player.openInventory(holder.inventory);
+        if (!island.owner().equals(player.getUniqueId())) {
+            messages.send(player, "delete-owner-only");
+            return;
+        }
+        ActionButton yesButton = ActionButton.builder(messageComponent("delete-yes"))
+                .action(DialogAction.customClick(
+                        (response, audience) -> {
+                            if (audience instanceof Player clicker) {
+                                confirmDelete(clicker, island.owner());
+                            }
+                        },
+                        ClickCallback.Options.builder()
+                                .uses(1)
+                                .lifetime(Duration.ofMinutes(5))
+                                .build()))
+                .build();
+        ActionButton noButton = ActionButton.builder(messageComponent("delete-no")).build();
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(messageComponent("delete-title"))
+                        .body(List.of(DialogBody.plainMessage(messageComponent("delete-dialog-body"))))
+                        .build())
+                .type(DialogType.confirmation(yesButton, noButton)));
+        player.showDialog(dialog);
+    }
+
+    private void confirmDelete(Player player, UUID islandOwner) {
+        if (!player.getUniqueId().equals(islandOwner)) {
+            messages.send(player, "delete-owner-only");
+            return;
+        }
+        IslandData island = repository.byOwner(islandOwner).orElse(null);
+        if (island == null) {
+            messages.send(player, "island-not-created");
+            return;
+        }
+        if (islandService.isDeleting(islandOwner)) {
+            messages.send(player, "island-being-deleted");
+            return;
+        }
+        islandService.deleteIsland(island, success -> messages.send(
+                player, success ? "island-deleted" : "island-delete-failed"));
     }
 
     @EventHandler
@@ -172,25 +231,6 @@ public final class IslandMenuManager implements Listener {
             return;
         }
         IslandData island = repository.byOwner(holder.islandOwner).orElse(null);
-        if (holder.type == MenuType.DELETE) {
-            if (event.getRawSlot() == 15) {
-                player.closeInventory();
-            } else if (event.getRawSlot() == 11 && island != null && island.owner().equals(player.getUniqueId())) {
-                player.closeInventory();
-                if (islandService.isDeleting(island.owner())) {
-                    messages.send(player, "island-being-deleted");
-                    return;
-                }
-                islandService.deleteIsland(island, success -> {
-                    if (success) {
-                        messages.send(player, "island-deleted");
-                    } else {
-                        messages.send(player, "island-delete-failed");
-                    }
-                });
-            }
-            return;
-        }
         if (island == null) {
             player.closeInventory();
             return;
@@ -211,6 +251,7 @@ public final class IslandMenuManager implements Listener {
                 }
                 try {
                     repository.replace(island.withSettings(island.settings().toggle(key)));
+                    sounds.play(player, "sounds.settings-toggle");
                     openSettings(player, repository.byOwner(island.owner()).orElseThrow());
                 } catch (java.io.IOException exception) {
                     plugin.getLogger().severe("Could not save island settings: " + exception.getMessage());
@@ -266,16 +307,14 @@ public final class IslandMenuManager implements Listener {
         return item;
     }
 
-    private ItemStack named(Material material, String name) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(text(name));
-        item.setItemMeta(meta);
-        return item;
+    private Component text(String value) {
+        return LegacyComponentSerializer.legacyAmpersand().deserialize(value)
+                .decoration(TextDecoration.ITALIC, false);
     }
 
-    private net.kyori.adventure.text.Component text(String value) {
-        return LegacyComponentSerializer.legacyAmpersand().deserialize(value);
+    private Component messageComponent(String key) {
+        return LegacyComponentSerializer.legacySection().deserialize(messages.colored(key))
+                .decoration(TextDecoration.ITALIC, false);
     }
 
     private String color(String value) {

@@ -8,7 +8,7 @@ depend: [FastAsyncWorldEdit]
 commands:
   is:
     description: Create and manage your Corebound island
-    usage: /is <create|home|visit|invite|accept|coop|open|close|settings|members|kick|ban|unban|delete|bypass>
+    usage: /is <create|home|visit|invite|accept|coop|open|close|settings|members|kick|ban|unban|delete|leave|bypass>
     permission: thecore.island
 permissions:
   thecore.*:

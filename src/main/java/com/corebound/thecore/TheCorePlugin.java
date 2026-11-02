@@ -3,6 +3,7 @@ package com.corebound.thecore;
 import com.corebound.thecore.command.CoreCommand;
 import com.corebound.thecore.gui.IslandMenuManager;
 import com.corebound.thecore.island.IslandRepository;
+import com.corebound.thecore.island.IslandSounds;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.listener.IslandListener;
 import com.corebound.thecore.message.Messages;
@@ -52,8 +53,9 @@ public final class TheCorePlugin extends JavaPlugin {
             return;
         }
 
-        islandService = new IslandService(this, islandWorld, islandRepository, messages);
-        IslandMenuManager menus = new IslandMenuManager(this, islandRepository, islandService, messages);
+        IslandSounds sounds = new IslandSounds(this);
+        islandService = new IslandService(this, islandWorld, islandRepository, messages, sounds);
+        IslandMenuManager menus = new IslandMenuManager(this, islandRepository, islandService, messages, sounds);
         CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages, menus);
         if (getCommand("is") == null) {
             getLogger().severe("The /is command is missing from plugin.yml.");
