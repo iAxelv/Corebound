@@ -1,6 +1,7 @@
 package com.corebound.thecore;
 
 import com.corebound.thecore.command.CoreCommand;
+import com.corebound.thecore.gui.IslandMenuManager;
 import com.corebound.thecore.island.IslandRepository;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.listener.IslandListener;
@@ -20,7 +21,9 @@ public final class TheCorePlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        saveResource("messages_es.yml", false);
+        saveResourceIfMissing("lang/messages_es.yml");
+        saveResourceIfMissing("is/is_settings.yml");
+        saveResourceIfMissing("is/is_members.yml");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");
@@ -35,7 +38,7 @@ public final class TheCorePlugin extends JavaPlugin {
         }
 
         messages = new Messages(
-                new File(getDataFolder(), "messages_es.yml"), getResource("messages_es.yml"));
+                new File(getDataFolder(), "lang/messages_es.yml"), getResource("lang/messages_es.yml"));
         islandRepository = new IslandRepository(new File(getDataFolder(), "data/islands.yml"));
 
         String worldName = getConfig().getString("world.name", "core_void_world");
@@ -50,7 +53,8 @@ public final class TheCorePlugin extends JavaPlugin {
         }
 
         islandService = new IslandService(this, islandWorld, islandRepository, messages);
-        CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages);
+        IslandMenuManager menus = new IslandMenuManager(this, islandRepository, islandService, messages);
+        CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages, menus);
         if (getCommand("is") == null) {
             getLogger().severe("The /is command is missing from plugin.yml.");
             getServer().getPluginManager().disablePlugin(this);
@@ -60,6 +64,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getCommand("is").setTabCompleter(coreCommand);
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
+        getServer().getPluginManager().registerEvents(menus, this);
         getLogger().info("TheCore island foundation enabled.");
     }
 
@@ -80,6 +85,13 @@ public final class TheCorePlugin extends JavaPlugin {
         if (spacing <= 0 || radius <= 0 || spacing <= radius * 2) {
             throw new IOException(
                     "world.distance-between-islands must be greater than twice world.island-radius.");
+        }
+    }
+
+    private void saveResourceIfMissing(String resourcePath) {
+        File destination = new File(getDataFolder(), resourcePath.replace('/', File.separatorChar));
+        if (!destination.isFile()) {
+            saveResource(resourcePath, false);
         }
     }
 }

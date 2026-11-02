@@ -1,0 +1,113 @@
+title: "&8Island Settings"
+rows: 4
+enabled-text: "&aEnabled"
+disabled-text: "&cDisabled"
+items:
+  pvp:
+    material: DIAMOND_SWORD
+    slot: 10
+    display-name: "&cPvP"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  alwaysDay:
+    material: SUNFLOWER
+    slot: 11
+    display-name: "&eAlways Day"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  alwaysNight:
+    material: COAL
+    slot: 12
+    display-name: "&8Always Night"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  alwaysMidnight:
+    material: CLOCK
+    slot: 13
+    display-name: "&9Always Midnight"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  alwaysNoon:
+    material: CLOCK
+    slot: 14
+    display-name: "&6Always Noon"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  rainCycle:
+    material: WATER_BUCKET
+    slot: 15
+    display-name: "&bToggle Rain"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  alwaysSunny:
+    material: SUNFLOWER
+    slot: 16
+    display-name: "&eAlways Sunny"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  alwaysRainy:
+    material: WATER_BUCKET
+    slot: 19
+    display-name: "&bAlways Rainy"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  thunderCycle:
+    material: LIGHTNING_ROD
+    slot: 20
+    display-name: "&dToggle Thunderstorm"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  alwaysThunderstorm:
+    material: TRIDENT
+    slot: 21
+    display-name: "&5Always Thunderstorm"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  explosions:
+    material: TNT
+    slot: 22
+    display-name: "&cExplosions"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  lavaFlow:
+    material: LAVA_BUCKET
+    slot: 23
+    display-name: "&6Lava Flow"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  waterFlow:
+    material: WATER_BUCKET
+    slot: 24
+    display-name: "&bWater Flow"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  redstone:
+    material: REDSTONE
+    slot: 25
+    display-name: "&cRedstone"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  passiveMobs:
+    material: PIG_SPAWN_EGG
+    slot: 28
+    display-name: "&aPassive Mobs"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  hostileMobs:
+    material: ZOMBIE_SPAWN_EGG
+    slot: 29
+    display-name: "&cHostile Mobs"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  spawners:
+    material: SPAWNER
+    slot: 30
+    display-name: "&dSpawners"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]
+  damage:
+    material: IRON_CHESTPLATE
+    slot: 31
+    display-name: "&cPlayer Damage"
+    lore-enabled: ["&7Status: %status%", "&eClick to toggle"]
+    lore-disabled: ["&7Status: %status%", "&eClick to toggle"]

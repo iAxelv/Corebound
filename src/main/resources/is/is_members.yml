@@ -1,0 +1,20 @@
+title: "&8Island Members"
+rows: 4
+member-slots: [10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25]
+display-name: "&f%player%"
+lore:
+  - "&7Rank: %rank%"
+  - "&7Time: %time%"
+owner-rank: "Owner"
+member-rank: "Member"
+unknown-time: "Unknown"
+slot-previous: 27
+slot-next: 35
+previous-page:
+  material: ARROW
+  display-name: "&ePrevious page"
+  lore: []
+next-page:
+  material: ARROW
+  display-name: "&eNext page"
+  lore: []

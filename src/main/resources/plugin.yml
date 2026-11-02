@@ -1,14 +1,15 @@
-name: TheCore
+name: Corebound
 version: '${version}'
 main: com.corebound.thecore.TheCorePlugin
 api-version: '26.2'
 description: Corebound island foundation
-author: Corebound
+author: iAx3lv
 depend: [FastAsyncWorldEdit]
 commands:
   is:
     description: Create and manage your Corebound island
-    usage: /is <create|home|visit|trust|open|close|bypass>
+    usage: /is <create|home|visit|invite|accept|coop|open|close|settings|members|kick|ban|unban|delete|bypass>
+    permission: thecore.island
 permissions:
   thecore.*:
     description: Allows staff to bypass island protection and closed-island access
@@ -16,9 +17,13 @@ permissions:
     children:
       thecore.build: true
       thecore.bypass: true
+      thecore.island: true
   thecore.admin:
     description: Allows administrative access to TheCore
     default: op
+  thecore.island:
+    description: Allows use of island commands
+    default: true
   thecore.build:
     description: Allows building and interacting on any island
     default: false

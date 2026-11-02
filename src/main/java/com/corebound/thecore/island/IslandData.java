@@ -1,8 +1,9 @@
 package com.corebound.thecore.island;
 
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.HashSet;
 
 public record IslandData(
         UUID owner,
@@ -11,27 +12,71 @@ public record IslandData(
         long centerX,
         long centerZ,
         boolean open,
-        Set<UUID> trustedMembers) {
+        long createdAt,
+        Map<UUID, Long> members,
+        Set<UUID> coops,
+        Set<UUID> bannedPlayers,
+        IslandSettings settings) {
 
     public IslandData {
-        trustedMembers = Set.copyOf(trustedMembers);
+        members = Map.copyOf(members);
+        coops = Set.copyOf(coops);
+        bannedPlayers = Set.copyOf(bannedPlayers);
     }
 
     public boolean canBuild(UUID playerId) {
-        return owner.equals(playerId) || trustedMembers.contains(playerId);
+        return owner.equals(playerId) || members.containsKey(playerId) || coops.contains(playerId);
     }
 
-    public IslandData withTrustedMember(UUID playerId, boolean trusted) {
-        HashSet<UUID> members = new HashSet<>(trustedMembers);
-        if (trusted) {
-            members.add(playerId);
+    public IslandData withMember(UUID playerId, boolean member, long joinedAt) {
+        Map<UUID, Long> updatedMembers = new java.util.HashMap<>(members);
+        if (member) {
+            updatedMembers.put(playerId, joinedAt);
         } else {
-            members.remove(playerId);
+            updatedMembers.remove(playerId);
         }
-        return new IslandData(owner, name, index, centerX, centerZ, open, members);
+        return copy(updatedMembers, coops, bannedPlayers, settings, open);
+    }
+
+    public IslandData withCoop(UUID playerId, boolean coop) {
+        Set<UUID> updatedCoops = new HashSet<>(coops);
+        if (coop) {
+            updatedCoops.add(playerId);
+        } else {
+            updatedCoops.remove(playerId);
+        }
+        return copy(members, updatedCoops, bannedPlayers, settings, open);
+    }
+
+    public IslandData withBanned(UUID playerId, boolean banned) {
+        Set<UUID> updatedBans = new HashSet<>(bannedPlayers);
+        if (banned) {
+            updatedBans.add(playerId);
+        } else {
+            updatedBans.remove(playerId);
+        }
+        Map<UUID, Long> updatedMembers = new java.util.HashMap<>(members);
+        updatedMembers.remove(playerId);
+        Set<UUID> updatedCoops = new HashSet<>(coops);
+        updatedCoops.remove(playerId);
+        return copy(updatedMembers, updatedCoops, updatedBans, settings, open);
+    }
+
+    public IslandData withSettings(IslandSettings settings) {
+        return copy(members, coops, bannedPlayers, settings, open);
     }
 
     public IslandData withOpen(boolean open) {
-        return new IslandData(owner, name, index, centerX, centerZ, open, trustedMembers);
+        return copy(members, coops, bannedPlayers, settings, open);
+    }
+
+    private IslandData copy(
+            Map<UUID, Long> members,
+            Set<UUID> coops,
+            Set<UUID> bannedPlayers,
+            IslandSettings settings,
+            boolean open) {
+        return new IslandData(owner, name, index, centerX, centerZ, open, createdAt,
+                members, coops, bannedPlayers, settings);
     }
 }

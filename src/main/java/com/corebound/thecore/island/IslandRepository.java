@@ -31,6 +31,18 @@ public final class IslandRepository {
         return Optional.ofNullable(islands.get(owner));
     }
 
+    public Optional<IslandData> byMember(UUID playerId) {
+        return islands.values().stream().filter(island -> island.members().containsKey(playerId)).findFirst();
+    }
+
+    public Optional<IslandData> byCoop(UUID playerId) {
+        return islands.values().stream().filter(island -> island.coops().contains(playerId)).findFirst();
+    }
+
+    public Optional<IslandData> forPlayer(UUID playerId) {
+        return byOwner(playerId).or(() -> byMember(playerId));
+    }
+
     public Optional<IslandData> byName(String name) {
         String normalized = name.toLowerCase(Locale.ROOT);
         return islands.values().stream()
@@ -89,6 +101,19 @@ public final class IslandRepository {
         }
     }
 
+    public void remove(UUID owner) throws IOException {
+        IslandData previous = islands.remove(owner);
+        if (previous == null) {
+            return;
+        }
+        try {
+            save();
+        } catch (IOException exception) {
+            islands.put(owner, previous);
+            throw exception;
+        }
+    }
+
     public void save() throws IOException {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("last-index", lastIndex);
@@ -99,9 +124,17 @@ public final class IslandRepository {
             yaml.set(path + ".center-x", island.centerX());
             yaml.set(path + ".center-z", island.centerZ());
             yaml.set(path + ".open", island.open());
-            yaml.set(path + ".trusted-members", island.trustedMembers().stream()
+            yaml.set(path + ".created-at", island.createdAt());
+            yaml.set(path + ".members", null);
+            island.members().forEach((member, joinedAt) ->
+                    yaml.set(path + ".members." + member, joinedAt));
+            yaml.set(path + ".coops", island.coops().stream()
                     .map(UUID::toString)
                     .toList());
+            yaml.set(path + ".banned", island.bannedPlayers().stream()
+                    .map(UUID::toString)
+                    .toList());
+            island.settings().save(yaml.createSection(path + ".settings"));
         }
 
         Path target = file.toPath();
@@ -138,10 +171,15 @@ public final class IslandRepository {
             }
             try {
                 UUID owner = UUID.fromString(ownerKey);
-                Set<UUID> trustedMembers = new HashSet<>();
-                for (String member : islandSection.getStringList("trusted-members")) {
-                    trustedMembers.add(UUID.fromString(member));
+                Map<UUID, Long> members = new LinkedHashMap<>();
+                ConfigurationSection membersSection = islandSection.getConfigurationSection("members");
+                if (membersSection != null) {
+                    for (String memberKey : membersSection.getKeys(false)) {
+                        members.put(UUID.fromString(memberKey), membersSection.getLong(memberKey));
+                    }
                 }
+                Set<UUID> coops = readUuids(islandSection.getStringList("coops"));
+                coops.addAll(readUuids(islandSection.getStringList("trusted-members")));
                 IslandData island = new IslandData(
                         owner,
                         islandSection.getString("name", ""),
@@ -149,16 +187,29 @@ public final class IslandRepository {
                         islandSection.getLong("center-x"),
                         islandSection.getLong("center-z"),
                         islandSection.getBoolean("open", true),
-                        trustedMembers);
+                        islandSection.getLong("created-at", 0L),
+                        members,
+                        coops,
+                        readUuids(islandSection.getStringList("banned")),
+                        IslandSettings.load(islandSection.getConfigurationSection("settings")));
                 islands.put(owner, island);
             } catch (IllegalArgumentException exception) {
                 throw new IllegalStateException("Invalid UUID in island data for owner " + ownerKey + ".", exception);
             }
+
         }
 
         long maximumIndex = islands.values().stream().mapToLong(IslandData::index).max().orElse(-1);
         if (lastIndex < maximumIndex) {
             lastIndex = maximumIndex;
         }
+    }
+
+    private Set<UUID> readUuids(List<String> values) {
+        Set<UUID> uuids = new HashSet<>();
+        for (String value : values) {
+            uuids.add(UUID.fromString(value));
+        }
+        return uuids;
     }
 }

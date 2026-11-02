@@ -8,7 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 public final class Messages {
     private final YamlConfiguration messages;
@@ -38,7 +39,7 @@ public final class Messages {
         for (Map.Entry<String, String> replacement : replacements.entrySet()) {
             message = message.replace("<" + replacement.getKey() + ">", replacement.getValue());
         }
-        recipient.sendMessage(MiniMessage.miniMessage().deserialize(prefix + message));
+        recipient.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(prefix + message));
     }
 
     public String text(String key) {
@@ -46,6 +47,15 @@ public final class Messages {
         if (message == null) {
             throw new IllegalArgumentException("Missing localized message: " + key);
         }
-        return MiniMessage.miniMessage().stripTags(message);
+        return PlainTextComponentSerializer.plainText().serialize(
+                LegacyComponentSerializer.legacyAmpersand().deserialize(message));
+    }
+
+    public String colored(String key) {
+        String message = messages.getString(key);
+        if (message == null) {
+            throw new IllegalArgumentException("Missing localized message: " + key);
+        }
+        return org.bukkit.ChatColor.translateAlternateColorCodes('&', message);
     }
 }

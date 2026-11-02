@@ -1,4 +1,4 @@
-# TheCore
+# Corebound
 
 A Paper plugin for Corebound's island-world gameplay.
 
@@ -42,8 +42,14 @@ schematic volume and the server's available CPU and storage performance.
 - Void island world and square-spiral island allocation
 - Schematic and `.nbt` structure placement
 - Per-player world borders and island protection
-- `/is create`, `/is home`, `/is visit`, `/is trust`, `/is open`, `/is close`,
+- `/is create`, `/is home`, `/is visit`, `/is coop`, `/is open`, `/is close`,
   and staff-only `/is bypass`
+- Island invitations/membership (`invite`, `accept`, `members`), coop access,
+  kick/ban/unban, and owner-confirmed island deletion
+- Configurable settings and member menus in `plugins/TheCore/is/`, with
+  ampersand-colored translations in `plugins/TheCore/lang/messages_es.yml`
+- Per-island combat, damage, weather/time visuals, explosions, fluids,
+  redstone, mob and spawner controls
 - Closed islands deny visits unless the visitor has enabled bypass. Old island
   records remain open by default.
 - Island protection covers the full square island border. Grant `thecore.*` to
