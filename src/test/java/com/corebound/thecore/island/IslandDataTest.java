@@ -1,5 +1,6 @@
 package com.corebound.thecore.island;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,6 +10,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class IslandDataTest {
+    @Test
+    void islandGridIndexesInvertGeneratedCoordinates() {
+        for (long index = 0; index < 10_000; index++) {
+            IslandCoordinates coordinates = IslandGrid.coordinates(index, 3000);
+            assertEquals(index, IslandGrid.indexAt(
+                    coordinates.x() / 3000, coordinates.z() / 3000));
+        }
+    }
+
     @Test
     void invitedMembersAndCoopsCanBuildButBannedPlayersCannotRemainMembers() {
         UUID owner = UUID.randomUUID();

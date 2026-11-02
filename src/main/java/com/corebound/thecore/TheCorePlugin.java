@@ -41,7 +41,7 @@ public final class TheCorePlugin extends JavaPlugin {
 
         messages = new Messages(
                 new File(getDataFolder(), "lang/messages_es.yml"), getResource("lang/messages_es.yml"));
-        islandRepository = new IslandRepository(new File(getDataFolder(), "data/islands.yml"));
+        islandRepository = new IslandRepository(new File(getDataFolder(), "data/islands.yml"), this);
 
         String worldName = getConfig().getString("world.name", "core_void_world");
         WorldCreator creator = new WorldCreator(worldName);
@@ -75,7 +75,7 @@ public final class TheCorePlugin extends JavaPlugin {
     public void onDisable() {
         if (islandRepository != null) {
             try {
-                islandRepository.save();
+                islandRepository.flush();
             } catch (IOException exception) {
                 getLogger().severe("Could not save island data: " + exception.getMessage());
             }

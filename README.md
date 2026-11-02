@@ -36,6 +36,10 @@ supported through Paper's built-in `StructureManager`.
 Schematic files are loaded and pasted asynchronously through FAWE so large
 creations do not block the server's main tick. Paste duration still depends on
 schematic volume and the server's available CPU and storage performance.
+Island data changes are applied in memory immediately and persisted from
+versioned snapshots on Paper's async scheduler. Island-location checks use the
+square-spiral grid index instead of scanning every island, while personal
+weather and time are refreshed only on island entry or settings changes.
 
 ## Current features
 

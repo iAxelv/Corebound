@@ -434,7 +434,10 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         UUID targetId = resolvePlayerId(args[1], island);
         if (targetId == null && action == MemberAction.BAN
                 && args[1].matches("[A-Za-z0-9_]{3,16}")) {
-            targetId = Bukkit.getOfflinePlayer(args[1]).getUniqueId();
+            OfflinePlayer cachedPlayer = Bukkit.getOfflinePlayerIfCached(args[1]);
+            if (cachedPlayer != null) {
+                targetId = cachedPlayer.getUniqueId();
+            }
         }
         if (targetId == null) {
             messages.send(player, "member-not-found");
@@ -478,7 +481,8 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         if (action == MemberAction.KICK || action == MemberAction.BAN) {
             islandService.clearIslandChat(targetId);
         }
-        String targetName = Optional.ofNullable(Bukkit.getOfflinePlayer(targetId).getName()).orElse(args[1]);
+        Player targetPlayer = Bukkit.getPlayer(targetId);
+        String targetName = targetPlayer == null ? args[1] : targetPlayer.getName();
         String targetMessageKey = switch (action) {
             case KICK -> "member-kicked-target";
             case BAN -> "member-banned-target";
@@ -493,7 +497,6 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             case BAN -> "island-member-banned";
             case UNBAN -> "island-member-unbanned";
         }, actionReplacements);
-        Player targetPlayer = Bukkit.getPlayer(targetId);
         boolean ejectTarget = targetPlayer != null
                 && (action == MemberAction.KICK || action == MemberAction.BAN)
                 && islandService.islandAt(targetPlayer.getLocation())

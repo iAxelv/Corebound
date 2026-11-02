@@ -39,7 +39,8 @@ import org.bukkit.WorldBorder;
 import org.bukkit.block.structure.Mirror;
 import org.bukkit.block.structure.StructureRotation;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
+import org.bukkit.WeatherType;
 import org.bukkit.structure.Structure;
 import net.kyori.adventure.text.Component;
 
@@ -53,14 +54,16 @@ public final class IslandService {
     private final Messages messages;
     private final IslandSounds sounds;
     private final IslandPermissions permissions;
-    private final Set<UUID> pendingOwners = new HashSet<>();
-    private final Set<String> pendingNames = new HashSet<>();
-    private final Set<UUID> islandBypass = new HashSet<>();
-    private final Map<UUID, IslandInvite> invites = new HashMap<>();
+    private final long gridDistance;
+    private final double islandRadius;
+    private final Set<UUID> pendingOwners = ConcurrentHashMap.newKeySet();
+    private final Set<String> pendingNames = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> islandBypass = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, IslandInvite> invites = new ConcurrentHashMap<>();
     private final Set<UUID> islandChats = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> deletingIslands = new HashSet<>();
+    private final Set<UUID> deletingIslands = ConcurrentHashMap.newKeySet();
 
-    private record IslandInvite(UUID inviter, UUID islandOwner, String islandName, BukkitTask expiry) {
+    private record IslandInvite(UUID inviter, UUID islandOwner, String islandName, ScheduledTask expiry) {
     }
 
     public IslandService(
@@ -74,6 +77,8 @@ public final class IslandService {
         this.repository = repository;
         this.messages = messages;
         this.sounds = sounds;
+        gridDistance = plugin.getConfig().getLong("world.distance-between-islands", 3000);
+        islandRadius = plugin.getConfig().getDouble("world.island-radius", 35);
         this.permissions = IslandPermissions.load(
                 plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile());
     }
@@ -187,7 +192,7 @@ public final class IslandService {
         BlockVector3 target = BlockVector3.at(
                 Math.toIntExact(coordinates.x()), 100, Math.toIntExact(coordinates.z()));
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
             try {
                 ClipboardFormat format = ClipboardFormats.findByFile(schematic);
                 if (format == null) {
@@ -208,7 +213,7 @@ public final class IslandService {
                     Operations.complete(operation);
                 }
 
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                plugin.getServer().getGlobalRegionScheduler().run(plugin, regionTask -> {
                     try {
                         finishCreation(owner, islandName, index, coordinates);
                     } finally {
@@ -220,10 +225,11 @@ public final class IslandService {
                         Level.SEVERE,
                         "Could not asynchronously paste island structure '" + islandName + "'.",
                         exception);
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                plugin.getServer().getGlobalRegionScheduler().run(plugin, regionTask -> {
                     Player player = Bukkit.getPlayer(owner);
                     if (player != null) {
-                        messages.send(player, "structure-place-failed");
+                        player.getScheduler().run(plugin,
+                                playerTask -> messages.send(player, "structure-place-failed"), null);
                     }
                     releasePending(owner, normalizedName);
                 });
@@ -249,14 +255,14 @@ public final class IslandService {
         }
         Player player = Bukkit.getPlayer(owner);
         if (player != null) {
-            sounds.play(player, "sounds.island-created");
-        }
-        if (player != null && !teleport(player, island)) {
-            messages.send(player, "teleport-failed");
-            return true;
-        }
-        if (player != null) {
-            messages.send(player, "island-created", java.util.Map.of("name", islandName));
+            player.getScheduler().run(plugin, task -> {
+                sounds.play(player, "sounds.island-created");
+                if (!teleport(player, island)) {
+                    messages.send(player, "teleport-failed");
+                    return;
+                }
+                messages.send(player, "island-created", java.util.Map.of("name", islandName));
+            }, null);
         }
         return true;
     }
@@ -271,14 +277,20 @@ public final class IslandService {
             return Optional.empty();
         }
 
-        double radius = plugin.getConfig().getDouble("world.island-radius", 35);
-        return repository.all().stream()
-                .filter(island -> {
-                    double deltaX = Math.abs(location.getBlockX() - island.centerX());
-                    double deltaZ = Math.abs(location.getBlockZ() - island.centerZ());
-                    return deltaX <= radius && deltaZ <= radius;
-                })
-                .findFirst();
+        if (gridDistance <= 0) {
+            return Optional.empty();
+        }
+        long gridX = Math.round(location.getBlockX() / (double) gridDistance);
+        long gridZ = Math.round(location.getBlockZ() / (double) gridDistance);
+        long index;
+        try {
+            index = IslandGrid.indexAt(gridX, gridZ);
+        } catch (IllegalArgumentException | ArithmeticException exception) {
+            return Optional.empty();
+        }
+        return repository.byIndex(index)
+                .filter(island -> Math.abs(location.getBlockX() - island.centerX()) <= islandRadius
+                        && Math.abs(location.getBlockZ() - island.centerZ()) <= islandRadius);
     }
 
     public boolean toggleBypass(UUID playerId) {
@@ -293,8 +305,46 @@ public final class IslandService {
         return islandBypass.contains(playerId);
     }
 
+    public void refreshIslandEnvironment(IslandData island) {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            player.getScheduler().run(plugin, task -> islandAt(player.getLocation())
+                    .filter(current -> current.owner().equals(island.owner()))
+                    .ifPresent(current -> applyPersonalEnvironment(player, island.settings())), null);
+        }
+    }
+
+    public void applyPersonalEnvironment(Player player, IslandSettings settings) {
+        if (settings == null) {
+            player.resetPlayerTime();
+            player.resetPlayerWeather();
+            return;
+        }
+        if (settings.alwaysDay()) {
+            player.setPlayerTime(1000L, false);
+        } else if (settings.alwaysNoon()) {
+            player.setPlayerTime(6000L, false);
+        } else if (settings.alwaysNight()) {
+            player.setPlayerTime(13000L, false);
+        } else if (settings.alwaysMidnight()) {
+            player.setPlayerTime(18000L, false);
+        } else {
+            player.resetPlayerTime();
+        }
+        if (settings.alwaysSunny() || !settings.rainCycle()) {
+            player.setPlayerWeather(WeatherType.CLEAR);
+        } else if (settings.alwaysRainy() || settings.alwaysThunderstorm() || !settings.thunderCycle()) {
+            player.setPlayerWeather(WeatherType.DOWNFALL);
+        } else {
+            player.resetPlayerWeather();
+        }
+    }
+
     public Optional<IslandData> islandForMember(UUID playerId) {
         return repository.forPlayer(playerId);
+    }
+
+    public List<IslandData> allIslands() {
+        return repository.all();
     }
 
     public boolean hasPermission(IslandData island, UUID playerId, IslandPermission permission) {
@@ -586,7 +636,7 @@ public final class IslandService {
         if (previous != null) {
             previous.expiry().cancel();
         }
-        BukkitTask expiry = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        ScheduledTask expiry = plugin.getServer().getGlobalRegionScheduler().runDelayed(plugin, task -> {
             IslandInvite expired = invites.remove(targetId);
             if (expired == null) {
                 return;
@@ -742,6 +792,12 @@ public final class IslandService {
 
     public void ejectFromIsland(
             Player player, IslandData island, String messageKey, Map<String, String> replacements) {
+        player.getScheduler().run(plugin,
+                task -> ejectFromIslandNow(player, island, messageKey, replacements), null);
+    }
+
+    private void ejectFromIslandNow(
+            Player player, IslandData island, String messageKey, Map<String, String> replacements) {
         Optional<IslandData> home = repository.byOwner(player.getUniqueId())
                 .filter(homeIsland -> !homeIsland.owner().equals(island.owner()));
         boolean teleported = home.isPresent() && teleportHome(player, home.get());
@@ -769,9 +825,10 @@ public final class IslandService {
             return;
         }
         for (Player player : Bukkit.getOnlinePlayers()) {
-            islandAt(player.getLocation())
+            player.getScheduler().run(plugin, task -> islandAt(player.getLocation())
                     .filter(current -> current.owner().equals(island.owner()))
-                    .ifPresent(current -> ejectFromIsland(player, current, "island-deleted-ejected"));
+                    .ifPresent(current -> ejectFromIslandNow(
+                            player, current, "island-deleted-ejected", Map.of())), null);
         }
 
         com.sk89q.worldedit.world.World editWorld = BukkitAdapter.adapt(world);
@@ -782,11 +839,11 @@ public final class IslandService {
         BlockVector3 maximum = BlockVector3.at(
                 Math.toIntExact(island.centerX() + radius), world.getMaxHeight() - 1,
                 Math.toIntExact(island.centerZ() + radius));
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
             try (EditSession editSession = WorldEdit.getInstance().newEditSession(editWorld)) {
                 editSession.setBlocks(new CuboidRegion(editWorld, minimum, maximum),
                         BlockTypes.AIR.getDefaultState());
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                plugin.getServer().getGlobalRegionScheduler().run(plugin, regionTask -> {
                     try {
                         repository.remove(island.owner());
                         cancelInvitesForIsland(island.owner());
@@ -801,7 +858,7 @@ public final class IslandService {
                 });
             } catch (WorldEditException | RuntimeException exception) {
                 plugin.getLogger().log(Level.SEVERE, "Could not clear island '" + island.name() + "'.", exception);
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                plugin.getServer().getGlobalRegionScheduler().run(plugin, regionTask -> {
                     deletingIslands.remove(island.owner());
                     completion.accept(false);
                 });
@@ -811,36 +868,36 @@ public final class IslandService {
 
     public void ejectVisitors(IslandData island) {
         for (Player visitor : Bukkit.getOnlinePlayers()) {
-            if (island.owner().equals(visitor.getUniqueId())
-                    || island.members().containsKey(visitor.getUniqueId())
-                    || island.coops().contains(visitor.getUniqueId())
-                    || hasBypass(visitor.getUniqueId())
-                    || islandAt(visitor.getLocation())
-                            .filter(currentIsland -> currentIsland.owner().equals(island.owner()))
-                            .isEmpty()) {
-                continue;
-            }
-
-            Optional<IslandData> home = repository.byOwner(visitor.getUniqueId());
-            boolean teleported = home.isPresent() && teleportHome(visitor, home.get());
-            if (!teleported) {
-                World spawnWorld = Bukkit.getWorlds().stream()
-                        .filter(candidate -> !candidate.getUID().equals(world.getUID()))
-                        .findFirst()
-                        .orElse(world);
-                teleported = visitor.teleport(spawnWorld.getSpawnLocation());
-                if (teleported) {
-                    visitor.setWorldBorder(null);
+            visitor.getScheduler().run(plugin, task -> {
+                if (island.owner().equals(visitor.getUniqueId())
+                        || island.members().containsKey(visitor.getUniqueId())
+                        || island.coops().contains(visitor.getUniqueId())
+                        || hasBypass(visitor.getUniqueId())
+                        || islandAt(visitor.getLocation())
+                                .filter(current -> current.owner().equals(island.owner()))
+                                .isEmpty()) {
+                    return;
                 }
-            }
-
-            if (teleported) {
-                messages.send(visitor, "island-visitor-ejected");
-            } else {
-                plugin.getLogger().warning("Could not eject visitor " + visitor.getName()
-                        + " from closed island '" + island.name() + "'.");
-                messages.send(visitor, "teleport-failed");
-            }
+                Optional<IslandData> home = repository.byOwner(visitor.getUniqueId());
+                boolean teleported = home.isPresent() && teleportHome(visitor, home.get());
+                if (!teleported) {
+                    World spawnWorld = Bukkit.getWorlds().stream()
+                            .filter(candidate -> !candidate.getUID().equals(world.getUID()))
+                            .findFirst()
+                            .orElse(world);
+                    teleported = visitor.teleport(spawnWorld.getSpawnLocation());
+                    if (teleported) {
+                        visitor.setWorldBorder(null);
+                    }
+                }
+                if (teleported) {
+                    messages.send(visitor, "island-visitor-ejected");
+                } else {
+                    plugin.getLogger().warning("Could not eject visitor " + visitor.getName()
+                            + " from closed island '" + island.name() + "'.");
+                    messages.send(visitor, "teleport-failed");
+                }
+            }, null);
         }
     }
 
@@ -886,7 +943,7 @@ public final class IslandService {
         IslandData currentIsland = island.get();
         double centerX = currentIsland.centerX() + 0.5;
         double centerZ = currentIsland.centerZ() + 0.5;
-        double size = plugin.getConfig().getDouble("world.island-radius", 35) * 2;
+        double size = islandRadius * 2;
         if (!force && currentBorder != null
                 && Math.abs(currentBorder.getCenter().getX() - centerX) < 0.01
                 && Math.abs(currentBorder.getCenter().getZ() - centerZ) < 0.01
@@ -900,19 +957,18 @@ public final class IslandService {
         if (border == null) {
             return false;
         }
-        double size = plugin.getConfig().getDouble("world.island-radius", 35) * 2;
-        return repository.all().stream().anyMatch(island ->
-                Math.abs(border.getCenter().getX() - island.centerX() - 0.5) < 0.01
-                        && Math.abs(border.getCenter().getZ() - island.centerZ() - 0.5) < 0.01
-                        && Math.abs(border.getSize() - size) < 0.01);
+        double size = islandRadius * 2;
+        if (Math.abs(border.getSize() - size) >= 0.01) {
+            return false;
+        }
+        return islandAt(new Location(world, border.getCenter().getX(), 0, border.getCenter().getZ()))
+                .filter(island -> Math.abs(border.getCenter().getX() - island.centerX() - 0.5) < 0.01
+                        && Math.abs(border.getCenter().getZ() - island.centerZ() - 0.5) < 0.01)
+                .isPresent();
     }
 
     private Optional<IslandData> islandWithinBorder(Location location) {
-        double radius = plugin.getConfig().getDouble("world.island-radius", 35);
-        return repository.all().stream()
-                .filter(island -> Math.abs(location.getX() - island.centerX() - 0.5) <= radius
-                        && Math.abs(location.getZ() - island.centerZ() - 0.5) <= radius)
-                .findFirst();
+        return islandAt(location);
     }
 
     public World islandWorld() {

@@ -41,6 +41,28 @@ public final class IslandGrid {
                 Math.multiplyExact(gridZ, distance));
     }
 
+    public static long indexAt(long gridX, long gridZ) {
+        long ring = Math.max(Math.abs(gridX), Math.abs(gridZ));
+        if (ring == 0) {
+            return 0;
+        }
+        long side = Math.multiplyExact(2, ring);
+        long start = square(Math.subtractExact(Math.multiplyExact(2, ring), 1));
+        long offset;
+        if (gridX == ring && gridZ > -ring) {
+            offset = gridZ + ring - 1;
+        } else if (gridZ == ring && gridX < ring) {
+            offset = side + ring - 1 - gridX;
+        } else if (gridX == -ring && gridZ < ring) {
+            offset = side * 2 + ring - 1 - gridZ;
+        } else if (gridZ == -ring && gridX > -ring) {
+            offset = side * 3 + gridX + ring - 1;
+        } else {
+            throw new IllegalArgumentException("Grid coordinate is not part of the island spiral.");
+        }
+        return Math.addExact(start, offset);
+    }
+
     private static long square(long value) {
         return Math.multiplyExact(value, value);
     }

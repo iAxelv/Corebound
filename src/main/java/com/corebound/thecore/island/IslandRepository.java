@@ -6,6 +6,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,20 +15,34 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
 
 public final class IslandRepository {
     private final File file;
     private final Map<UUID, IslandData> islands = new LinkedHashMap<>();
+    private final Map<Long, IslandData> islandsByIndex = new LinkedHashMap<>();
+    private final JavaPlugin plugin;
+    private final boolean synchronousWrites;
+    private final Object writeLock = new Object();
+    private final AtomicLong writeVersion = new AtomicLong();
     private long lastIndex = -1;
 
     public IslandRepository(File file) {
+        this(file, null);
+    }
+
+    public IslandRepository(File file, JavaPlugin plugin) {
         this.file = file;
+        this.plugin = plugin;
+        synchronousWrites = plugin == null;
         load();
     }
 
-    public void transferOwnership(UUID previousOwner, IslandData updatedIsland) throws IOException {
+    public synchronized void transferOwnership(UUID previousOwner, IslandData updatedIsland) throws IOException {
         IslandData previous = islands.remove(previousOwner);
         if (previous == null || !previous.owner().equals(previousOwner)
                 || islands.containsKey(updatedIsland.owner())) {
@@ -36,48 +51,56 @@ public final class IslandRepository {
             }
             throw new IllegalStateException("Could not transfer island ownership to an existing owner.");
         }
+        islandsByIndex.remove(previous.index());
         islands.put(updatedIsland.owner(), updatedIsland);
+        islandsByIndex.put(updatedIsland.index(), updatedIsland);
         try {
             save();
         } catch (IOException exception) {
             islands.remove(updatedIsland.owner());
             islands.put(previousOwner, previous);
+            islandsByIndex.remove(updatedIsland.index());
+            islandsByIndex.put(previous.index(), previous);
             throw exception;
         }
     }
 
-    public Optional<IslandData> byOwner(UUID owner) {
+    public synchronized Optional<IslandData> byOwner(UUID owner) {
         return Optional.ofNullable(islands.get(owner));
     }
 
-    public Optional<IslandData> byMember(UUID playerId) {
+    public synchronized Optional<IslandData> byIndex(long index) {
+        return Optional.ofNullable(islandsByIndex.get(index));
+    }
+
+    public synchronized Optional<IslandData> byMember(UUID playerId) {
         return islands.values().stream().filter(island -> island.members().containsKey(playerId)).findFirst();
     }
 
-    public Optional<IslandData> byCoop(UUID playerId) {
+    public synchronized Optional<IslandData> byCoop(UUID playerId) {
         return islands.values().stream().filter(island -> island.coops().contains(playerId)).findFirst();
     }
 
-    public Optional<IslandData> forPlayer(UUID playerId) {
+    public synchronized Optional<IslandData> forPlayer(UUID playerId) {
         return byOwner(playerId).or(() -> byMember(playerId));
     }
 
-    public Optional<IslandData> byName(String name) {
+    public synchronized Optional<IslandData> byName(String name) {
         String normalized = name.toLowerCase(Locale.ROOT);
         return islands.values().stream()
                 .filter(island -> island.name().toLowerCase(Locale.ROOT).equals(normalized))
                 .findFirst();
     }
 
-    public List<IslandData> all() {
+    public synchronized List<IslandData> all() {
         return List.copyOf(islands.values());
     }
 
-    public long nextIndex() {
+    public synchronized long nextIndex() {
         return lastIndex + 1;
     }
 
-    public long reserveNextIndex() throws IOException {
+    public synchronized long reserveNextIndex() throws IOException {
         long previous = lastIndex;
         lastIndex++;
         try {
@@ -89,7 +112,7 @@ public final class IslandRepository {
         return lastIndex;
     }
 
-    public void add(IslandData island) throws IOException {
+    public synchronized void add(IslandData island) throws IOException {
         if (islands.containsKey(island.owner()) || byName(island.name()).isPresent()) {
             throw new IllegalStateException("Island owner or name is already registered.");
         }
@@ -98,45 +121,85 @@ public final class IslandRepository {
         }
 
         islands.put(island.owner(), island);
+        islandsByIndex.put(island.index(), island);
         try {
             save();
         } catch (IOException exception) {
             islands.remove(island.owner());
+            islandsByIndex.remove(island.index());
             throw exception;
         }
     }
 
-    public void replace(IslandData island) throws IOException {
+    public synchronized void replace(IslandData island) throws IOException {
         IslandData previous = islands.put(island.owner(), island);
+        if (previous != null) {
+            islandsByIndex.remove(previous.index());
+        }
+        islandsByIndex.put(island.index(), island);
         try {
             save();
         } catch (IOException exception) {
+            islandsByIndex.remove(island.index());
             if (previous == null) {
                 islands.remove(island.owner());
             } else {
                 islands.put(island.owner(), previous);
+                islandsByIndex.put(previous.index(), previous);
             }
             throw exception;
         }
     }
 
-    public void remove(UUID owner) throws IOException {
+    public synchronized void remove(UUID owner) throws IOException {
         IslandData previous = islands.remove(owner);
         if (previous == null) {
             return;
         }
+        islandsByIndex.remove(previous.index());
         try {
             save();
         } catch (IOException exception) {
             islands.put(owner, previous);
+            islandsByIndex.put(previous.index(), previous);
             throw exception;
         }
     }
 
-    public void save() throws IOException {
+    public synchronized void save() throws IOException {
+        Snapshot snapshot = new Snapshot(new ArrayList<>(islands.values()), lastIndex);
+        if (synchronousWrites) {
+            writeSnapshot(snapshot, writeVersion.incrementAndGet());
+            return;
+        }
+        long version = writeVersion.incrementAndGet();
+        plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
+            try {
+                writeSnapshot(snapshot, version);
+            } catch (IOException exception) {
+                plugin.getLogger().log(Level.SEVERE, "Could not asynchronously save island data.", exception);
+            }
+        });
+    }
+
+    public synchronized void flush() throws IOException {
+        Snapshot snapshot = new Snapshot(new ArrayList<>(islands.values()), lastIndex);
+        writeSnapshot(snapshot, writeVersion.incrementAndGet());
+    }
+
+    private void writeSnapshot(Snapshot snapshot, long version) throws IOException {
+        synchronized (writeLock) {
+            if (version < writeVersion.get()) {
+                return;
+            }
+            writeSnapshot(snapshot);
+        }
+    }
+
+    private void writeSnapshot(Snapshot snapshot) throws IOException {
         YamlConfiguration yaml = new YamlConfiguration();
-        yaml.set("last-index", lastIndex);
-        for (IslandData island : islands.values()) {
+        yaml.set("last-index", snapshot.lastIndex());
+        for (IslandData island : snapshot.islands()) {
             String path = "islands." + island.owner();
             yaml.set(path + ".name", island.name());
             yaml.set(path + ".index", island.index());
@@ -187,6 +250,12 @@ public final class IslandRepository {
             }
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    private record Snapshot(List<IslandData> islands, long lastIndex) {
+        private Snapshot {
+            islands = List.copyOf(islands);
         }
     }
 
@@ -291,6 +360,7 @@ public final class IslandRepository {
                         allPermissionOverrides,
                         spawn);
                 islands.put(owner, island);
+                islandsByIndex.put(island.index(), island);
             } catch (IllegalArgumentException exception) {
                 throw new IllegalStateException("Invalid UUID in island data for owner " + ownerKey + ".", exception);
             }

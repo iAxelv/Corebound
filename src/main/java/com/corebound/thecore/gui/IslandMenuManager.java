@@ -339,8 +339,8 @@ public final class IslandMenuManager implements Listener {
             messages.send(player, "island-being-deleted");
             return;
         }
-        islandService.deleteIsland(island, success -> messages.send(
-                player, success ? "island-deleted" : "island-delete-failed"));
+        islandService.deleteIsland(island, success -> player.getScheduler().run(
+                plugin, task -> messages.send(player, success ? "island-deleted" : "island-delete-failed"), null));
     }
 
     public void openTransferConfirmation(Player player, IslandData island, UUID target) {
@@ -403,9 +403,11 @@ public final class IslandMenuManager implements Listener {
                     continue;
                 }
                 try {
-                    repository.replace(island.withSettings(island.settings().toggle(key)));
+                    IslandData updated = island.withSettings(island.settings().toggle(key));
+                    repository.replace(updated);
+                    islandService.refreshIslandEnvironment(updated);
                     sounds.play(player, "sounds.settings-toggle");
-                    openSettings(player, repository.byOwner(island.owner()).orElseThrow());
+                    openSettings(player, updated);
                 } catch (java.io.IOException exception) {
                     plugin.getLogger().severe("Could not save island settings: " + exception.getMessage());
                     messages.send(player, "data-save-failed");

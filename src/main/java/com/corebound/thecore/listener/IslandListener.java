@@ -6,11 +6,10 @@ import com.corebound.thecore.island.IslandSettings;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.message.Messages;
 import io.papermc.paper.event.player.AsyncChatEvent;
-import java.util.HashSet;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
@@ -39,15 +38,18 @@ import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Projectile;
 import org.bukkit.projectiles.ProjectileSource;
-import org.bukkit.WeatherType;
 
 public final class IslandListener implements Listener {
     private final TheCorePlugin plugin;
     private final IslandService islandService;
     private final Messages messages;
-    private final Set<UUID> joinFallProtection = new HashSet<>();
-    private final Map<UUID, Long> nextStormStrike = new HashMap<>();
+    private final Set<UUID> joinFallProtection = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Long> nextStormStrike = new ConcurrentHashMap<>();
+    private final Map<UUID, EnvironmentSnapshot> playerEnvironments = new ConcurrentHashMap<>();
     private long environmentTick;
+
+    private record EnvironmentSnapshot(UUID islandOwner, IslandSettings settings) {
+    }
 
     public IslandListener(
             TheCorePlugin plugin,
@@ -56,7 +58,8 @@ public final class IslandListener implements Listener {
         this.plugin = plugin;
         this.islandService = islandService;
         this.messages = messages;
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::applyPersonalEnvironment, 20L, 20L);
+        plugin.getServer().getGlobalRegionScheduler()
+                .runAtFixedRate(plugin, task -> applyStormEffects(), 20L, 20L);
     }
 
     @EventHandler
@@ -104,14 +107,15 @@ public final class IslandListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        player.getScheduler().run(plugin, task -> {
             if (player.isOnline()) {
                 islandService.refreshBorder(player);
+                refreshPlayerEnvironment(player);
                 islandService.islandAt(player.getLocation())
                         .filter(island -> islandService.isBannedFromIsland(player.getUniqueId(), island))
                         .ifPresent(island -> islandService.ejectFromIsland(player, island, "island-banned"));
             }
-        });
+        }, null);
         if (!plugin.getConfig().getBoolean("protection.prevent-fall-damage-on-join", true)) {
             return;
         }
@@ -119,7 +123,8 @@ public final class IslandListener implements Listener {
         UUID playerId = player.getUniqueId();
         joinFallProtection.add(playerId);
         player.setFallDistance(0);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> joinFallProtection.remove(playerId), 100L);
+        player.getScheduler().runDelayed(
+                plugin, task -> joinFallProtection.remove(playerId), null, 100L);
     }
 
     @EventHandler
@@ -127,12 +132,13 @@ public final class IslandListener implements Listener {
         if (event.getTo() == null || sameBlock(event.getFrom(), event.getTo())) {
             return;
         }
-        islandService.islandAt(event.getTo())
-                .filter(island -> islandService.isBannedFromIsland(event.getPlayer().getUniqueId(), island))
-                .ifPresent(island -> {
-                    event.setCancelled(true);
-                    messages.send(event.getPlayer(), "island-banned");
-                });
+        IslandData island = islandService.islandAt(event.getTo()).orElse(null);
+        if (island != null && islandService.isBannedFromIsland(event.getPlayer().getUniqueId(), island)) {
+            event.setCancelled(true);
+            messages.send(event.getPlayer(), "island-banned");
+            return;
+        }
+        refreshPlayerEnvironment(event.getPlayer(), island);
         islandService.updateBorder(event.getPlayer(), event.getTo());
         if (event.getPlayer().isOnGround()) {
             joinFallProtection.remove(event.getPlayer().getUniqueId());
@@ -141,7 +147,20 @@ public final class IslandListener implements Listener {
 
     @EventHandler
     public void onWorldChange(PlayerChangedWorldEvent event) {
-        islandService.updateBorder(event.getPlayer());
+        Player player = event.getPlayer();
+        islandService.updateBorder(player);
+        refreshPlayerEnvironment(player);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleportEnvironment(PlayerTeleportEvent event) {
+        Player player = event.getPlayer();
+        player.getScheduler().run(plugin, task -> {
+            if (player.isOnline()) {
+                islandService.updateBorder(player);
+                refreshPlayerEnvironment(player);
+            }
+        }, null);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -172,6 +191,7 @@ public final class IslandListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         islandService.clearBypass(event.getPlayer().getUniqueId());
         islandService.clearIslandChat(event.getPlayer().getUniqueId());
+        playerEnvironments.remove(event.getPlayer().getUniqueId());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -183,7 +203,8 @@ public final class IslandListener implements Listener {
         event.setCancelled(true);
         event.viewers().clear();
         Component message = event.message();
-        plugin.getServer().getScheduler().runTask(plugin, () -> islandService.sendIslandChat(senderId, message));
+        event.getPlayer().getScheduler().run(
+                plugin, task -> islandService.sendIslandChat(senderId, message), null);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -294,53 +315,52 @@ public final class IslandListener implements Listener {
         return lava ? !settings.lavaFlow() : !settings.waterFlow();
     }
 
-    private void applyPersonalEnvironment() {
+    private void refreshPlayerEnvironment(Player player) {
+        refreshPlayerEnvironment(player, islandService.islandAt(player.getLocation()).orElse(null));
+    }
+
+    private void refreshPlayerEnvironment(Player player, IslandData island) {
+        EnvironmentSnapshot current = island == null
+                ? null
+                : new EnvironmentSnapshot(island.owner(), island.settings());
+        UUID playerId = player.getUniqueId();
+        if (java.util.Objects.equals(playerEnvironments.get(playerId), current)) {
+            return;
+        }
+        if (current == null) {
+            playerEnvironments.remove(playerId);
+            islandService.applyPersonalEnvironment(player, null);
+            return;
+        }
+        playerEnvironments.put(playerId, current);
+        islandService.applyPersonalEnvironment(player, current.settings());
+    }
+
+    private void applyStormEffects() {
         environmentTick += 20;
-        for (Player player : plugin.getServer().getOnlinePlayers()) {
-            IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
-            if (island == null) {
-                player.resetPlayerTime();
-                player.resetPlayerWeather();
+        for (IslandData island : islandService.allIslands()) {
+            if (!island.settings().alwaysThunderstorm()) {
+                nextStormStrike.remove(island.owner());
                 continue;
             }
-            IslandSettings settings = island.settings();
-            if (settings.alwaysDay()) {
-                player.setPlayerTime(1000L, false);
-            } else if (settings.alwaysNoon()) {
-                player.setPlayerTime(6000L, false);
-            } else if (settings.alwaysNight()) {
-                player.setPlayerTime(13000L, false);
-            } else if (settings.alwaysMidnight()) {
-                player.setPlayerTime(18000L, false);
-            } else {
-                player.resetPlayerTime();
+            long nextStrike = nextStormStrike.getOrDefault(island.owner(), environmentTick);
+            if (environmentTick < nextStrike) {
+                continue;
             }
-            if (settings.alwaysSunny()) {
-                player.setPlayerWeather(WeatherType.CLEAR);
-            } else if (settings.alwaysRainy() || settings.alwaysThunderstorm()) {
-                player.setPlayerWeather(WeatherType.DOWNFALL);
-            } else if (!settings.rainCycle()) {
-                player.setPlayerWeather(WeatherType.CLEAR);
-            } else if (!settings.thunderCycle()) {
-                player.setPlayerWeather(WeatherType.DOWNFALL);
-            } else {
-                player.resetPlayerWeather();
-            }
-            if (settings.alwaysThunderstorm()) {
-                long nextStrike = nextStormStrike.getOrDefault(island.owner(), environmentTick);
-                if (environmentTick >= nextStrike) {
-                    int radius = (int) plugin.getConfig().getDouble("world.island-radius", 35);
-                    int x = Math.toIntExact(island.centerX())
-                            + ThreadLocalRandom.current().nextInt(-radius, radius + 1);
-                    int z = Math.toIntExact(island.centerZ())
-                            + ThreadLocalRandom.current().nextInt(-radius, radius + 1);
-                    int y = Math.min(islandService.islandWorld().getMaxHeight() - 1,
-                            islandService.islandWorld().getHighestBlockYAt(x, z) + 1);
-                    islandService.islandWorld().strikeLightningEffect(new Location(islandService.islandWorld(), x, y, z));
-                    nextStormStrike.put(island.owner(),
-                            environmentTick + ThreadLocalRandom.current().nextLong(120L, 241L));
-                }
-            }
+            int radius = (int) plugin.getConfig().getDouble("world.island-radius", 35);
+            int x = Math.toIntExact(island.centerX())
+                    + ThreadLocalRandom.current().nextInt(-radius, radius + 1);
+            int z = Math.toIntExact(island.centerZ())
+                    + ThreadLocalRandom.current().nextInt(-radius, radius + 1);
+            plugin.getServer().getRegionScheduler().run(
+                    plugin, islandService.islandWorld(), x >> 4, z >> 4, task -> {
+                        int y = Math.min(islandService.islandWorld().getMaxHeight() - 1,
+                                islandService.islandWorld().getHighestBlockYAt(x, z) + 1);
+                        islandService.islandWorld().strikeLightningEffect(
+                                new Location(islandService.islandWorld(), x, y, z));
+                    });
+            nextStormStrike.put(island.owner(),
+                    environmentTick + ThreadLocalRandom.current().nextLong(120L, 241L));
         }
     }
 

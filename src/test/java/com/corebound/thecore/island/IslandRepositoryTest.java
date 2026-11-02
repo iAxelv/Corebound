@@ -33,6 +33,7 @@ class IslandRepositoryTest {
                 .withSpawn(new IslandSpawn(101.25, 73, -99.5, 65.0f, -12.0f));
         repository.add(island);
 
+        assertEquals(island, repository.byIndex(index).orElseThrow());
         IslandData loaded = new IslandRepository(file.toFile()).byOwner(owner).orElseThrow();
 
         assertEquals(IslandRank.MODERATOR, loaded.rank(member));
