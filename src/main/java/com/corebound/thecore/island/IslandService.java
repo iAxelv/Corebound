@@ -261,27 +261,30 @@ public final class IslandService {
     }
 
     public void updateBorder(Player player) {
-        if (player.getWorld().getUID().equals(world.getUID())) {
-            Optional<IslandData> currentIsland = islandAt(player.getLocation());
-            if (currentIsland.isPresent()) {
-                IslandData island = currentIsland.get();
-                WorldBorder currentBorder = player.getWorldBorder();
-                double centerX = island.centerX() + 0.5;
-                double centerZ = island.centerZ() + 0.5;
-                double size = plugin.getConfig().getDouble("world.island-radius", 35) * 2;
-                if (currentBorder != null
-                        && currentBorder.getCenter().getX() == centerX
-                        && currentBorder.getCenter().getZ() == centerZ
-                        && currentBorder.getSize() == size) {
-                    return;
-                }
-                applyBorder(player, island);
-            } else if (player.getWorldBorder() != null) {
+        updateBorder(player, player.getLocation());
+    }
+
+    public void updateBorder(Player player, Location location) {
+        if (location.getWorld() == null || !location.getWorld().getUID().equals(world.getUID())) {
+            if (player.getWorldBorder() != null) {
                 player.setWorldBorder(null);
             }
-        } else if (player.getWorldBorder() != null) {
-            player.setWorldBorder(null);
+            return;
         }
+
+        if (player.getWorldBorder() != null) {
+            return;
+        }
+
+        islandWithinBorder(location).ifPresent(island -> applyBorder(player, island));
+    }
+
+    private Optional<IslandData> islandWithinBorder(Location location) {
+        double radius = plugin.getConfig().getDouble("world.island-radius", 35);
+        return repository.all().stream()
+                .filter(island -> Math.abs(location.getX() - island.centerX() - 0.5) <= radius
+                        && Math.abs(location.getZ() - island.centerZ() - 0.5) <= radius)
+                .findFirst();
     }
 
     public World islandWorld() {

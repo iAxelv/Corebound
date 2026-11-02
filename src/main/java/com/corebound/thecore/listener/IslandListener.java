@@ -80,7 +80,7 @@ public final class IslandListener implements Listener {
         if (event.getTo() == null || sameBlock(event.getFrom(), event.getTo())) {
             return;
         }
-        islandService.updateBorder(event.getPlayer());
+        islandService.updateBorder(event.getPlayer(), event.getTo());
         if (event.getPlayer().isOnGround()) {
             joinFallProtection.remove(event.getPlayer().getUniqueId());
         }
