@@ -84,7 +84,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getCommand("is").setTabCompleter(coreCommand);
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
-        getServer().getPluginManager().registerEvents(new CorePlaceListener(coreService), this);
+        getServer().getPluginManager().registerEvents(new CorePlaceListener(this, coreService), this);
         getServer().getPluginManager().registerEvents(menus, this);
         coreService.initializeLoadedEntities();
         getLogger().info("Corebound island foundation enabled.");

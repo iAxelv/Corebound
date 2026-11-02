@@ -1,24 +1,34 @@
 package com.corebound.thecore.incremental;
 
+import com.corebound.thecore.TheCorePlugin;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.entity.Interaction;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
-import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
-import org.bukkit.entity.Interaction;
-import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
 
 public final class CorePlaceListener implements Listener {
+    private final TheCorePlugin plugin;
     private final CoreService coreService;
+    private final Set<PickupAttempt> pickupAttempts = ConcurrentHashMap.newKeySet();
 
-    public CorePlaceListener(CoreService coreService) {
+    private record PickupAttempt(UUID playerId, UUID entityId) {
+    }
+
+    public CorePlaceListener(TheCorePlugin plugin, CoreService coreService) {
+        this.plugin = plugin;
         this.coreService = coreService;
     }
 
@@ -70,7 +80,17 @@ public final class CorePlaceListener implements Listener {
         if (coreService.isCoreEntity(entity)) {
             event.setCancelled(true);
             if (hand == EquipmentSlot.HAND && event.getPlayer().isSneaking()) {
-                coreService.pickupCore(event.getPlayer(), entity);
+                Player player = event.getPlayer();
+                PickupAttempt attempt = new PickupAttempt(player.getUniqueId(), entity.getUniqueId());
+                if (!pickupAttempts.add(attempt)) {
+                    return;
+                }
+                player.getScheduler().runDelayed(
+                        plugin,
+                        task -> pickupAttempts.remove(attempt),
+                        () -> pickupAttempts.remove(attempt),
+                        1L);
+                coreService.pickupCore(player, entity);
             }
         }
     }

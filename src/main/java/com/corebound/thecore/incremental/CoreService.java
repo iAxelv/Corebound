@@ -48,6 +48,7 @@ public final class CoreService {
     private final float displayScale;
     private final float interactionWidth;
     private final float interactionHeight;
+    private final double displayHeightOffset;
     private final double textOffset;
     private final int textLineWidth;
     private final int rotationSpeedTicks;
@@ -83,7 +84,8 @@ public final class CoreService {
         displayScale = positiveFloat("display.scale", 1.3f);
         interactionWidth = positiveFloat("interaction.width", 1.3f);
         interactionHeight = positiveFloat("interaction.height", 1.3f);
-        textOffset = config.getDouble("text-display.offset-y", 1.4);
+        displayHeightOffset = config.getDouble("display.height-offset", 1.8);
+        textOffset = config.getDouble("text-display.offset-y", 1.1);
         textLineWidth = config.getInt("text-display.line-width", 200);
         rotationSpeedTicks = config.getInt("display.rotation-speed-ticks", 20);
         comboWindowMillis = config.getLong("combo.window-ms", 3000L);
@@ -192,7 +194,8 @@ public final class CoreService {
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
-                Item dropped = player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+                Location dropLocation = clickedEntity.getLocation().getBlock().getLocation().add(0.5, 0.5, 0.5);
+                Item dropped = clickedEntity.getWorld().dropItem(dropLocation, leftover);
                 dropped.setPersistent(true);
             }
             removeCoreEntities(removed);
@@ -243,7 +246,7 @@ public final class CoreService {
         Location coreLocation = new Location(
                 clickedBlock.getWorld(),
                 clickedBlock.getX() + 0.5,
-                clickedBlock.getY() + 1.0,
+                clickedBlock.getY() + displayHeightOffset,
                 clickedBlock.getZ() + 0.5);
         ItemDisplay itemDisplay = null;
         Interaction interaction = null;
@@ -263,7 +266,7 @@ public final class CoreService {
                 display.setPersistent(true);
                 markCoreEntity(display, island.index());
             });
-            Location interactionLocation = coreLocation.clone().add(0, -0.1, 0);
+            Location interactionLocation = coreLocation.clone().subtract(0, interactionHeight / 2.0, 0);
             interaction = clickedBlock.getWorld().spawn(interactionLocation, Interaction.class, entity -> {
                 entity.setInteractionWidth(interactionWidth);
                 entity.setInteractionHeight(interactionHeight);
