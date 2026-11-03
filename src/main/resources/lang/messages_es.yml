@@ -1,4 +1,8 @@
 prefix: "&3[Corebound] &r"
+core-no-permission: "&cNo tienes permiso para usar este comando."
+core-usage: "&cUso: /core reload"
+core-reload-success: "&aConfiguraciones de Corebound recargadas correctamente."
+core-reload-failure: "&cNo se pudieron recargar las configuraciones. Revisa la consola."
 player-only: "&cEste comando solo puede ejecutarlo un jugador."
 usage: "&cUso: /is <create|home|visit|invite|accept|coop|open|close|settings|members|kick|ban|unban|delete|leave|bypass> ..."
 already-has-island: "&cYa tienes una isla."

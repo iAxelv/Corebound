@@ -7,6 +7,7 @@ import com.corebound.thecore.island.IslandRepository;
 import com.corebound.thecore.island.IslandSounds;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.message.Messages;
+import com.corebound.thecore.config.ConfigFiles;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.DialogBase;
@@ -61,9 +62,9 @@ public final class IslandMenuManager implements Listener {
     private final IslandService islandService;
     private final IslandSounds sounds;
     private final Messages messages;
-    private final YamlConfiguration settingsConfig;
-    private final YamlConfiguration membersConfig;
-    private final YamlConfiguration permissionsConfig;
+    private YamlConfiguration settingsConfig;
+    private YamlConfiguration membersConfig;
+    private YamlConfiguration permissionsConfig;
 
     private static final class MenuHolder implements InventoryHolder {
         private final MenuType type;
@@ -100,11 +101,15 @@ public final class IslandMenuManager implements Listener {
         this.islandService = islandService;
         this.messages = messages;
         this.sounds = sounds;
-        settingsConfig = YamlConfiguration.loadConfiguration(
+        reload();
+    }
+
+    public void reload() {
+        settingsConfig = ConfigFiles.load(
                 plugin.getDataFolder().toPath().resolve("is/is_settings.yml").toFile());
-        membersConfig = YamlConfiguration.loadConfiguration(
+        membersConfig = ConfigFiles.load(
                 plugin.getDataFolder().toPath().resolve("is/is_members.yml").toFile());
-        permissionsConfig = YamlConfiguration.loadConfiguration(
+        permissionsConfig = ConfigFiles.load(
                 plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile());
     }
 

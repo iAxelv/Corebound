@@ -17,6 +17,7 @@ import java.io.File;
 import java.io.IOException;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class TheCorePlugin extends JavaPlugin {
@@ -25,6 +26,8 @@ public final class TheCorePlugin extends JavaPlugin {
     private CoreService coreService;
     private PylonService pylonService;
     private Messages messages;
+    private IslandSounds sounds;
+    private IslandMenuManager menus;
 
     @Override
     public void onEnable() {
@@ -65,7 +68,7 @@ public final class TheCorePlugin extends JavaPlugin {
             return;
         }
 
-        IslandSounds sounds = new IslandSounds(this);
+        sounds = new IslandSounds(this);
         islandService = new IslandService(this, islandWorld, islandRepository, messages, sounds);
         try {
             CoreRepository coreRepository = new CoreRepository(new File(getDataFolder(), "data/cores.yml"), this);
@@ -89,15 +92,22 @@ public final class TheCorePlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        IslandMenuManager menus = new IslandMenuManager(this, islandRepository, islandService, messages, sounds);
+        menus = new IslandMenuManager(this, islandRepository, islandService, messages, sounds);
         CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages, menus);
         if (getCommand("is") == null) {
             getLogger().severe("The /is command is missing from plugin.yml.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
+        if (getCommand("core") == null) {
+            getLogger().severe("The /core command is missing from plugin.yml.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         getCommand("is").setExecutor(coreCommand);
         getCommand("is").setTabCompleter(coreCommand);
+        getCommand("core").setExecutor(coreCommand);
+        getCommand("core").setTabCompleter(coreCommand);
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
         getServer().getPluginManager().registerEvents(
@@ -138,9 +148,36 @@ public final class TheCorePlugin extends JavaPlugin {
     }
 
     private void validateIslandSpacing() throws IOException {
-        int spacing = getConfig().getInt("world.distance-between-islands");
-        double radius = getConfig().getDouble("world.island-radius");
-        if (spacing <= 0 || radius <= 0 || spacing <= radius * 2) {
+        validateIslandSpacing(getConfig());
+    }
+
+    public void reloadConfigurations() throws IOException {
+        YamlConfiguration candidate = new YamlConfiguration();
+        try {
+            candidate.load(new File(getDataFolder(), "config.yml"));
+        } catch (org.bukkit.configuration.InvalidConfigurationException exception) {
+            throw new IOException("config.yml contains invalid YAML.", exception);
+        }
+        validateIslandSpacing(candidate);
+        String configuredWorld = candidate.getString("world.name", "core_void_world");
+        if (!islandService.islandWorld().getName().equals(configuredWorld)) {
+            throw new IllegalArgumentException("Changing world.name requires a server restart.");
+        }
+
+        reloadConfig();
+        validateIslandSpacing();
+        islandService.reloadConfiguration();
+        messages.reload();
+        sounds.reload();
+        menus.reload();
+        coreService.reloadConfiguration();
+        pylonService.reloadConfiguration();
+    }
+
+    private void validateIslandSpacing(org.bukkit.configuration.ConfigurationSection config) throws IOException {
+        long spacing = config.getLong("world.distance-between-islands");
+        double radius = config.getDouble("world.island-radius");
+        if (spacing <= 0 || !Double.isFinite(radius) || radius <= 0 || spacing <= radius * 2) {
             throw new IOException(
                     "world.distance-between-islands must be greater than twice world.island-radius.");
         }

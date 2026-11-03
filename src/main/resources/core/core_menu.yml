@@ -1,9 +1,9 @@
 title: "&5Gestión del Núcleo"
-rows: 3
+rows: 5
 items:
   upgrades:
     material: ENCHANTED_BOOK
-    slot: 10
+    slot: 19
     display-name: "&dUpgrades"
     lore:
       - "&7Permite mejorar aspectos del Núcleo."
@@ -20,9 +20,21 @@ items:
       - "&7Energía: &6%energy%&7/&6%max_energy%⚡"
       - "&7Producción base: &a+%base_energy%⚡/golpe"
       - "&7Multiplicador máximo de combo: &bx%max_combo%"
+  fracture:
+    material: NETHER_STAR
+    slot: 44
+    display-name: "&d&lFRACTURA DIMENSIONAL"
+    lore:
+      - "&7Reinicia tu Núcleo a Nivel 1."
+      - "&aBonus permanente: +50% de producción global."
+      - "&7Prestigios: &d%prestige%"
+      - "&7Fragmentos del Núcleo: &b%fragments%"
+      - "&cLos Pilones y sus células serán destruidos."
+      - ""
+      - "&eHaz clic para colapsar el Núcleo."
   pylon:
     material: SEA_LANTERN
-    slot: 14
+    slot: 25
     display-name: "&bForjar Pilón I"
     lore:
       - "&7Costo: &6%cost%⚡"
@@ -38,7 +50,7 @@ items:
       - "&7Pilones colocados o guardados: &e%owned%&7/&e%pylons%"
   cell-forge:
     material: ENCHANTING_TABLE
-    slot: 12
+    slot: 23
     display-name: "&5Forja Elemental"
     lore:
       - "&7Sintetiza células de Fuego, Sobrecarga y Vacío."
@@ -50,7 +62,7 @@ items:
       - "&cRequiere Núcleo Nivel 3."
   upgrade:
     material: NETHER_STAR
-    slot: 16
+    slot: 36
     display-name: "&aMejorar Núcleo &7(Nvl. %next_level%)"
     lore-enough:
       - "&7Costo: &6%cost%⚡"

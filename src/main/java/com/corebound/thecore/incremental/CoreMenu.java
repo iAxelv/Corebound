@@ -1,5 +1,6 @@
 package com.corebound.thecore.incremental;
 
+import com.corebound.thecore.config.ConfigFiles;
 import com.corebound.thecore.message.Messages;
 import java.io.File;
 import java.io.IOException;
@@ -25,24 +26,25 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class CoreMenu implements Listener {
-    private static final int UPGRADES_SLOT = 10;
-    private static final int STATISTICS_SLOT = 4;
-    private static final int CELL_FORGE_SLOT = 12;
-    private static final int FRACTURE_SLOT = 13;
-    private static final int PYLON_SLOT = 14;
-    private static final int UPGRADE_SLOT = 16;
-
     private final CoreService coreService;
     private final Messages messages;
-    private final YamlConfiguration config;
+    private final JavaPlugin plugin;
+    private final File configFile;
+    private YamlConfiguration config;
     private PylonService pylonService;
 
     private static final class MenuHolder implements InventoryHolder {
         private final long islandIndex;
+        private final Map<String, Integer> slots;
         private Inventory inventory;
 
-        private MenuHolder(long islandIndex) {
+        private MenuHolder(long islandIndex, Map<String, Integer> slots) {
             this.islandIndex = islandIndex;
+            this.slots = Map.copyOf(slots);
+        }
+
+        private int slot(String item) {
+            return slots.get(item);
         }
 
         @Override
@@ -52,34 +54,48 @@ public final class CoreMenu implements Listener {
     }
 
     public CoreMenu(JavaPlugin plugin, Messages messages, CoreService coreService, File configFile) {
+        this.plugin = plugin;
         this.coreService = coreService;
         this.messages = messages;
-        config = YamlConfiguration.loadConfiguration(configFile);
+        this.configFile = configFile;
+        reload(true);
+    }
+
+    public void reload() {
+        reload(false);
+    }
+
+    private void reload(boolean saveDefaults) {
+        YamlConfiguration loaded = ConfigFiles.load(configFile);
         InputStream defaultsStream = plugin.getResource("core/core_menu.yml");
         if (defaultsStream == null) {
             throw new IllegalArgumentException("Bundled core/core_menu.yml is missing.");
         }
         try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
-            config.setDefaults(YamlConfiguration.loadConfiguration(reader));
-            config.options().copyDefaults(true);
-            config.save(configFile);
+            loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
+            if (saveDefaults) {
+                loaded.options().copyDefaults(true);
+                loaded.save(configFile);
+            }
         } catch (IOException exception) {
-            throw new IllegalArgumentException("Could not migrate core/core_menu.yml defaults.", exception);
+            throw new IllegalArgumentException("Could not load core/core_menu.yml defaults.", exception);
         }
-        if (config.getInt("rows", 3) != 3) {
-            throw new IllegalArgumentException("core_menu.yml rows must be 3.");
+        if (loaded.getInt("rows", 5) != 5) {
+            throw new IllegalArgumentException("core_menu.yml rows must be 5.");
         }
-        validateItem("items.upgrades", UPGRADES_SLOT);
-        validateItem("items.statistics", STATISTICS_SLOT);
-        validateItem("items.pylon", PYLON_SLOT);
-        validateItem("items.cell-forge", CELL_FORGE_SLOT);
-        if (Material.matchMaterial(config.getString("items.pylon.locked-material", "BARRIER")) == null) {
+        validateItem(loaded, "items.upgrades");
+        validateItem(loaded, "items.statistics");
+        validateItem(loaded, "items.fracture");
+        validateItem(loaded, "items.pylon");
+        validateItem(loaded, "items.cell-forge");
+        validateItem(loaded, "items.upgrade");
+        if (Material.matchMaterial(loaded.getString("items.pylon.locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.pylon.locked-material must be valid.");
         }
-        if (Material.matchMaterial(config.getString("items.cell-forge.locked-material", "BARRIER")) == null) {
+        if (Material.matchMaterial(loaded.getString("items.cell-forge.locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.cell-forge.locked-material must be valid.");
         }
-        validateItem("items.upgrade", UPGRADE_SLOT);
+        config = loaded;
     }
 
     public void attachPylonService(PylonService pylonService) {
@@ -87,19 +103,19 @@ public final class CoreMenu implements Listener {
     }
 
     public void open(Player player, CoreRecord core) {
-        MenuHolder holder = new MenuHolder(core.islandIndex());
+        MenuHolder holder = new MenuHolder(core.islandIndex(), menuSlots());
         holder.inventory = Bukkit.createInventory(
-                holder, 27, color(config.getString("title", "&5Gestión del Núcleo")));
-        holder.inventory.setItem(UPGRADES_SLOT,
+                holder, 45, color(config.getString("title", "&5Gestión del Núcleo")));
+        holder.inventory.setItem(slot("upgrades"),
                 createItem(config.getConfigurationSection("items.upgrades"), core, false));
-        holder.inventory.setItem(STATISTICS_SLOT,
+        holder.inventory.setItem(slot("statistics"),
                 createItem(config.getConfigurationSection("items.statistics"), core, false));
-        holder.inventory.setItem(CELL_FORGE_SLOT, createCellForgeItem(core));
+        holder.inventory.setItem(slot("cell-forge"), createCellForgeItem(core));
         if (core.level() >= 10) {
-            holder.inventory.setItem(FRACTURE_SLOT, createFractureItem(core));
+            holder.inventory.setItem(slot("fracture"), createFractureItem(core));
         }
-        holder.inventory.setItem(PYLON_SLOT, createPylonItem(core));
-        holder.inventory.setItem(UPGRADE_SLOT, createItem(
+        holder.inventory.setItem(slot("pylon"), createPylonItem(core));
+        holder.inventory.setItem(slot("upgrade"), createItem(
                 config.getConfigurationSection("items.upgrade"), core, core.energy() >= core.upgradeCost()));
         player.openInventory(holder.inventory);
     }
@@ -114,20 +130,21 @@ public final class CoreMenu implements Listener {
                 || !(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        if (event.getRawSlot() == UPGRADES_SLOT) {
+        if (event.getRawSlot() == holder.slot("upgrades")) {
             coreService.openCoreUpgrades(player, holder.islandIndex);
-        } else if (event.getRawSlot() == PYLON_SLOT && pylonService != null) {
+        } else if (event.getRawSlot() == holder.slot("pylon") && pylonService != null) {
             pylonService.buy(player, holder.islandIndex);
             coreService.openCoreMenu(player, holder.islandIndex);
-        } else if (event.getRawSlot() == CELL_FORGE_SLOT && pylonService != null) {
+        } else if (event.getRawSlot() == holder.slot("cell-forge") && pylonService != null) {
             pylonService.openCellForge(player, holder.islandIndex);
-        } else if (event.getRawSlot() == FRACTURE_SLOT) {
+        } else if (event.getRawSlot() == holder.slot("fracture")) {
             if (coreService.fractureCore(player, holder.islandIndex)) {
                 coreService.openCoreMenu(player, holder.islandIndex);
             }
-        } else if (event.getRawSlot() == UPGRADE_SLOT && coreService.upgradeCore(player, holder.islandIndex)) {
+        } else if (event.getRawSlot() == holder.slot("upgrade")
+                && coreService.upgradeCore(player, holder.islandIndex)) {
             coreService.openCoreMenu(player, holder.islandIndex);
-        } else if (event.getRawSlot() == UPGRADE_SLOT) {
+        } else if (event.getRawSlot() == holder.slot("upgrade")) {
             player.closeInventory();
         }
     }
@@ -172,17 +189,15 @@ public final class CoreMenu implements Listener {
     }
 
     private ItemStack createFractureItem(CoreRecord core) {
-        ItemStack item = new ItemStack(Material.NETHER_STAR);
+        ConfigurationSection itemConfig = config.getConfigurationSection("items.fracture");
+        ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "NETHER_STAR")));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(color("&d&lFRACTURA DIMENSIONAL"));
-        meta.lore(List.of(
-                color("&7Reinicia tu Núcleo a Nivel 1."),
-                color("&aBonus permanente: +50% de producción global."),
-                color("&7Prestigios: &d" + core.prestigeCount()),
-                color("&7Fragmentos del Núcleo: &b" + core.coreFragments()),
-                color("&cLos Pilones y sus células serán destruidos."),
-                color(""),
-                color("&eHaz clic para colapsar el Núcleo.")));
+        meta.displayName(color(itemConfig.getString("display-name", "&d&lFRACTURA DIMENSIONAL")));
+        meta.lore(itemConfig.getStringList("lore").stream()
+                .map(line -> color(replace(line, Map.of(
+                        "%prestige%", Integer.toString(core.prestigeCount()),
+                        "%fragments%", Integer.toString(core.coreFragments())))))
+                .toList());
         item.setItemMeta(meta);
         return item;
     }
@@ -241,14 +256,37 @@ public final class CoreMenu implements Listener {
         return item;
     }
 
-    private void validateItem(String path, int expectedSlot) {
-        ConfigurationSection section = config.getConfigurationSection(path);
+    private void validateItem(YamlConfiguration loaded, String path) {
+        ConfigurationSection section = loaded.getConfigurationSection(path);
+        int slot = section == null ? -1 : section.getInt("slot", -1);
         if (section == null
-                || section.getInt("slot", -1) != expectedSlot
+                || slot < 0
+                || slot >= loaded.getInt("rows", 5) * 9
                 || Material.matchMaterial(section.getString("material", "")) == null) {
-            throw new IllegalArgumentException(
-                    "core_menu.yml " + path + " must define a valid material and slot " + expectedSlot + ".");
+            throw new IllegalArgumentException("core_menu.yml " + path + " must define a valid material and slot.");
         }
+        for (String otherPath : List.of(
+                "items.upgrades", "items.statistics", "items.fracture", "items.pylon", "items.cell-forge",
+                "items.upgrade")) {
+            if (!otherPath.equals(path)
+                    && loaded.getInt(otherPath + ".slot", -1) == slot) {
+                throw new IllegalArgumentException("core_menu.yml item slots must be unique.");
+            }
+        }
+    }
+
+    private int slot(String item) {
+        return config.getInt("items." + item + ".slot");
+    }
+
+    private Map<String, Integer> menuSlots() {
+        return Map.of(
+                "upgrades", slot("upgrades"),
+                "statistics", slot("statistics"),
+                "fracture", slot("fracture"),
+                "pylon", slot("pylon"),
+                "cell-forge", slot("cell-forge"),
+                "upgrade", slot("upgrade"));
     }
 
     private String replace(String text, Map<String, String> placeholders) {

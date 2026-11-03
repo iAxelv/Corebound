@@ -1,6 +1,7 @@
 package com.corebound.thecore.island;
 
 import com.corebound.thecore.TheCorePlugin;
+import com.corebound.thecore.config.ConfigFiles;
 import java.io.File;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
@@ -11,12 +12,17 @@ import org.bukkit.entity.Player;
 
 public final class IslandSounds {
     private final TheCorePlugin plugin;
-    private final YamlConfiguration settings;
+    private final File file;
+    private YamlConfiguration settings;
 
     public IslandSounds(TheCorePlugin plugin) {
         this.plugin = plugin;
-        File file = plugin.getDataFolder().toPath().resolve("is/is_settings.yml").toFile();
-        settings = YamlConfiguration.loadConfiguration(file);
+        file = plugin.getDataFolder().toPath().resolve("is/is_settings.yml").toFile();
+        reload();
+    }
+
+    public void reload() {
+        settings = ConfigFiles.load(file);
     }
 
     public void play(Player player, String soundPath) {

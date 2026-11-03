@@ -1,5 +1,6 @@
 package com.corebound.thecore.island;
 
+import com.corebound.thecore.config.ConfigFiles;
 import java.io.File;
 import java.util.EnumMap;
 import java.util.Map;
@@ -13,7 +14,7 @@ public final class IslandPermissions {
     }
 
     public static IslandPermissions load(File file) {
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration config = ConfigFiles.load(file);
         Map<IslandPermission, IslandRank> defaults = defaults();
         for (IslandPermission permission : IslandPermission.values()) {
             IslandRank configured = IslandRank.fromConfig(

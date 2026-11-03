@@ -1,5 +1,6 @@
 package com.corebound.thecore.message;
 
+import com.corebound.thecore.config.ConfigFiles;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,18 +15,27 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 public final class Messages {
-    private final YamlConfiguration messages;
+    private final File file;
+    private final YamlConfiguration defaults;
+    private YamlConfiguration messages;
 
     public Messages(File file, InputStream defaults) {
-        messages = YamlConfiguration.loadConfiguration(file);
+        this.file = file;
         if (defaults == null) {
             throw new IllegalStateException("Bundled default messages are missing.");
         }
         try (InputStreamReader reader = new InputStreamReader(defaults, StandardCharsets.UTF_8)) {
-            messages.setDefaults(YamlConfiguration.loadConfiguration(reader));
+            this.defaults = YamlConfiguration.loadConfiguration(reader);
         } catch (IOException exception) {
             throw new IllegalStateException("Could not load bundled default messages.", exception);
         }
+        reload();
+    }
+
+    public void reload() {
+        YamlConfiguration loaded = ConfigFiles.load(file);
+        loaded.setDefaults(defaults);
+        messages = loaded;
     }
 
     public void send(CommandSender recipient, String key) {

@@ -1,5 +1,6 @@
 package com.corebound.thecore.incremental;
 
+import com.corebound.thecore.config.ConfigFiles;
 import com.corebound.thecore.message.Messages;
 import java.io.File;
 import java.io.IOException;
@@ -47,35 +48,50 @@ public final class CoreUpgradesMenu implements Listener {
 
     private final Messages messages;
     private final CoreService cores;
-    private final YamlConfiguration config;
+    private final JavaPlugin plugin;
+    private final File configFile;
+    private YamlConfiguration config;
 
     public CoreUpgradesMenu(JavaPlugin plugin, Messages messages, CoreService cores, File configFile) {
+        this.plugin = plugin;
         this.messages = messages;
         this.cores = cores;
-        config = YamlConfiguration.loadConfiguration(configFile);
+        this.configFile = configFile;
+        reload(true);
+    }
+
+    public void reload() {
+        reload(false);
+    }
+
+    private void reload(boolean saveDefaults) {
+        YamlConfiguration loaded = ConfigFiles.load(configFile);
         InputStream defaultsStream = plugin.getResource("core/core_upgrades.yml");
         if (defaultsStream == null) {
             throw new IllegalArgumentException("Bundled core/core_upgrades.yml is missing.");
         }
         try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
-            config.setDefaults(YamlConfiguration.loadConfiguration(reader));
-            config.options().copyDefaults(true);
-            config.save(configFile);
+            loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
+            if (saveDefaults) {
+                loaded.options().copyDefaults(true);
+                loaded.save(configFile);
+            }
         } catch (IOException exception) {
-            throw new IllegalArgumentException("Could not migrate core/core_upgrades.yml defaults.", exception);
+            throw new IllegalArgumentException("Could not load core/core_upgrades.yml defaults.", exception);
         }
-        if (config.getInt("rows", 3) != 3) {
+        if (loaded.getInt("rows", 3) != 3) {
             throw new IllegalArgumentException("core_upgrades.yml rows must be 3.");
         }
         for (CoreEnhancement enhancement : CoreEnhancement.values()) {
-            validateUpgrade(enhancement);
+            validateUpgrade(loaded, enhancement);
         }
-        ConfigurationSection back = config.getConfigurationSection("items.back");
+        ConfigurationSection back = loaded.getConfigurationSection("items.back");
         if (back == null
                 || back.getInt("slot", -1) != BACK_SLOT
                 || Material.matchMaterial(back.getString("material", "")) == null) {
             throw new IllegalArgumentException("core_upgrades.yml items.back must define a valid material and slot 22.");
         }
+        config = loaded;
     }
 
     public void open(Player player, long islandIndex) {
@@ -170,9 +186,9 @@ public final class CoreUpgradesMenu implements Listener {
         return stack;
     }
 
-    private void validateUpgrade(CoreEnhancement enhancement) {
+    private void validateUpgrade(YamlConfiguration loaded, CoreEnhancement enhancement) {
         String path = "items." + path(enhancement);
-        ConfigurationSection item = config.getConfigurationSection(path);
+        ConfigurationSection item = loaded.getConfigurationSection(path);
         int expectedSlot = SLOTS.get(enhancement);
         if (item == null
                 || item.getInt("slot", -1) != expectedSlot

@@ -48,6 +48,10 @@ weather and time are refreshed only on island entry or settings changes.
 - Per-player world borders and island protection
 - `/is create`, `/is home`, `/is visit`, `/is coop`, `/is open`, `/is close`,
   `/is leave`, `/is chat`, and staff-only `/is bypass`
+- Staff-only `/core reload` to apply edited Corebound configuration and
+  language YAML files without restarting the server. Persistent `data/*.yml`
+  files are intentionally not reloaded; changing the island world name still
+  requires a restart.
 - Island invitations/membership (`invite`, `accept`, `members`), coop access,
   kick/ban/unban, and owner-confirmed island deletion using a native dialog
 - Owner transfer, member ranks, rename, custom home spawn, and rank-based

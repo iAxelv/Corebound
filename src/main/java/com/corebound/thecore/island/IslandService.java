@@ -54,9 +54,9 @@ public final class IslandService {
     private final IslandRepository repository;
     private final Messages messages;
     private final IslandSounds sounds;
-    private final IslandPermissions permissions;
-    private final long gridDistance;
-    private final double islandRadius;
+    private IslandPermissions permissions;
+    private long gridDistance;
+    private double islandRadius;
     private final Set<UUID> pendingOwners = ConcurrentHashMap.newKeySet();
     private final Set<String> pendingNames = ConcurrentHashMap.newKeySet();
     private final Set<UUID> islandBypass = ConcurrentHashMap.newKeySet();
@@ -82,6 +82,24 @@ public final class IslandService {
         islandRadius = plugin.getConfig().getDouble("world.island-radius", 35);
         this.permissions = IslandPermissions.load(
                 plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile());
+    }
+
+    public void reloadConfiguration() {
+        long newGridDistance = plugin.getConfig().getLong("world.distance-between-islands", 3000);
+        double newIslandRadius = plugin.getConfig().getDouble("world.island-radius", 35);
+        if (newGridDistance <= 0 || !Double.isFinite(newIslandRadius) || newIslandRadius <= 0
+                || newGridDistance <= newIslandRadius * 2) {
+            throw new IllegalArgumentException("Invalid world island spacing or radius in config.yml.");
+        }
+        if (newGridDistance != gridDistance && !repository.all().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "world.distance-between-islands cannot change while island data exists.");
+        }
+        IslandPermissions newPermissions = IslandPermissions.load(
+                plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile());
+        gridDistance = newGridDistance;
+        islandRadius = newIslandRadius;
+        permissions = newPermissions;
     }
 
     public boolean create(Player player, String islandName) {
@@ -201,7 +219,7 @@ public final class IslandService {
 
         plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
             try {
-                ClipboardFormat format = ClipboardFormats.findByPath(schematic.toPath());
+                ClipboardFormat format = ClipboardFormats.findByFile(schematic);
                 if (format == null) {
                     throw new IOException("No WorldEdit clipboard format recognized " + schematic.getName() + ".");
                 }

@@ -1,6 +1,7 @@
 package com.corebound.thecore.incremental;
 
 import com.corebound.thecore.TheCorePlugin;
+import com.corebound.thecore.config.ConfigFiles;
 import com.corebound.thecore.island.IslandData;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.message.Messages;
@@ -51,7 +52,8 @@ public final class PylonService {
     private final CoreRepository coreRepository;
     private final PylonRepository repository;
     private final Messages messages;
-    private final YamlConfiguration config;
+    private final File configFile;
+    private YamlConfiguration config;
     private final NamespacedKey pylonItemKey;
     private final NamespacedKey pylonItemGenerationKey;
     private final NamespacedKey pylonTierKey;
@@ -59,17 +61,17 @@ public final class PylonService {
     private final NamespacedKey pylonIslandKey;
     private final NamespacedKey pylonEntityKey;
     private final NamespacedKey pylonIdKey;
-    private final Material itemMaterial;
-    private final Material baseMaterial;
-    private final Material rodMaterial;
-    private final float displayScale;
-    private final int intervalTicks;
-    private final double minimumDistance;
-    private final double maximumDistance;
-    private final double baseYieldRatio;
-    private final double purchaseCost;
-    private final double purchaseCostMultiplier;
-    private final double forgeRefreshCost;
+    private Material itemMaterial;
+    private Material baseMaterial;
+    private Material rodMaterial;
+    private float displayScale;
+    private int intervalTicks;
+    private double minimumDistance;
+    private double maximumDistance;
+    private double baseYieldRatio;
+    private double purchaseCost;
+    private double purchaseCostMultiplier;
+    private double forgeRefreshCost;
     private final Map<CellType, Double> cellForgeCosts = new java.util.EnumMap<>(CellType.class);
     private final Map<Integer, Integer> tierCoreLevelRequirements = Map.of(2, 5, 3, 10);
     private final Map<Long, CellType[]> cellForgeOffers = new ConcurrentHashMap<>();
@@ -92,67 +94,8 @@ public final class PylonService {
         this.coreRepository = coreRepository;
         this.repository = repository;
         this.messages = messages;
-        config = YamlConfiguration.loadConfiguration(configFile);
-        InputStream defaultsStream = plugin.getResource("core/pylons.yml");
-        if (defaultsStream == null) {
-            throw new IllegalArgumentException("Bundled core/pylons.yml is missing.");
-        }
-        try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
-            config.setDefaults(YamlConfiguration.loadConfiguration(reader));
-            config.options().copyDefaults(true);
-            if (!config.contains("pylon.purchase-cost-multiplier", true)
-                    && Double.compare(config.getDouble("pylon.purchase-cost", 500.0), 150.0) == 0) {
-                config.set("pylon.purchase-cost", 500.0);
-            }
-            config.save(configFile);
-        } catch (IOException exception) {
-            throw new IllegalArgumentException("Could not migrate core/pylons.yml defaults.", exception);
-        }
-
-        itemMaterial = configuredMaterial("pylon.item.material", "SEA_LANTERN", true);
-        baseMaterial = configuredMaterial("pylon.display.base-material", "SEA_LANTERN", false);
-        rodMaterial = configuredMaterial("pylon.display.material", "END_ROD", false);
-        double configuredScale = config.getDouble("pylon.display.scale", 1.2);
-        if (!Double.isFinite(configuredScale) || configuredScale <= 0 || configuredScale > Float.MAX_VALUE) {
-            throw new IllegalArgumentException("pylons.yml pylon.display.scale must be a positive finite number.");
-        }
-        displayScale = (float) configuredScale;
-        intervalTicks = config.getInt("pylon.interval-ticks", 60);
-        minimumDistance = config.getDouble("pylon.min-distance", 3.0);
-        maximumDistance = config.getDouble("pylon.max-distance", 12.0);
-        baseYieldRatio = config.getDouble("pylon.base-yield-ratio", 0.4);
-        purchaseCost = config.getDouble("pylon.purchase-cost", 500.0);
-        purchaseCostMultiplier = config.getDouble("pylon.purchase-cost-multiplier", 3.5);
-        forgeRefreshCost = config.getDouble("pylon.cells.refresh-cost", 75.0);
-        if (!Double.isFinite(forgeRefreshCost) || forgeRefreshCost < 0) {
-            throw new IllegalArgumentException("pylons.yml pylon.cells.refresh-cost must be a non-negative finite number.");
-        }
-        for (CellType type : CellType.values()) {
-            double cost = config.getDouble("pylon.cells.costs." + type.name(), 100.0);
-            if (!Double.isFinite(cost) || cost <= 0) {
-                throw new IllegalArgumentException("pylons.yml cell forge costs must be positive finite numbers.");
-            }
-            cellForgeCosts.put(type, cost);
-        }
-        int tierTwoCoreLevel = pylonUpgradeRequiredCoreLevel(2);
-        int tierThreeCoreLevel = pylonUpgradeRequiredCoreLevel(3);
-        if (tierTwoCoreLevel < 3 || tierThreeCoreLevel <= tierTwoCoreLevel) {
-            throw new IllegalArgumentException(
-                    "pylons.yml tier-required-core-levels must be at least 3 and increase for each tier.");
-        }
-        if (intervalTicks <= 0
-                || !Double.isFinite(minimumDistance)
-                || !Double.isFinite(maximumDistance)
-                || minimumDistance < 0
-                || maximumDistance <= minimumDistance
-                || !Double.isFinite(baseYieldRatio)
-                || baseYieldRatio <= 0
-                || !Double.isFinite(purchaseCost)
-                || purchaseCost <= 0
-                || !Double.isFinite(purchaseCostMultiplier)
-                || purchaseCostMultiplier <= 1.0) {
-            throw new IllegalArgumentException("pylons.yml contains invalid distance, interval, yield, or cost.");
-        }
+        this.configFile = configFile;
+        applyConfiguration(loadConfiguration(true));
         pylonItemKey = new NamespacedKey(plugin, "pylon_item");
         pylonItemGenerationKey = new NamespacedKey(plugin, "pylon_item_generation");
         pylonTierKey = new NamespacedKey(plugin, "pylon_tier");
@@ -161,6 +104,95 @@ public final class PylonService {
         pylonEntityKey = new NamespacedKey(plugin, "pylon_entity");
         pylonIdKey = new NamespacedKey(plugin, "pylon_id");
         pylonMenu = new PylonMenu(messages, this);
+    }
+
+    public void reloadConfiguration() {
+        applyConfiguration(loadConfiguration(false));
+        repository.all().forEach(this::restartPulse);
+    }
+
+    private YamlConfiguration loadConfiguration(boolean saveDefaults) {
+        YamlConfiguration loaded = ConfigFiles.load(configFile);
+        InputStream defaultsStream = plugin.getResource("core/pylons.yml");
+        if (defaultsStream == null) {
+            throw new IllegalArgumentException("Bundled core/pylons.yml is missing.");
+        }
+        try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
+            loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
+            if (saveDefaults) {
+                loaded.options().copyDefaults(true);
+                if (!loaded.contains("pylon.purchase-cost-multiplier", true)
+                        && Double.compare(loaded.getDouble("pylon.purchase-cost", 500.0), 150.0) == 0) {
+                    loaded.set("pylon.purchase-cost", 500.0);
+                }
+                loaded.save(configFile);
+            }
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Could not load core/pylons.yml defaults.", exception);
+        }
+
+        return loaded;
+    }
+
+    private void applyConfiguration(YamlConfiguration loaded) {
+        Material loadedItemMaterial = configuredMaterial(loaded, "pylon.item.material", "SEA_LANTERN", true);
+        Material loadedBaseMaterial = configuredMaterial(loaded, "pylon.display.base-material", "SEA_LANTERN", false);
+        Material loadedRodMaterial = configuredMaterial(loaded, "pylon.display.material", "END_ROD", false);
+        double configuredScale = loaded.getDouble("pylon.display.scale", 1.2);
+        if (!Double.isFinite(configuredScale) || configuredScale <= 0 || configuredScale > Float.MAX_VALUE) {
+            throw new IllegalArgumentException("pylons.yml pylon.display.scale must be a positive finite number.");
+        }
+        int loadedIntervalTicks = loaded.getInt("pylon.interval-ticks", 60);
+        double loadedMinimumDistance = loaded.getDouble("pylon.min-distance", 3.0);
+        double loadedMaximumDistance = loaded.getDouble("pylon.max-distance", 12.0);
+        double loadedBaseYieldRatio = loaded.getDouble("pylon.base-yield-ratio", 0.4);
+        double loadedPurchaseCost = loaded.getDouble("pylon.purchase-cost", 500.0);
+        double loadedPurchaseCostMultiplier = loaded.getDouble("pylon.purchase-cost-multiplier", 3.5);
+        double loadedForgeRefreshCost = loaded.getDouble("pylon.cells.refresh-cost", 75.0);
+        if (!Double.isFinite(loadedForgeRefreshCost) || loadedForgeRefreshCost < 0) {
+            throw new IllegalArgumentException("pylons.yml pylon.cells.refresh-cost must be a non-negative finite number.");
+        }
+        Map<CellType, Double> loadedCellForgeCosts = new java.util.EnumMap<>(CellType.class);
+        for (CellType type : CellType.values()) {
+            double cost = loaded.getDouble("pylon.cells.costs." + type.name(), 100.0);
+            if (!Double.isFinite(cost) || cost <= 0) {
+                throw new IllegalArgumentException("pylons.yml cell forge costs must be positive finite numbers.");
+            }
+            loadedCellForgeCosts.put(type, cost);
+        }
+        int tierTwoCoreLevel = loaded.getInt("pylon.tier-required-core-levels.2", 5);
+        int tierThreeCoreLevel = loaded.getInt("pylon.tier-required-core-levels.3", 10);
+        if (tierTwoCoreLevel < 3 || tierThreeCoreLevel <= tierTwoCoreLevel) {
+            throw new IllegalArgumentException(
+                    "pylons.yml tier-required-core-levels must be at least 3 and increase for each tier.");
+        }
+        if (loadedIntervalTicks <= 0
+                || !Double.isFinite(loadedMinimumDistance)
+                || !Double.isFinite(loadedMaximumDistance)
+                || loadedMinimumDistance < 0
+                || loadedMaximumDistance <= loadedMinimumDistance
+                || !Double.isFinite(loadedBaseYieldRatio)
+                || loadedBaseYieldRatio <= 0
+                || !Double.isFinite(loadedPurchaseCost)
+                || loadedPurchaseCost <= 0
+                || !Double.isFinite(loadedPurchaseCostMultiplier)
+                || loadedPurchaseCostMultiplier <= 1.0) {
+            throw new IllegalArgumentException("pylons.yml contains invalid distance, interval, yield, or cost.");
+        }
+        config = loaded;
+        itemMaterial = loadedItemMaterial;
+        baseMaterial = loadedBaseMaterial;
+        rodMaterial = loadedRodMaterial;
+        displayScale = (float) configuredScale;
+        intervalTicks = loadedIntervalTicks;
+        minimumDistance = loadedMinimumDistance;
+        maximumDistance = loadedMaximumDistance;
+        baseYieldRatio = loadedBaseYieldRatio;
+        purchaseCost = loadedPurchaseCost;
+        purchaseCostMultiplier = loadedPurchaseCostMultiplier;
+        forgeRefreshCost = loadedForgeRefreshCost;
+        cellForgeCosts.clear();
+        cellForgeCosts.putAll(loadedCellForgeCosts);
     }
 
     public double purchaseCost() {
@@ -1137,7 +1169,8 @@ public final class PylonService {
                 .orElse(baseMaterial);
     }
 
-    private Material configuredMaterial(String path, String fallback, boolean mustBeItem) {
+    private Material configuredMaterial(
+            YamlConfiguration config, String path, String fallback, boolean mustBeItem) {
         Material material = Material.matchMaterial(config.getString(path, fallback));
         if (material == null || (mustBeItem && !material.isItem()) || (!mustBeItem && !material.isBlock())) {
             throw new IllegalArgumentException("pylons.yml " + path + " must be a valid "

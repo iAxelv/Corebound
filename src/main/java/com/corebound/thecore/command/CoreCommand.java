@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -48,6 +49,24 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("core")) {
+            if (!sender.hasPermission("thecore.admin")) {
+                messages.send(sender, "core-no-permission");
+                return true;
+            }
+            if (args.length != 1 || !args[0].equalsIgnoreCase("reload")) {
+                messages.send(sender, "core-usage");
+                return true;
+            }
+            try {
+                plugin.reloadConfigurations();
+                messages.send(sender, "core-reload-success");
+            } catch (IOException | IllegalArgumentException exception) {
+                plugin.getLogger().log(Level.SEVERE, "Could not reload Corebound configuration.", exception);
+                messages.send(sender, "core-reload-failure");
+            }
+            return true;
+        }
         if (!(sender instanceof Player player)) {
             messages.send(sender, "player-only");
             return true;
@@ -93,6 +112,14 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (command.getName().equalsIgnoreCase("core")) {
+            if (args.length == 1 && sender.hasPermission("thecore.admin")) {
+                return List.of("reload").stream()
+                        .filter(option -> option.startsWith(args[0].toLowerCase(Locale.ROOT)))
+                        .toList();
+            }
+            return List.of();
+        }
         if (args.length == 1) {
             return SUBCOMMANDS.stream()
                     .filter(option -> option.startsWith(args[0].toLowerCase(Locale.ROOT)))

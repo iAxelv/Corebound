@@ -1,6 +1,7 @@
 package com.corebound.thecore.incremental;
 
 import com.corebound.thecore.TheCorePlugin;
+import com.corebound.thecore.config.ConfigFiles;
 import com.corebound.thecore.island.IslandData;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.message.Messages;
@@ -42,21 +43,22 @@ public final class CoreService {
     private final IslandService islandService;
     private final CoreRepository repository;
     private final Messages messages;
-    private final YamlConfiguration config;
+    private final File configFile;
+    private YamlConfiguration config;
     private final NamespacedKey coreItemKey = new NamespacedKey("thecore", "core_item");
     private final NamespacedKey coreEntityKey;
     private final NamespacedKey islandIndexKey;
-    private final Material displayMaterial;
-    private final float displayScale;
-    private final float interactionWidth;
-    private final float interactionHeight;
-    private final double displayHeightOffset;
-    private final double textOffset;
-    private final int textLineWidth;
-    private final int rotationSpeedTicks;
-    private final long comboWindowMillis;
-    private final Sound hitSound;
-    private final float hitSoundVolume;
+    private Material displayMaterial;
+    private float displayScale;
+    private float interactionWidth;
+    private float interactionHeight;
+    private double displayHeightOffset;
+    private double textOffset;
+    private int textLineWidth;
+    private int rotationSpeedTicks;
+    private long comboWindowMillis;
+    private Sound hitSound;
+    private float hitSoundVolume;
     private final Set<UUID> itemDeliveries = ConcurrentHashMap.newKeySet();
     private final Set<UUID> rotatingDisplays = ConcurrentHashMap.newKeySet();
     private final Map<UUID, DisplayAnimation> displayAnimations = new ConcurrentHashMap<>();
@@ -97,43 +99,10 @@ public final class CoreService {
         this.islandService = islandService;
         this.repository = repository;
         this.messages = messages;
-        config = YamlConfiguration.loadConfiguration(configFile);
-        InputStream defaultsStream = plugin.getResource("core/core.yml");
-        if (defaultsStream == null) {
-            throw new IllegalArgumentException("Bundled core/core.yml is missing.");
-        }
-        try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
-            config.setDefaults(YamlConfiguration.loadConfiguration(reader));
-            config.options().copyDefaults(true);
-            config.save(configFile);
-        } catch (IOException exception) {
-            throw new IllegalArgumentException("Could not migrate core/core.yml defaults.", exception);
-        }
-        CoreItem.create(config, messages, coreItemKey, 1);
-        displayMaterial = configuredBlock("display.material", "CRYING_OBSIDIAN");
-        displayScale = positiveFloat("display.scale", 1.3f);
-        interactionWidth = positiveFloat("interaction.width", 1.3f);
-        interactionHeight = positiveFloat("interaction.height", 1.3f);
-        displayHeightOffset = config.getDouble("display.height-offset", 1.8);
-        textOffset = config.getDouble("text-display.offset-y", 1.1);
-        textLineWidth = config.getInt("text-display.line-width", 200);
-        rotationSpeedTicks = config.getInt("display.rotation-speed-ticks", 20);
-        comboWindowMillis = config.getLong("combo.window-ms", 3000L);
-        if (textLineWidth <= 0 || rotationSpeedTicks <= 0 || comboWindowMillis <= 0) {
-            throw new IllegalArgumentException(
-                    "core.yml display rotation speed, combo window, and text line width must be positive.");
-        }
-        String soundKey = config.getString("sound.key", "minecraft:block.note_block.pling");
-        NamespacedKey parsedSoundKey = soundKey == null ? null : NamespacedKey.fromString(soundKey);
-        hitSound = parsedSoundKey == null ? null : Registry.SOUNDS.get(parsedSoundKey);
-        if (hitSound == null) {
-            throw new IllegalArgumentException("core.yml sound.key must be a valid registered sound.");
-        }
-        double configuredVolume = config.getDouble("sound.volume", 1.0);
-        if (!Double.isFinite(configuredVolume) || configuredVolume < 0 || configuredVolume > Float.MAX_VALUE) {
-            throw new IllegalArgumentException("core.yml sound.volume must be a non-negative finite number.");
-        }
-        hitSoundVolume = (float) configuredVolume;
+        this.configFile = configFile;
+        YamlConfiguration initialConfig = loadConfiguration(true);
+        CoreItem.create(initialConfig, messages, coreItemKey, 1);
+        applyConfiguration(initialConfig);
         coreEntityKey = new NamespacedKey(plugin, "core_entity");
         islandIndexKey = new NamespacedKey(plugin, "core_island_index");
         coreMenu = new CoreMenu(
@@ -146,6 +115,70 @@ public final class CoreService {
                 messages,
                 this,
                 new File(plugin.getDataFolder(), "core/core_upgrades.yml"));
+    }
+
+    public void reloadConfiguration() {
+        YamlConfiguration loaded = loadConfiguration(false);
+        CoreItem.create(loaded, messages, coreItemKey, 1);
+        applyConfiguration(loaded);
+        coreMenu.reload();
+        coreUpgradesMenu.reload();
+    }
+
+    private YamlConfiguration loadConfiguration(boolean saveDefaults) {
+        YamlConfiguration loaded = ConfigFiles.load(configFile);
+        InputStream defaultsStream = plugin.getResource("core/core.yml");
+        if (defaultsStream == null) {
+            throw new IllegalArgumentException("Bundled core/core.yml is missing.");
+        }
+        try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
+            loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
+            if (saveDefaults) {
+                loaded.options().copyDefaults(true);
+                loaded.save(configFile);
+            }
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Could not load core/core.yml defaults.", exception);
+        }
+        return loaded;
+    }
+
+    private void applyConfiguration(YamlConfiguration loaded) {
+        Material loadedDisplayMaterial = configuredBlock(loaded, "display.material", "CRYING_OBSIDIAN");
+        float loadedDisplayScale = positiveFloat(loaded, "display.scale", 1.3f);
+        float loadedInteractionWidth = positiveFloat(loaded, "interaction.width", 1.3f);
+        float loadedInteractionHeight = positiveFloat(loaded, "interaction.height", 1.3f);
+        double loadedDisplayHeightOffset = loaded.getDouble("display.height-offset", 1.8);
+        double loadedTextOffset = loaded.getDouble("text-display.offset-y", 1.1);
+        int loadedTextLineWidth = loaded.getInt("text-display.line-width", 200);
+        int loadedRotationSpeedTicks = loaded.getInt("display.rotation-speed-ticks", 20);
+        long loadedComboWindowMillis = loaded.getLong("combo.window-ms", 3000L);
+        if (loadedTextLineWidth <= 0 || loadedRotationSpeedTicks <= 0 || loadedComboWindowMillis <= 0) {
+            throw new IllegalArgumentException(
+                    "core.yml display rotation speed, combo window, and text line width must be positive.");
+        }
+        String soundKey = loaded.getString("sound.key", "minecraft:block.note_block.pling");
+        NamespacedKey parsedSoundKey = soundKey == null ? null : NamespacedKey.fromString(soundKey);
+        Sound loadedHitSound = parsedSoundKey == null ? null : Registry.SOUNDS.get(parsedSoundKey);
+        if (loadedHitSound == null) {
+            throw new IllegalArgumentException("core.yml sound.key must be a valid registered sound.");
+        }
+        double configuredVolume = loaded.getDouble("sound.volume", 1.0);
+        if (!Double.isFinite(configuredVolume) || configuredVolume < 0 || configuredVolume > Float.MAX_VALUE) {
+            throw new IllegalArgumentException("core.yml sound.volume must be a non-negative finite number.");
+        }
+        config = loaded;
+        displayMaterial = loadedDisplayMaterial;
+        displayScale = loadedDisplayScale;
+        interactionWidth = loadedInteractionWidth;
+        interactionHeight = loadedInteractionHeight;
+        displayHeightOffset = loadedDisplayHeightOffset;
+        textOffset = loadedTextOffset;
+        textLineWidth = loadedTextLineWidth;
+        rotationSpeedTicks = loadedRotationSpeedTicks;
+        comboWindowMillis = loadedComboWindowMillis;
+        hitSound = loadedHitSound;
+        hitSoundVolume = (float) configuredVolume;
     }
 
     public void onIslandCreated(IslandCreatedEvent event) {
@@ -922,7 +955,7 @@ public final class CoreService {
         }
     }
 
-    private Material configuredBlock(String path, String fallback) {
+    private Material configuredBlock(YamlConfiguration config, String path, String fallback) {
         Material material = Material.matchMaterial(config.getString(path, fallback));
         if (material == null || !material.isBlock()) {
             throw new IllegalArgumentException("core.yml " + path + " must be a valid block material.");
@@ -930,7 +963,7 @@ public final class CoreService {
         return material;
     }
 
-    private float positiveFloat(String path, float fallback) {
+    private float positiveFloat(YamlConfiguration config, String path, float fallback) {
         double value = config.getDouble(path, fallback);
         if (!Double.isFinite(value) || value <= 0 || value > Float.MAX_VALUE) {
             throw new IllegalArgumentException("core.yml " + path + " must be a positive finite number.");

@@ -10,11 +10,16 @@ commands:
     description: Create and manage your Corebound island
     usage: /is <create|home|visit|invite|accept|coop|open|close|settings|members|kick|ban|unban|delete|leave|bypass|chat|perms|transfer|promote|demote|setspawn|rename>
     permission: thecore.island
+  core:
+    description: Reload Corebound configuration
+    usage: /core reload
+    permission: thecore.admin
 permissions:
   thecore.*:
     description: Allows staff to bypass island protection and closed-island access
     default: false
     children:
+      thecore.admin: true
       thecore.build: true
       thecore.bypass: true
       thecore.island: true
