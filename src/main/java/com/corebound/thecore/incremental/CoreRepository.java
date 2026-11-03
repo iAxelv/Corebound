@@ -113,6 +113,19 @@ public final class CoreRepository {
         return fractured;
     }
 
+    public synchronized CoreRecord upgradeAstralSkill(long islandIndex, AstralSkill skill) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null) {
+            return null;
+        }
+        CoreRecord upgraded = current.upgradeAstralSkill(skill);
+        if (upgraded != null) {
+            cores.put(islandIndex, upgraded);
+            save();
+        }
+        return upgraded;
+    }
+
     public synchronized void restoreEnergy(long islandIndex, double amount) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null || !Double.isFinite(amount) || amount <= 0) {
@@ -135,7 +148,9 @@ public final class CoreRepository {
                 current.upgradeWindow(),
                 current.upgradeCritical(),
                 current.prestigeCount(),
-                current.coreFragments()));
+                current.coreFragments(),
+                current.astralResonance(),
+                current.astralPylonAttunement()));
         save();
     }
 
@@ -244,6 +259,8 @@ public final class CoreRepository {
                 yaml.set(path + ".upgrade-critical", core.upgradeCritical());
                 yaml.set(path + ".prestige-count", core.prestigeCount());
                 yaml.set(path + ".core-fragments", core.coreFragments());
+                yaml.set(path + ".astral-resonance", core.astralResonance());
+                yaml.set(path + ".astral-pylon-attunement", core.astralPylonAttunement());
             }
             yaml.set("pending-items", snapshot.pendingItems().stream().map(id -> id.toString()).toList());
             Path target = file.toPath();
@@ -293,7 +310,9 @@ public final class CoreRepository {
                         core.getInt("upgrade-window", 0),
                         core.getInt("upgrade-critical", 0),
                         core.getInt("prestige-count", 0),
-                        core.getInt("core-fragments", core.getInt("prestige-count", 0))));
+                        core.getInt("core-fragments", core.getInt("prestige-count", 0)),
+                        core.getInt("astral-resonance", 0),
+                        core.getInt("astral-pylon-attunement", 0)));
             }
         }
         for (String playerId : yaml.getStringList("pending-items")) {

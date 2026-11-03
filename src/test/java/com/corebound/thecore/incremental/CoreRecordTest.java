@@ -158,6 +158,47 @@ class CoreRecordTest {
     }
 
     @Test
+    void astralResonanceRequiresFracturesAndFragmentsAndImprovesManualYield() {
+        CoreRecord locked = createCore(1, 0, 0, 10, 0, 0);
+        assertNull(locked.upgradeAstralSkill(AstralSkill.RESONANCE));
+
+        CoreRecord eligible = createCore(1, 0, 1, 1, 0, 0);
+        CoreRecord upgraded = eligible.upgradeAstralSkill(AstralSkill.RESONANCE);
+        assertEquals(1, upgraded.astralResonance());
+        assertEquals(0, upgraded.coreFragments());
+        assertNull(upgraded.upgradeAstralSkill(AstralSkill.RESONANCE));
+
+        CoreRecord producing = upgraded.withHit(1000, COMBO_WINDOW_MILLIS);
+        assertEquals(1.716, producing.energy(), 0.0001);
+        assertEquals(1.10, producing.astralResonanceMultiplier(), 0.0001);
+    }
+
+    @Test
+    void astralPylonAttunementRequiresHigherFractureAndImprovesPassiveYield() {
+        CoreRecord firstFracture = createCore(1, 0, 1, 5, 0, 0);
+        assertNull(firstFracture.upgradeAstralSkill(AstralSkill.PYLON_ATTUNEMENT));
+
+        CoreRecord secondFracture = createCore(1, 0, 2, 2, 0, 0);
+        CoreRecord upgraded = secondFracture.upgradeAstralSkill(AstralSkill.PYLON_ATTUNEMENT);
+        assertEquals(1, upgraded.astralPylonAttunement());
+        assertEquals(0, upgraded.coreFragments());
+        assertEquals(1.15, upgraded.astralPylonMultiplier(), 0.0001);
+        assertNull(upgraded.upgradeAstralSkill(AstralSkill.PYLON_ATTUNEMENT));
+    }
+
+    @Test
+    void astralSkillsSurviveRebirthAndKeepTheirRanks() {
+        CoreRecord core = createCore(10, 500, 3, 5, 2, 1);
+
+        CoreRecord reborn = core.fracture();
+
+        assertEquals(2, reborn.astralResonance());
+        assertEquals(1, reborn.astralPylonAttunement());
+        assertEquals(4, reborn.prestigeCount());
+        assertEquals(6, reborn.coreFragments());
+    }
+
+    @Test
     void pylonCapacityUnlocksAtLevelsFourSevenAndTen() {
         assertEquals(0, createCore(1).pylonCapacity());
         assertEquals(0, createCore(3).pylonCapacity());
@@ -187,5 +228,34 @@ class CoreRecordTest {
                 energy,
                 0,
                 0);
+    }
+
+    private CoreRecord createCore(
+            int level,
+            double energy,
+            int prestige,
+            int fragments,
+            int resonance,
+            int pylonAttunement) {
+        return new CoreRecord(
+                1,
+                UUID.randomUUID(),
+                0,
+                64,
+                0,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                level,
+                energy,
+                0,
+                0,
+                0,
+                0,
+                0,
+                prestige,
+                fragments,
+                resonance,
+                pylonAttunement);
     }
 }

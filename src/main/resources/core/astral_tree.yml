@@ -1,0 +1,56 @@
+title: "&5Árbol Astral de Fracturas"
+rows: 6
+items:
+  info:
+    material: BOOK
+    slot: 5
+    display-name: "&dRegistro Astral"
+    lore:
+      - "&7Nivel de Fractura: &e%prestige%"
+      - "&7Fragmentos del Núcleo: &b%fragments%"
+  resonance:
+    material: NETHER_STAR
+    slot: 12
+    display-name: "&dResonancia Astral &7[%level%/%max_level%]"
+    lore:
+      - "&7Aumenta la energía obtenida al golpear el Núcleo."
+      - "&7Bonus por rango: &a+%bonus%%"
+      - "&7Fractura requerida: &d%required_fracture%"
+      - "&7Costo: &b%cost% fragmentos"
+      - "%status%"
+    maxed-status: "&aNivel máximo alcanzado."
+    locked-status: "&cRequiere Fractura %required_fracture%."
+    fragments-status: "&cNecesitas %cost% fragmentos."
+    available-status: "&eHaz clic para mejorar."
+  pylon-attunement:
+    material: LIGHTNING_ROD
+    slot: 16
+    display-name: "&bSintonía de Pilones &7[%level%/%max_level%]"
+    lore:
+      - "&7Aumenta la energía producida por los Pilones."
+      - "&7Bonus por rango: &a+%bonus%%"
+      - "&7Fractura requerida: &d%required_fracture%"
+      - "&7Costo: &b%cost% fragmentos"
+      - "%status%"
+    maxed-status: "&aNivel máximo alcanzado."
+    locked-status: "&cRequiere Fractura %required_fracture%."
+    fragments-status: "&cNecesitas %cost% fragmentos."
+    available-status: "&eHaz clic para mejorar."
+  previous:
+    material: ARROW
+    slots: [28, 36]
+    display-name: "&ePágina anterior"
+    lore:
+      - "&7Página %page%/%pages%"
+  next:
+    material: ARROW
+    slots: [46, 54]
+    display-name: "&eSiguiente página"
+    lore:
+      - "&7Página %page%/%pages%"
+  back:
+    material: ARROW
+    slot: 50
+    display-name: "&cVolver al Núcleo"
+    lore:
+      - "&7Regresa al menú principal del Núcleo."

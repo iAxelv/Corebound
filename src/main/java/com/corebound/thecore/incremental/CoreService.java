@@ -67,6 +67,7 @@ public final class CoreService {
     private final Map<Long, AnomalyState> anomalies = new ConcurrentHashMap<>();
     private final CoreMenu coreMenu;
     private final CoreUpgradesMenu coreUpgradesMenu;
+    private final AstralTreeMenu astralTreeMenu;
     private PylonService pylonService;
 
     private static final class DisplayAnimation {
@@ -115,6 +116,11 @@ public final class CoreService {
                 messages,
                 this,
                 new File(plugin.getDataFolder(), "core/core_upgrades.yml"));
+        astralTreeMenu = new AstralTreeMenu(
+                plugin,
+                messages,
+                this,
+                new File(plugin.getDataFolder(), "core/astral_tree.yml"));
     }
 
     public void reloadConfiguration() {
@@ -123,6 +129,7 @@ public final class CoreService {
         applyConfiguration(loaded);
         coreMenu.reload();
         coreUpgradesMenu.reload();
+        astralTreeMenu.reload();
     }
 
     private YamlConfiguration loadConfiguration(boolean saveDefaults) {
@@ -275,6 +282,55 @@ public final class CoreService {
         coreUpgradesMenu.open(player, islandIndex);
     }
 
+    public void openAstralTree(Player player, long islandIndex, int page) {
+        CoreRecord core = coreForPlayer(player, islandIndex);
+        if (core != null) {
+            astralTreeMenu.open(player, core, page);
+        }
+    }
+
+    public AstralTreeMenu astralTreeMenuListener() {
+        return astralTreeMenu;
+    }
+
+    public boolean upgradeAstralSkill(Player player, long islandIndex, AstralSkill skill) {
+        CoreRecord current = coreForPlayer(player, islandIndex);
+        if (current == null) {
+            return false;
+        }
+        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+        if (island == null || !island.owner().equals(player.getUniqueId())) {
+            messages.send(player, "astral-tree-owner-only");
+            return false;
+        }
+        int nextLevel = current.astralSkillLevel(skill) + 1;
+        if (nextLevel > skill.maxLevel()) {
+            messages.send(player, "astral-skill-max-level");
+            return false;
+        }
+        int requiredFracture = skill.fractureRequirement(nextLevel);
+        if (current.prestigeCount() < requiredFracture) {
+            messages.send(player, "astral-skill-fracture-required", Map.of(
+                    "required", Integer.toString(requiredFracture)));
+            return false;
+        }
+        int cost = skill.fragmentCost(nextLevel);
+        if (current.coreFragments() < cost) {
+            messages.send(player, "astral-skill-fragments-required", Map.of(
+                    "cost", Integer.toString(cost)));
+            return false;
+        }
+        CoreRecord upgraded = repository.upgradeAstralSkill(islandIndex, skill);
+        if (upgraded == null) {
+            messages.send(player, "astral-skill-upgrade-failed");
+            return false;
+        }
+        messages.send(player, "astral-skill-upgraded", Map.of(
+                "level", Integer.toString(upgraded.astralSkillLevel(skill)),
+                "fragments", Integer.toString(upgraded.coreFragments())));
+        return true;
+    }
+
     public CoreRecord getCoreForMenu(Player player, long islandIndex) {
         return coreForPlayer(player, islandIndex);
     }
@@ -417,7 +473,9 @@ public final class CoreService {
                 removed.upgradeWindow(),
                 removed.upgradeCritical(),
                 removed.prestigeCount(),
-                removed.coreFragments());
+                removed.coreFragments(),
+                removed.astralResonance(),
+                removed.astralPylonAttunement());
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
@@ -534,7 +592,9 @@ public final class CoreService {
                     progress.upgradeWindow(),
                     progress.upgradeCritical(),
                     progress.prestigeCount(),
-                    progress.coreFragments()));
+                    progress.coreFragments(),
+                    progress.astralResonance(),
+                    progress.astralPylonAttunement()));
         } catch (RuntimeException exception) {
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);
@@ -755,7 +815,7 @@ public final class CoreService {
         if (core == null) {
             return null;
         }
-        double amount = core.baseEnergy() * yieldRatio;
+        double amount = core.baseEnergy() * yieldRatio * core.astralPylonMultiplier();
         CoreRecord updated = repository.addPassiveEnergy(islandIndex, amount);
         if (updated != null) {
             updateCoreVisuals(updated, System.currentTimeMillis());

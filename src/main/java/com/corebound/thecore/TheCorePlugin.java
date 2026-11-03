@@ -39,6 +39,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("core/core.yml");
         saveResourceIfMissing("core/core_menu.yml");
         saveResourceIfMissing("core/core_upgrades.yml");
+        saveResourceIfMissing("core/astral_tree.yml");
         saveResourceIfMissing("core/pylons.yml");
 
         try {
@@ -115,6 +116,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(pylonService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.upgradesMenuListener(), this);
+        getServer().getPluginManager().registerEvents(coreService.astralTreeMenuListener(), this);
         getServer().getPluginManager().registerEvents(menus, this);
         coreService.initializeLoadedEntities();
         pylonService.initializeLoadedEntities();

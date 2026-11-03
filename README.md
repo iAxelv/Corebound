@@ -62,6 +62,9 @@ weather and time are refreshed only on island entry or settings changes.
   redstone, mob and spawner controls
 - Island Core with persistent animation, combo-reactive scaling, hit feedback,
   combo actionbar, and an upgrade menu; configured in `plugins/Corebound/core/`.
+  The Astral Fracture Tree lets island owners spend rebirth fragments on
+  permanent Core-hit and pylon-production bonuses; its menu is configured in
+  `plugins/Corebound/core/astral_tree.yml`.
   Level 3 unlocks purchasable extraction pylons with persistent, periodic
   energy pulses. Pylons require Core level 5 for Tier II and level 10 for Tier
   III by default, configurable in `plugins/Corebound/core/pylons.yml`. Core

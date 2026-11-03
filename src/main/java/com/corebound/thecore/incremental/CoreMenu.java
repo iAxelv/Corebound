@@ -86,11 +86,16 @@ public final class CoreMenu implements Listener {
         validateItem(loaded, "items.upgrades");
         validateItem(loaded, "items.statistics");
         validateItem(loaded, "items.fracture");
+        validateItem(loaded, "items.astral-tree");
         validateItem(loaded, "items.pylon");
         validateItem(loaded, "items.cell-forge");
         validateItem(loaded, "items.upgrade");
+        validateItem(loaded, "items.close");
         if (Material.matchMaterial(loaded.getString("items.pylon.locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.pylon.locked-material must be valid.");
+        }
+        if (Material.matchMaterial(loaded.getString("items.fracture.locked-material", "BARRIER")) == null) {
+            throw new IllegalArgumentException("core_menu.yml items.fracture.locked-material must be valid.");
         }
         if (Material.matchMaterial(loaded.getString("items.cell-forge.locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.cell-forge.locked-material must be valid.");
@@ -110,13 +115,13 @@ public final class CoreMenu implements Listener {
                 createItem(config.getConfigurationSection("items.upgrades"), core, false));
         holder.inventory.setItem(slot("statistics"),
                 createItem(config.getConfigurationSection("items.statistics"), core, false));
+        holder.inventory.setItem(slot("astral-tree"), createSimpleItem("items.astral-tree"));
         holder.inventory.setItem(slot("cell-forge"), createCellForgeItem(core));
-        if (core.level() >= 10) {
-            holder.inventory.setItem(slot("fracture"), createFractureItem(core));
-        }
+        holder.inventory.setItem(slot("fracture"), createFractureItem(core));
         holder.inventory.setItem(slot("pylon"), createPylonItem(core));
         holder.inventory.setItem(slot("upgrade"), createItem(
                 config.getConfigurationSection("items.upgrade"), core, core.energy() >= core.upgradeCost()));
+        holder.inventory.setItem(slot("close"), createSimpleItem("items.close"));
         player.openInventory(holder.inventory);
     }
 
@@ -137,10 +142,14 @@ public final class CoreMenu implements Listener {
             coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("cell-forge") && pylonService != null) {
             pylonService.openCellForge(player, holder.islandIndex);
+        } else if (event.getRawSlot() == holder.slot("astral-tree")) {
+            coreService.openAstralTree(player, holder.islandIndex, 0);
         } else if (event.getRawSlot() == holder.slot("fracture")) {
             if (coreService.fractureCore(player, holder.islandIndex)) {
                 coreService.openCoreMenu(player, holder.islandIndex);
             }
+        } else if (event.getRawSlot() == holder.slot("close")) {
+            player.closeInventory();
         } else if (event.getRawSlot() == holder.slot("upgrade")
                 && coreService.upgradeCore(player, holder.islandIndex)) {
             coreService.openCoreMenu(player, holder.islandIndex);
@@ -190,14 +199,29 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createFractureItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.fracture");
-        ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "NETHER_STAR")));
+        boolean unlocked = core.level() >= 10;
+        String material = itemConfig.getString(unlocked ? "material" : "locked-material",
+                unlocked ? "NETHER_STAR" : "BARRIER");
+        ItemStack item = new ItemStack(Material.matchMaterial(material));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(color(itemConfig.getString("display-name", "&d&lFRACTURA DIMENSIONAL")));
-        meta.lore(itemConfig.getStringList("lore").stream()
+        meta.displayName(color(itemConfig.getString(unlocked ? "display-name" : "locked-name",
+                unlocked ? "&d&lFRACTURA DIMENSIONAL" : "&cFractura bloqueada")));
+        meta.lore(itemConfig.getStringList(unlocked ? "lore" : "locked-lore").stream()
                 .map(line -> color(replace(line, Map.of(
+                        "%level%", Integer.toString(core.level()),
                         "%prestige%", Integer.toString(core.prestigeCount()),
                         "%fragments%", Integer.toString(core.coreFragments())))))
                 .toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createSimpleItem(String path) {
+        ConfigurationSection itemConfig = config.getConfigurationSection(path);
+        ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "PAPER")));
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(color(itemConfig.getString("display-name", "")));
+        meta.lore(itemConfig.getStringList("lore").stream().map(this::color).toList());
         item.setItemMeta(meta);
         return item;
     }
@@ -266,8 +290,8 @@ public final class CoreMenu implements Listener {
             throw new IllegalArgumentException("core_menu.yml " + path + " must define a valid material and slot.");
         }
         for (String otherPath : List.of(
-                "items.upgrades", "items.statistics", "items.fracture", "items.pylon", "items.cell-forge",
-                "items.upgrade")) {
+                "items.upgrades", "items.statistics", "items.fracture", "items.astral-tree", "items.pylon",
+                "items.cell-forge", "items.upgrade", "items.close")) {
             if (!otherPath.equals(path)
                     && loaded.getInt(otherPath + ".slot", -1) == slot) {
                 throw new IllegalArgumentException("core_menu.yml item slots must be unique.");
@@ -284,9 +308,11 @@ public final class CoreMenu implements Listener {
                 "upgrades", slot("upgrades"),
                 "statistics", slot("statistics"),
                 "fracture", slot("fracture"),
+                "astral-tree", slot("astral-tree"),
                 "pylon", slot("pylon"),
                 "cell-forge", slot("cell-forge"),
-                "upgrade", slot("upgrade"));
+                "upgrade", slot("upgrade"),
+                "close", slot("close"));
     }
 
     private String replace(String text, Map<String, String> placeholders) {

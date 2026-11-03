@@ -32,6 +32,19 @@ items:
       - "&cLos Pilones y sus células serán destruidos."
       - ""
       - "&eHaz clic para colapsar el Núcleo."
+    locked-material: BARRIER
+    locked-name: "&cFractura bloqueada"
+    locked-lore:
+      - "&7Requiere Núcleo nivel 10."
+      - "&7Nivel actual: &e%level%"
+  astral-tree:
+    material: NETHERITE_UPGRADE_SMITHING_TEMPLATE
+    slot: 21
+    display-name: "&5Árbol de Fracturas"
+    lore:
+      - "&7Desbloquea habilidades astrales con Fragmentos del Núcleo."
+      - ""
+      - "&eHaz clic para explorar el árbol."
   pylon:
     material: SEA_LANTERN
     slot: 25
@@ -74,3 +87,9 @@ items:
       - "&7Nueva base: &a+%next_base%⚡/golpe"
       - " "
       - "&cEnergía insuficiente."
+  close:
+    material: ARROW
+    slot: 40
+    display-name: "&cCerrar"
+    lore:
+      - "&7Cierra el menú del Núcleo."
