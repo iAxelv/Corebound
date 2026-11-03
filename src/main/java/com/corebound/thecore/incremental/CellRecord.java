@@ -10,9 +10,30 @@ public record CellRecord(CellType type, int tier) {
     }
 
     public CellRecord fuse(CellRecord other) {
+        return fuse(other, MAX_TIER);
+    }
+
+    public CellRecord fuse(CellRecord other, int maximumTier) {
         if (other == null || type != other.type || tier != other.tier || tier >= MAX_TIER) {
             return null;
         }
-        return new CellRecord(type, tier + 1);
+        int fusedTier = tier + 1;
+        return fusedTier > Math.min(MAX_TIER, maximumTier) ? null : new CellRecord(type, fusedTier);
+    }
+
+    public static int maximumTierForCoreLevel(int coreLevel) {
+        return Math.max(1, Math.min(MAX_TIER, coreLevel / 5));
+    }
+
+    public int fireIntervalReductionTicks() {
+        return type == CellType.FIRE ? 20 * tier : 0;
+    }
+
+    public double lightningBonusPerLink() {
+        return type == CellType.LIGHTNING ? 0.10 * tier : 0.0;
+    }
+
+    public double voidCriticalChance() {
+        return type == CellType.VOID ? 0.05 * tier : 0.0;
     }
 }

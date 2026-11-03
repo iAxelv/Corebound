@@ -67,6 +67,7 @@ public final class PylonMenu implements Listener {
                 holder.inventory.setItem(slots[index], emptyCellSlotItem());
             }
         }
+        holder.inventory.setItem(4, statisticsItem(pylon));
         holder.inventory.setItem(UPGRADE_SLOT, upgradeItem(pylon));
         player.openInventory(holder.inventory);
     }
@@ -184,6 +185,9 @@ public final class PylonMenu implements Listener {
         if (cell == null || item.getAmount() != 1) {
             return;
         }
+        if (!pylons.canUseCellTier(player, pylon.islandIndex(), cell.tier())) {
+            return;
+        }
         int cellIndex = firstEmptyCellSlot(pylon);
         if (cellIndex < 0) {
             return;
@@ -191,8 +195,12 @@ public final class PylonMenu implements Listener {
         int[] slots = pylonCellSlots(pylon.maxSlots());
         int menuSlot = slots[cellIndex];
         pylons.setEquippedCell(pylon.pylonId(), cellIndex, cell);
+        PylonRecord updated = pylons.getPylon(pylon.pylonId());
         event.getClickedInventory().setItem(event.getSlot(), null);
         menu.setItem(menuSlot, CellItem.create(cell, pylons.baseIntervalTicks()));
+        if (updated != null) {
+            menu.setItem(4, statisticsItem(updated));
+        }
         player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
     }
 
@@ -213,6 +221,10 @@ public final class PylonMenu implements Listener {
             return;
         }
         menu.setItem(pylonCellSlots(pylon.maxSlots())[cellIndex], null);
+        PylonRecord updated = pylons.getPylon(pylon.pylonId());
+        if (updated != null) {
+            menu.setItem(4, statisticsItem(updated));
+        }
         player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
     }
 
@@ -258,13 +270,42 @@ public final class PylonMenu implements Listener {
                 || cursorCell.tier() >= CellRecord.MAX_TIER) {
             return;
         }
+        CellRecord fusedCell = cursorCell.fuse(targetCell);
+        if (fusedCell == null || !pylons.canFuseCellTier(player, fusedCell.tier())) {
+            event.setCancelled(true);
+            return;
+        }
         event.setCancelled(true);
-        player.setItemOnCursor(CellItem.create(cursorCell.fuse(targetCell), pylons.baseIntervalTicks()));
+        player.setItemOnCursor(CellItem.create(fusedCell, pylons.baseIntervalTicks()));
         event.getClickedInventory().setItem(event.getSlot(), null);
         player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.8f);
         messages.send(player, "cell-fused", Map.of(
                 "cell", cursorCell.type().displayName(),
-                "tier", Integer.toString(cursorCell.tier() + 1)));
+                "tier", Integer.toString(fusedCell.tier())));
+    }
+
+    private ItemStack statisticsItem(PylonRecord pylon) {
+        ItemStack item = new ItemStack(Material.CLOCK);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(messages.parseComponent("&bEstadísticas del Pilón"));
+        CoreRecord core = pylons.coreRecord(pylon.islandIndex());
+        List<Component> lore;
+        if (core == null) {
+            lore = List.of(messages.parseComponent("&cNo se encontró el Núcleo de esta isla."));
+        } else {
+            double interval = pylons.effectiveIntervalTicks(pylon) / 20.0;
+            double yield = pylons.estimatedPulseYield(core, pylon);
+            double perMinute = yield * 60.0 / interval;
+            lore = List.of(
+                    messages.parseComponent("&7Intervalo: &f" + formatEnergy(interval) + "s"),
+                    messages.parseComponent("&7Energía promedio por pulso: &e+" + formatEnergy(yield) + "⚡"),
+                    messages.parseComponent("&7Producción promedio: &a+" + formatEnergy(perMinute) + "⚡/min"),
+                    messages.parseComponent("&7Tier de runa permitido: &bT"
+                            + CellRecord.maximumTierForCoreLevel(core.level())));
+        }
+        meta.lore(lore);
+        item.setItemMeta(meta);
+        return item;
     }
 
     private ItemStack upgradeItem(PylonRecord pylon) {

@@ -143,7 +143,7 @@ public final class CoreMenu implements Listener {
         } else if (event.getRawSlot() == holder.slot("cell-forge") && pylonService != null) {
             pylonService.openCellForge(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("astral-tree")) {
-            coreService.openAstralTree(player, holder.islandIndex, 0);
+            coreService.openAstralTree(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("fracture")) {
             if (coreService.fractureCore(player, holder.islandIndex)) {
                 coreService.openCoreMenu(player, holder.islandIndex);
@@ -228,7 +228,7 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createPylonItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.pylon");
-        boolean levelUnlocked = core.level() >= 4;
+        boolean levelUnlocked = core.level() >= 3;
         boolean hasCapacity = pylonService == null
                 || pylonService.hasPylonCapacity(core.islandIndex(), core.pylonCapacity());
         boolean unlocked = levelUnlocked && hasCapacity;
@@ -264,7 +264,7 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createCellForgeItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.cell-forge");
-        boolean unlocked = core.level() >= 3;
+        boolean unlocked = core.level() >= 5;
         String material = unlocked
                 ? itemConfig.getString("material", "ENCHANTING_TABLE")
                 : itemConfig.getString("locked-material", "BARRIER");

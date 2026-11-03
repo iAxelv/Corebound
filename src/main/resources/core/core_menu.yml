@@ -57,7 +57,7 @@ items:
     locked-material: BARRIER
     locked-name: "&cPilón bloqueado"
     locked-lore:
-      - "&cRequiere Núcleo Nivel 4."
+      - "&cRequiere Núcleo Nivel 3."
     limit-name: "&cLímite de Pilones alcanzado"
     limit-lore:
       - "&7Pilones colocados o guardados: &e%owned%&7/&e%pylons%"
@@ -72,7 +72,7 @@ items:
     locked-material: BARRIER
     locked-name: "&cForja bloqueada"
     locked-lore:
-      - "&cRequiere Núcleo Nivel 3."
+      - "&cRequiere Núcleo Nivel 5."
   upgrade:
     material: NETHER_STAR
     slot: 36

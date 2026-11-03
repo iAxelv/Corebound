@@ -26,18 +26,15 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class AstralTreeMenu implements Listener {
-    private static final int PAGE_COUNT = 2;
     private static final int INFO_SLOT = 4;
     private static final int BACK_SLOT = 49;
 
     private static final class Holder implements InventoryHolder {
         private final long islandIndex;
-        private final int page;
         private Inventory inventory;
 
-        private Holder(long islandIndex, int page) {
+        private Holder(long islandIndex) {
             this.islandIndex = islandIndex;
-            this.page = page;
         }
 
         @Override
@@ -85,48 +82,26 @@ public final class AstralTreeMenu implements Listener {
         validateItem(loaded, "items.info", INFO_SLOT);
         validateItem(loaded, "items.resonance", -1);
         validateItem(loaded, "items.pylon-attunement", -1);
-        validateItem(loaded, "items.previous", -1);
-        validateItem(loaded, "items.next", -1);
         validateItem(loaded, "items.back", BACK_SLOT);
-        if (!loaded.getIntegerList("items.previous.slots").equals(List.of(28, 36))
-                || !loaded.getIntegerList("items.next.slots").equals(List.of(46, 54))) {
-            throw new IllegalArgumentException(
-                    "astral_tree.yml navigation slots must be [28, 36] and [46, 54].");
-        }
         List<Integer> occupiedSlots = List.of(
                 loaded.getInt("items.info.slot"),
                 loaded.getInt("items.resonance.slot"),
                 loaded.getInt("items.pylon-attunement.slot"),
-                loaded.getInt("items.back.slot"),
-                28, 36, 46, 54);
+                loaded.getInt("items.back.slot"));
         if (occupiedSlots.stream().distinct().count() != occupiedSlots.size()) {
             throw new IllegalArgumentException("astral_tree.yml item slots must be unique.");
         }
         config = loaded;
     }
 
-    public void open(Player player, CoreRecord core, int requestedPage) {
-        int page = Math.max(0, Math.min(PAGE_COUNT - 1, requestedPage));
-        Holder holder = new Holder(core.islandIndex(), page);
+    public void open(Player player, CoreRecord core) {
+        Holder holder = new Holder(core.islandIndex());
         holder.inventory = Bukkit.createInventory(
                 holder, 54, messages.parseComponent(config.getString("title", "&5Árbol de Fracturas")));
         holder.inventory.setItem(slot("info"), infoItem(core));
         holder.inventory.setItem(slot("back"), simpleItem("items.back", Map.of()));
-        if (page == 0) {
-            holder.inventory.setItem(slot("resonance"), skillItem(core, AstralSkill.RESONANCE));
-        } else {
-            holder.inventory.setItem(slot("pylon-attunement"), skillItem(core, AstralSkill.PYLON_ATTUNEMENT));
-        }
-        if (page > 0) {
-            for (int previousSlot : slots("previous")) {
-                holder.inventory.setItem(previousSlot, navigationItem("items.previous", page));
-            }
-        }
-        if (page + 1 < PAGE_COUNT) {
-            for (int nextSlot : slots("next")) {
-                holder.inventory.setItem(nextSlot, navigationItem("items.next", page));
-            }
-        }
+        holder.inventory.setItem(slot("resonance"), skillItem(core, AstralSkill.RESONANCE));
+        holder.inventory.setItem(slot("pylon-attunement"), skillItem(core, AstralSkill.PYLON_ATTUNEMENT));
         player.openInventory(holder.inventory);
     }
 
@@ -145,24 +120,16 @@ public final class AstralTreeMenu implements Listener {
             cores.openCoreMenu(player, holder.islandIndex);
             return;
         }
-        if (slots("previous").contains(slot) && holder.page > 0) {
-            cores.openAstralTree(player, holder.islandIndex, holder.page - 1);
-            return;
-        }
-        if (slots("next").contains(slot) && holder.page + 1 < PAGE_COUNT) {
-            cores.openAstralTree(player, holder.islandIndex, holder.page + 1);
-            return;
-        }
-        AstralSkill skill = holder.page == 0 && slot == slot("resonance")
+        AstralSkill skill = slot == slot("resonance")
                 ? AstralSkill.RESONANCE
-                : holder.page == 1 && slot == slot("pylon-attunement")
+                : slot == slot("pylon-attunement")
                         ? AstralSkill.PYLON_ATTUNEMENT
                         : null;
         if (skill != null) {
             cores.upgradeAstralSkill(player, holder.islandIndex, skill);
             CoreRecord updated = cores.getCoreForMenu(player, holder.islandIndex);
             if (updated != null) {
-                open(player, updated, holder.page);
+                open(player, updated);
             }
         }
     }
@@ -209,12 +176,6 @@ public final class AstralTreeMenu implements Listener {
         return simpleItem(path, placeholders);
     }
 
-    private ItemStack navigationItem(String path, int page) {
-        return simpleItem(path, Map.of(
-                "%page%", Integer.toString(page + 1),
-                "%pages%", Integer.toString(PAGE_COUNT)));
-    }
-
     private ItemStack simpleItem(String path, Map<String, String> placeholders) {
         ConfigurationSection item = config.getConfigurationSection(path);
         ItemStack stack = new ItemStack(Material.matchMaterial(item.getString("material", "PAPER")));
@@ -245,10 +206,6 @@ public final class AstralTreeMenu implements Listener {
 
     private int slot(String item) {
         return config.getInt("items." + item + ".slot") - 1;
-    }
-
-    private List<Integer> slots(String item) {
-        return config.getIntegerList("items." + item + ".slots").stream().map(slot -> slot - 1).toList();
     }
 
     private String replace(String text, Map<String, String> placeholders) {

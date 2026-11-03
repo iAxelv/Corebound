@@ -29,13 +29,13 @@ public final class CellItem {
     }
 
     public static List<String> cellLore(CellRecord cell, int baseIntervalTicks) {
-        int tierMultiplier = 1 << (cell.tier() - 1);
         String improvement = switch (cell.type()) {
-            case FIRE -> "&6Mejora: &e-" + formatSeconds(tierMultiplier) + "s entre pulsos"
+            case FIRE -> "&6Mejora: &e-" + formatSeconds(cell.fireIntervalReductionTicks() / 20.0)
+                    + "s entre pulsos"
                     + " &7(mínimo 1s; base " + formatSeconds(baseIntervalTicks / 20.0) + "s).";
-            case LIGHTNING -> "&6Mejora: &e+" + formatNumber(25 * tierMultiplier)
+            case LIGHTNING -> "&6Mejora: &e+" + formatNumber(cell.lightningBonusPerLink() * 100)
                     + "% de producción por enlace.";
-            case VOID -> "&6Mejora: &e" + formatNumber(Math.min(100, 15 * tierMultiplier))
+            case VOID -> "&6Mejora: &e" + formatNumber(cell.voidCriticalChance() * 100)
                     + "% de crítico &7(x3.5 energía).";
         };
         return List.of(

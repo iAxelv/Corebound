@@ -271,7 +271,7 @@ public record CoreRecord(
     }
 
     public double upgradeCost() {
-        return 250.0 * Math.pow(3.0, level - 1);
+        return maxEnergy() * 0.5;
     }
 
     public double maxEnergy() {
@@ -295,7 +295,7 @@ public record CoreRecord(
     }
 
     public int pylonCapacity() {
-        if (level < 4) {
+        if (level < 3) {
             return 0;
         }
         if (level < 7) {

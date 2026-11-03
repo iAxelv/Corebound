@@ -2,6 +2,7 @@ package com.corebound.thecore.incremental;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -56,12 +57,32 @@ class CoreRecordTest {
     void upgradesLevelAndDeductsTheExponentialCost() {
         CoreRecord levelTwoCore = createCore(2, 1000.0);
 
-        assertEquals(750.0, levelTwoCore.upgradeCost(), 0.0001);
+        assertEquals(550.0, levelTwoCore.upgradeCost(), 0.0001);
         CoreRecord upgraded = levelTwoCore.upgrade(levelTwoCore.upgradeCost());
 
         assertEquals(3, upgraded.level());
-        assertEquals(250.0, upgraded.energy(), 0.0001);
+        assertEquals(450.0, upgraded.energy(), 0.0001);
         assertEquals(1.5625, upgraded.baseEnergy(), 0.0001);
+    }
+
+    @Test
+    void upgradeCostAlwaysFitsWithinCurrentCapacity() {
+        for (int level = 1; level <= 100; level++) {
+            CoreRecord core = createCore(level);
+            assertEquals(core.maxEnergy() * 0.5, core.upgradeCost(), 0.0001);
+            assertTrue(core.upgradeCost() <= core.maxEnergy());
+        }
+    }
+
+    @Test
+    void levelFourCoreCanAffordItsNextUpgradeAtFullCapacity() {
+        CoreRecord levelFourCore = createCore(4, 5324.0);
+
+        assertEquals(2662.0, levelFourCore.upgradeCost(), 0.0001);
+        CoreRecord upgraded = levelFourCore.upgrade(levelFourCore.upgradeCost());
+
+        assertEquals(5, upgraded.level());
+        assertEquals(2662.0, upgraded.energy(), 0.0001);
     }
 
     @Test
@@ -199,10 +220,9 @@ class CoreRecordTest {
     }
 
     @Test
-    void pylonCapacityUnlocksAtLevelsFourSevenAndTen() {
+    void pylonCapacityUnlocksAtLevelsThreeSevenAndTen() {
         assertEquals(0, createCore(1).pylonCapacity());
-        assertEquals(0, createCore(3).pylonCapacity());
-        assertEquals(1, createCore(4).pylonCapacity());
+        assertEquals(1, createCore(3).pylonCapacity());
         assertEquals(1, createCore(6).pylonCapacity());
         assertEquals(2, createCore(7).pylonCapacity());
         assertEquals(2, createCore(9).pylonCapacity());

@@ -36,18 +36,6 @@ items:
     locked-status: "&cRequiere Fractura %required_fracture%."
     fragments-status: "&cNecesitas %cost% fragmentos."
     available-status: "&eHaz clic para mejorar."
-  previous:
-    material: ARROW
-    slots: [28, 36]
-    display-name: "&ePágina anterior"
-    lore:
-      - "&7Página %page%/%pages%"
-  next:
-    material: ARROW
-    slots: [46, 54]
-    display-name: "&eSiguiente página"
-    lore:
-      - "&7Página %page%/%pages%"
   back:
     material: ARROW
     slot: 50

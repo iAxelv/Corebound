@@ -121,6 +121,12 @@ public final class PylonService {
             loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
             if (saveDefaults) {
                 loaded.options().copyDefaults(true);
+                if (loaded.getInt("pylon.interval-ticks", 400) == 60) {
+                    loaded.set("pylon.interval-ticks", 400);
+                }
+                if (Double.compare(loaded.getDouble("pylon.base-yield-ratio", 2.0), 0.4) == 0) {
+                    loaded.set("pylon.base-yield-ratio", 2.0);
+                }
                 if (!loaded.contains("pylon.purchase-cost-multiplier", true)
                         && Double.compare(loaded.getDouble("pylon.purchase-cost", 500.0), 150.0) == 0) {
                     loaded.set("pylon.purchase-cost", 500.0);
@@ -142,10 +148,10 @@ public final class PylonService {
         if (!Double.isFinite(configuredScale) || configuredScale <= 0 || configuredScale > Float.MAX_VALUE) {
             throw new IllegalArgumentException("pylons.yml pylon.display.scale must be a positive finite number.");
         }
-        int loadedIntervalTicks = loaded.getInt("pylon.interval-ticks", 60);
+        int loadedIntervalTicks = loaded.getInt("pylon.interval-ticks", 400);
         double loadedMinimumDistance = loaded.getDouble("pylon.min-distance", 3.0);
         double loadedMaximumDistance = loaded.getDouble("pylon.max-distance", 12.0);
-        double loadedBaseYieldRatio = loaded.getDouble("pylon.base-yield-ratio", 0.4);
+        double loadedBaseYieldRatio = loaded.getDouble("pylon.base-yield-ratio", 2.0);
         double loadedPurchaseCost = loaded.getDouble("pylon.purchase-cost", 500.0);
         double loadedPurchaseCostMultiplier = loaded.getDouble("pylon.purchase-cost-multiplier", 3.5);
         double loadedForgeRefreshCost = loaded.getDouble("pylon.cells.refresh-cost", 75.0);
@@ -227,7 +233,7 @@ public final class PylonService {
     public void openCellForge(Player player, long islandIndex) {
         if (canManageIslandCore(player, islandIndex)) {
             CoreRecord core = coreRepository.core(islandIndex);
-            if (core == null || core.level() < 3) {
+            if (core == null || core.level() < 5) {
                 messages.send(player, "cell-forge-locked");
                 return;
             }
@@ -280,7 +286,7 @@ public final class PylonService {
             return null;
         }
         CoreRecord core = coreRepository.core(islandIndex);
-        if (core == null || core.level() < 3) {
+        if (core == null || core.level() < 5) {
             messages.send(player, "cell-forge-locked");
             return null;
         }
@@ -302,7 +308,7 @@ public final class PylonService {
             return false;
         }
         CoreRecord core = coreRepository.core(islandIndex);
-        if (core == null || core.level() < 3) {
+        if (core == null || core.level() < 5) {
             messages.send(player, "cell-forge-locked");
             return false;
         }
@@ -348,7 +354,7 @@ public final class PylonService {
         }
         PylonRecord updated = pylon.withCell(slot, cell);
         repository.update(updated);
-        refreshPylon(updated);
+        repository.forIsland(updated.islandIndex()).forEach(this::refreshPylon);
         restartPulse(updated);
     }
 
@@ -412,6 +418,51 @@ public final class PylonService {
         return core == null ? 0 : core.level();
     }
 
+    public CoreRecord coreRecord(long islandIndex) {
+        return coreRepository.core(islandIndex);
+    }
+
+    public boolean canUseCellTier(Player player, long islandIndex, int tier) {
+        if (!canManageIslandCore(player, islandIndex)) {
+            return false;
+        }
+        CoreRecord core = coreRepository.core(islandIndex);
+        if (core == null) {
+            messages.send(player, "core-already-placed");
+            return false;
+        }
+        return isCellTierAllowed(player, core, tier);
+    }
+
+    private boolean isCellTierAllowed(Player player, CoreRecord core, int tier) {
+        int maximumTier = CellRecord.maximumTierForCoreLevel(core.level());
+        if (tier > maximumTier) {
+            messages.send(player, "cell-tier-locked", Map.of(
+                    "tier", Integer.toString(tier),
+                    "max_tier", Integer.toString(maximumTier),
+                    "level", Integer.toString(core.level())));
+            return false;
+        }
+        return true;
+    }
+
+    public boolean canFuseCellTier(Player player, int tier) {
+        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+        if (island == null) {
+            messages.send(player, "pylon-menu-access-denied");
+            return false;
+        }
+        return canUseCellTier(player, island.index(), tier);
+    }
+
+    public int effectiveIntervalTicks(PylonRecord pylon) {
+        return effectiveIntervalTicks(pylon.equippedCells());
+    }
+
+    public double estimatedPulseYield(CoreRecord core, PylonRecord pylon) {
+        return estimatedPulseYield(core, pylon.equippedCells(), lightningMultiplier(pylon));
+    }
+
     public int ownedPylonCount(long islandIndex) {
         return repository.forIsland(islandIndex).size() + repository.pendingItems(islandIndex);
     }
@@ -470,7 +521,7 @@ public final class PylonService {
             messages.send(player, "core-already-placed");
             return false;
         }
-        if (core.level() < 4) {
+        if (core.level() < 3) {
             messages.send(player, "pylon-requires-core-level");
             return false;
         }
@@ -628,7 +679,7 @@ public final class PylonService {
             messages.send(player, "core-already-placed");
             return false;
         }
-        if (core.level() < 4) {
+        if (core.level() < 3) {
             messages.send(player, "pylon-requires-core-level");
             return false;
         }
@@ -671,6 +722,11 @@ public final class PylonService {
         UUID pylonId = UUID.randomUUID();
         int pylonTier = pylonTier(heldPylon);
         Map<Integer, CellRecord> equippedCells = pylonCells(heldPylon);
+        for (CellRecord cell : equippedCells.values()) {
+            if (!isCellTierAllowed(player, core, cell.tier())) {
+                return false;
+            }
+        }
         ItemDisplay baseDisplay = null;
         ItemDisplay rodDisplay = null;
         Interaction interaction = null;
@@ -903,12 +959,10 @@ public final class PylonService {
         }
     }
 
-    private int effectiveIntervalTicks(PylonRecord pylon) {
+    private int effectiveIntervalTicks(Map<Integer, CellRecord> cells) {
         int reduction = 0;
-        for (CellRecord cell : pylon.equippedCells().values()) {
-            if (cell.type() == CellType.FIRE) {
-                reduction += 20 * (1 << (cell.tier() - 1));
-            }
+        for (CellRecord cell : cells.values()) {
+            reduction += cell.fireIntervalReductionTicks();
         }
         return Math.max(20, intervalTicks - reduction);
     }
@@ -925,18 +979,29 @@ public final class PylonService {
             }
             CellRecord linkedCell = highestCell(neighbor, CellType.LIGHTNING);
             if (linkedCell != null) {
-                bonus += lightningBonusForTier(ownCell.tier());
+                bonus += Math.min(ownCell.lightningBonusPerLink(), linkedCell.lightningBonusPerLink());
             }
         }
         return 1.0 + bonus;
     }
 
     private boolean criticalHit(PylonRecord pylon) {
-        double chance = pylon.equippedCells().values().stream()
-                .filter(cell -> cell.type() == CellType.VOID)
-                .mapToDouble(cell -> 0.15 * Math.pow(2.0, cell.tier() - 1))
-                .sum();
-        return ThreadLocalRandom.current().nextDouble() < Math.min(1.0, chance);
+        return ThreadLocalRandom.current().nextDouble() < criticalChance(pylon.equippedCells());
+    }
+
+    private double criticalChance(Map<Integer, CellRecord> cells) {
+        return Math.min(1.0, cells.values().stream().mapToDouble(CellRecord::voidCriticalChance).sum());
+    }
+
+    private double estimatedPulseYield(
+            CoreRecord core, Map<Integer, CellRecord> cells, double lightningMultiplier) {
+        double expectedCriticalMultiplier = 1.0 + criticalChance(cells) * 2.5;
+        return core.baseEnergy()
+                * baseYieldRatio
+                * lightningMultiplier
+                * core.astralPylonMultiplier()
+                * core.prestigeMultiplier()
+                * expectedCriticalMultiplier;
     }
 
     private CellRecord dominantCell(PylonRecord pylon) {
@@ -1027,13 +1092,12 @@ public final class PylonService {
             text = text.append(Component.newline()).append(messages.parseComponent(
                     "&7Células equipadas: &f" + cells.size()));
         }
-        double yield = core.baseEnergy() * baseYieldRatio * lightningMultiplier;
+        double yield = estimatedPulseYield(core, cells, lightningMultiplier);
+        double intervalSeconds = effectiveIntervalTicks(cells) / 20.0;
         return text.append(Component.newline())
-                .append(messages.parseComponent("&e+" + formatEnergy(yield) + "⚡ / pulso"));
-    }
-
-    private double lightningBonusForTier(int tier) {
-        return 0.25 * Math.pow(2.0, tier - 1);
+                .append(messages.parseComponent("&7Intervalo: &f" + formatEnergy(intervalSeconds) + "s"))
+                .append(Component.newline())
+                .append(messages.parseComponent("&e+" + formatEnergy(yield) + "⚡ / pulso promedio"));
     }
 
     private void updatePylonVisuals(PylonRecord pylon, CoreRecord core, World world) {
@@ -1107,14 +1171,12 @@ public final class PylonService {
 
     private String cellEffectLore(CellRecord cell) {
         return switch (cell.type()) {
-            case FIRE -> "&e-" + String.format(
-                    java.util.Locale.ROOT, "%.1f", Math.pow(2.0, cell.tier() - 1))
+            case FIRE -> "&e-" + String.format(java.util.Locale.ROOT, "%.1f", cell.fireIntervalReductionTicks() / 20.0)
                     + "s entre pulsos";
             case LIGHTNING -> "&e+" + String.format(
-                    java.util.Locale.ROOT, "%.0f", lightningBonusForTier(cell.tier()) * 100.0)
+                    java.util.Locale.ROOT, "%.0f", cell.lightningBonusPerLink() * 100.0)
                     + "% producción por enlace";
-            case VOID -> "&e" + String.format(
-                    java.util.Locale.ROOT, "%.0f", Math.min(1.0, 0.15 * Math.pow(2.0, cell.tier() - 1)) * 100.0)
+            case VOID -> "&e" + String.format(java.util.Locale.ROOT, "%.0f", cell.voidCriticalChance() * 100.0)
                     + "% de crítico x3.5";
         };
     }

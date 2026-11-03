@@ -282,10 +282,10 @@ public final class CoreService {
         coreUpgradesMenu.open(player, islandIndex);
     }
 
-    public void openAstralTree(Player player, long islandIndex, int page) {
+    public void openAstralTree(Player player, long islandIndex) {
         CoreRecord core = coreForPlayer(player, islandIndex);
         if (core != null) {
-            astralTreeMenu.open(player, core, page);
+            astralTreeMenu.open(player, core);
         }
     }
 
