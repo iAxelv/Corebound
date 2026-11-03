@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
@@ -59,8 +60,12 @@ public final class CoreService {
     private final Set<UUID> itemDeliveries = ConcurrentHashMap.newKeySet();
     private final Set<UUID> rotatingDisplays = ConcurrentHashMap.newKeySet();
     private final Map<UUID, DisplayAnimation> displayAnimations = new ConcurrentHashMap<>();
+    private final Map<Long, io.papermc.paper.threadedregions.scheduler.ScheduledTask> anomalyTasks =
+            new ConcurrentHashMap<>();
+    private final Map<Long, AnomalyState> anomalies = new ConcurrentHashMap<>();
     private final CoreMenu coreMenu;
     private final CoreUpgradesMenu coreUpgradesMenu;
+    private PylonService pylonService;
 
     private static final class DisplayAnimation {
         private float yaw;
@@ -72,6 +77,12 @@ public final class CoreService {
             currentScale = scale;
             targetScale = scale;
         }
+    }
+
+    private static final class AnomalyState {
+        private volatile long unstableUntil;
+        private volatile int hits;
+        private volatile long hyperdriveUntil;
     }
 
     public CoreService(
@@ -206,6 +217,7 @@ public final class CoreService {
     }
 
     public void attachPylonService(PylonService pylonService) {
+        this.pylonService = pylonService;
         coreMenu.attachPylonService(pylonService);
     }
 
@@ -264,6 +276,42 @@ public final class CoreService {
                 "level", Integer.toString(upgraded.enhancementLevel(enhancement)),
                 "cost", formatEnergy(cost)));
         return true;
+    }
+
+    public boolean fractureCore(Player player, long islandIndex) {
+        CoreRecord current = coreForPlayer(player, islandIndex);
+        if (current == null) {
+            return false;
+        }
+        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+        if (island == null || !island.owner().equals(player.getUniqueId())) {
+            messages.send(player, "core-fracture-owner-only");
+            return false;
+        }
+        if (current.level() < 10) {
+            messages.send(player, "core-fracture-level-required");
+            return false;
+        }
+        if (pylonService != null && !pylonService.preservePylons(player, islandIndex)) {
+            return false;
+        }
+        CoreRecord fractured = repository.fractureCore(islandIndex);
+        if (fractured == null) {
+            messages.send(player, "core-fracture-level-required");
+            return false;
+        }
+        anomalies.remove(islandIndex);
+        updateCoreVisuals(fractured, System.currentTimeMillis());
+        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+        messages.send(player, "core-fractured", Map.of(
+                "prestige", Integer.toString(fractured.prestigeCount()),
+                "bonus", formatEnergy((fractured.prestigeMultiplier() - 1.0) * 100.0)));
+        return true;
+    }
+
+    public double energyMultiplier(long islandIndex, long now) {
+        AnomalyState state = anomalies.get(islandIndex);
+        return state != null && state.hyperdriveUntil > now ? 5.0 : 1.0;
     }
 
     public boolean upgradeCore(Player player, long islandIndex) {
@@ -331,7 +379,8 @@ public final class CoreService {
                 removed.lastHitAt(),
                 removed.upgradeOvercharge(),
                 removed.upgradeWindow(),
-                removed.upgradeStorage());
+                removed.upgradeCritical(),
+                removed.prestigeCount());
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
@@ -340,6 +389,7 @@ public final class CoreService {
                 dropped.setPersistent(true);
             }
             removeCoreEntities(removed);
+            stopQuantumAnomaly(islandIndex);
             messages.send(player, "core-picked-up");
         } catch (RuntimeException exception) {
             repository.addCore(removed);
@@ -445,7 +495,8 @@ public final class CoreService {
                     progress.lastHitAt(),
                     progress.upgradeOvercharge(),
                     progress.upgradeWindow(),
-                    progress.upgradeStorage()));
+                    progress.upgradeCritical(),
+                    progress.prestigeCount()));
         } catch (RuntimeException exception) {
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);
@@ -463,6 +514,7 @@ public final class CoreService {
             heldItem.setAmount(heldItem.getAmount() - 1);
         }
         startRotation(itemDisplay);
+        startQuantumAnomaly(itemDisplay, island.index());
         updateHologram(textDisplay, repository.core(island.index()), System.currentTimeMillis());
         messages.send(player, "core-placed", Map.of("island", island.name()));
         return true;
@@ -484,10 +536,13 @@ public final class CoreService {
         long now = System.currentTimeMillis();
         CoreRecord previous = repository.core(islandIndex);
         long activeComboWindow = previous == null ? comboWindowMillis : previous.comboWindowMillis(comboWindowMillis);
-        CoreRecord updated = repository.registerHit(islandIndex, now, activeComboWindow);
-        if (updated == null) {
+        double eventMultiplier = energyMultiplier(islandIndex, now);
+        CoreRecord.HitResult hitResult = repository.registerHitResult(
+                islandIndex, now, activeComboWindow, eventMultiplier);
+        if (hitResult == null) {
             return;
         }
+        CoreRecord updated = hitResult.core();
         double gainedEnergy = previous == null ? 0.0 : updated.energy() - previous.energy();
         float pitch = 1.0f + Math.min(updated.hits(), updated.maxComboHits())
                 / (float) updated.maxComboHits();
@@ -498,7 +553,8 @@ public final class CoreService {
             entity.getWorld().spawnParticle(
                     Particle.ELECTRIC_SPARK, entity.getLocation().add(0, 0.65, 0), 24, 0.35, 0.35, 0.35, 0.1);
         }
-        sendHitActionBar(player, updated, gainedEnergy, now);
+        String anomalyFeedback = recordAnomalyHit(islandIndex, now);
+        sendHitActionBar(player, updated, gainedEnergy, now, hitResult.critical(), anomalyFeedback);
         updateCoreVisuals(updated, now);
         scheduleComboExpiration(entity, updated);
     }
@@ -526,6 +582,110 @@ public final class CoreService {
         }, null, delayTicks);
     }
 
+    private void startQuantumAnomaly(ItemDisplay display, long islandIndex) {
+        if (anomalyTasks.containsKey(islandIndex)) {
+            return;
+        }
+        io.papermc.paper.threadedregions.scheduler.ScheduledTask[] taskReference =
+                new io.papermc.paper.threadedregions.scheduler.ScheduledTask[1];
+        io.papermc.paper.threadedregions.scheduler.ScheduledTask scheduled =
+                display.getScheduler().runAtFixedRate(plugin, task -> {
+                    if (!display.isValid() || repository.core(islandIndex) == null) {
+                        task.cancel();
+                        anomalyTasks.remove(islandIndex, taskReference[0]);
+                        anomalies.remove(islandIndex);
+                        return;
+                    }
+                    tickQuantumAnomaly(display, islandIndex);
+                }, () -> {
+                    anomalyTasks.remove(islandIndex, taskReference[0]);
+                    anomalies.remove(islandIndex);
+                }, 1L, 20L);
+        if (scheduled != null) {
+            taskReference[0] = scheduled;
+            anomalyTasks.put(islandIndex, scheduled);
+        }
+    }
+
+    private void stopQuantumAnomaly(long islandIndex) {
+        io.papermc.paper.threadedregions.scheduler.ScheduledTask task = anomalyTasks.remove(islandIndex);
+        if (task != null) {
+            task.cancel();
+        }
+        anomalies.remove(islandIndex);
+    }
+
+    private void tickQuantumAnomaly(ItemDisplay display, long islandIndex) {
+        long now = System.currentTimeMillis();
+        AnomalyState state = anomalies.computeIfAbsent(islandIndex, ignored -> new AnomalyState());
+        CoreRecord core = repository.core(islandIndex);
+        if (core == null) {
+            anomalies.remove(islandIndex, state);
+            return;
+        }
+        if (state.unstableUntil > now) {
+            org.bukkit.World world = display.getWorld();
+            for (int point = 0; point < 12; point++) {
+                double angle = 2.0 * Math.PI * point / 12;
+                Location particle = new Location(
+                        world,
+                        core.x() + Math.cos(angle) * 1.1,
+                        core.y() + 0.6 + Math.sin(angle * 2) * 0.25,
+                        core.z() + Math.sin(angle) * 1.1);
+                world.spawnParticle(Particle.SOUL_FIRE_FLAME, particle, 2, 0.05, 0.05, 0.05, 0.01);
+            }
+            return;
+        }
+        if (state.unstableUntil != 0) {
+            state.unstableUntil = 0;
+            state.hits = 0;
+        }
+        if (state.hyperdriveUntil <= now && ThreadLocalRandom.current().nextDouble() < 0.005) {
+            state.unstableUntil = now + 20_000L;
+            state.hits = 0;
+            notifyQuantumAnomaly(islandIndex);
+        }
+    }
+
+    private void notifyQuantumAnomaly(long islandIndex) {
+        String message = "&b&l¡ANOMALÍA DETECTADA! &7Golpea 15 veces rápido (0/15)";
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            player.getScheduler().run(plugin, task -> {
+                IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+                if (island != null && island.index() == islandIndex) {
+                    player.sendActionBar(messages.parseComponent(message));
+                }
+            }, null);
+        }
+    }
+
+    private String recordAnomalyHit(long islandIndex, long now) {
+        AnomalyState state = anomalies.get(islandIndex);
+        if (state == null) {
+            return "";
+        }
+        if (state.unstableUntil > now) {
+            state.hits++;
+            if (state.hits >= 15) {
+                state.unstableUntil = 0;
+                state.hits = 0;
+                state.hyperdriveUntil = now + 45_000L;
+                CoreRecord core = repository.core(islandIndex);
+                org.bukkit.World world = core == null ? null : plugin.getServer().getWorld(core.worldId());
+                if (core != null && world != null) {
+                    Location location = new Location(world, core.x(), core.y(), core.z());
+                    world.playSound(location, Sound.ENTITY_WITHER_SPAWN, 1.0f, 2.0f);
+                }
+                return "&d&lHIPERIMPULSO ACTIVADO &7x5.0 por 45s";
+            }
+            return "&b&l¡ANOMALÍA DETECTADA! &7Golpea 15 veces rápido (" + state.hits + "/15)";
+        }
+        if (state.hyperdriveUntil > now) {
+            return "&d&lHIPERIMPULSO &7x5.0";
+        }
+        return "";
+    }
+
     public CoreRecord addPassiveEnergy(long islandIndex, double yieldRatio) {
         CoreRecord core = repository.core(islandIndex);
         if (core == null) {
@@ -543,7 +703,8 @@ public final class CoreService {
         updateCoreVisuals(core, now);
     }
 
-    private void sendHitActionBar(Player player, CoreRecord core, double gainedEnergy, long now) {
+    private void sendHitActionBar(
+            Player player, CoreRecord core, double gainedEnergy, long now, boolean critical, String anomalyFeedback) {
         int filledSegments = (int) Math.round(Math.min(core.hits(), core.maxComboHits())
                 / (double) core.maxComboHits() * 10);
         String bar = "&a" + "|".repeat(filledSegments)
@@ -552,7 +713,9 @@ public final class CoreService {
                 ? "&cTanque lleno &7(" + formatEnergy(core.energy()) + "/" +
                         formatEnergy(core.maxEnergy()) + "⚡)"
                 : "&6+" + formatEnergy(gainedEnergy) + "⚡";
-        String actionBar = energyFeedback
+        String actionBar = (critical ? "&c¡CRÍTICO x3! &r" : "")
+                + (anomalyFeedback.isEmpty() ? "" : anomalyFeedback + " &8| ")
+                + energyFeedback
                 + " &8| &bCombo x" + String.format(
                         Locale.ROOT, "%.2f", core.combo(now, core.comboWindowMillis(comboWindowMillis)))
                 + " &7[" + bar + "&7]";
@@ -566,6 +729,7 @@ public final class CoreService {
         }
         if (entity instanceof ItemDisplay itemDisplay) {
             startRotation(itemDisplay);
+            startQuantumAnomaly(itemDisplay, islandIndex);
         } else if (entity instanceof TextDisplay) {
             updateCoreVisuals(repository.core(islandIndex), System.currentTimeMillis());
         }

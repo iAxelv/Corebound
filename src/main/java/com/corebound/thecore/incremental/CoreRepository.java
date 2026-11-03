@@ -100,6 +100,19 @@ public final class CoreRepository {
         return updated;
     }
 
+    public synchronized CoreRecord fractureCore(long islandIndex) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null) {
+            return null;
+        }
+        CoreRecord fractured = current.fracture();
+        if (fractured != null) {
+            cores.put(islandIndex, fractured);
+            save();
+        }
+        return fractured;
+    }
+
     public synchronized void restoreEnergy(long islandIndex, double amount) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null || !Double.isFinite(amount) || amount <= 0) {
@@ -120,24 +133,32 @@ public final class CoreRepository {
                 current.lastHitAt(),
                 current.upgradeOvercharge(),
                 current.upgradeWindow(),
-                current.upgradeStorage()));
+                current.upgradeCritical(),
+                current.prestigeCount()));
         save();
     }
 
     public synchronized CoreRecord registerHit(long islandIndex, long now, long comboWindowMillis) {
-        return registerHit(islandIndex, now, comboWindowMillis, 1.0);
+        CoreRecord.HitResult result = registerHitResult(islandIndex, now, comboWindowMillis, 1.0);
+        return result == null ? null : result.core();
     }
 
     public synchronized CoreRecord registerHit(
+            long islandIndex, long now, long comboWindowMillis, double yieldRatio) {
+        CoreRecord.HitResult result = registerHitResult(islandIndex, now, comboWindowMillis, yieldRatio);
+        return result == null ? null : result.core();
+    }
+
+    public synchronized CoreRecord.HitResult registerHitResult(
             long islandIndex, long now, long comboWindowMillis, double yieldRatio) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null) {
             return null;
         }
-        CoreRecord updated = current.withHit(now, comboWindowMillis, yieldRatio);
-        cores.put(islandIndex, updated);
+        CoreRecord.HitResult result = current.withHitResult(now, comboWindowMillis, yieldRatio);
+        cores.put(islandIndex, result.core());
         save();
-        return updated;
+        return result;
     }
 
     public synchronized CoreRecord addPassiveEnergy(long islandIndex, double amount) {
@@ -219,7 +240,8 @@ public final class CoreRepository {
                 yaml.set(path + ".last-hit-at", core.lastHitAt());
                 yaml.set(path + ".upgrade-overcharge", core.upgradeOvercharge());
                 yaml.set(path + ".upgrade-window", core.upgradeWindow());
-                yaml.set(path + ".upgrade-storage", core.upgradeStorage());
+                yaml.set(path + ".upgrade-critical", core.upgradeCritical());
+                yaml.set(path + ".prestige-count", core.prestigeCount());
             }
             yaml.set("pending-items", snapshot.pendingItems().stream().map(UUID::toString).toList());
             Path target = file.toPath();
@@ -267,7 +289,8 @@ public final class CoreRepository {
                         core.getLong("last-hit-at", 0L),
                         core.getInt("upgrade-overcharge", 0),
                         core.getInt("upgrade-window", 0),
-                        core.getInt("upgrade-storage", 0)));
+                        core.getInt("upgrade-critical", 0),
+                        core.getInt("prestige-count", 0)));
             }
         }
         for (String playerId : yaml.getStringList("pending-items")) {

@@ -27,18 +27,19 @@ items:
     base-cost: 200.0
     cost-multiplier: 1.8
     max-level: 5
-  storage:
-    material: HOPPER
+  critical:
+    material: NETHER_STAR
     slot: 15
-    display-name: "&dCondensadores de Vacío &7[Nvl. %level%/%max%]"
+    display-name: "&cGolpe Crítico &7[Nvl. %level%/%max%]"
     lore:
-      - "&7Expande la capacidad máxima de almacenamiento."
-      - "&7Capacidad extra: &a+50%"
+      - "&7Probabilidad de impacto crítico manual."
+      - "&7Multiplica el golpe actual por &cx3.0⚡"
+      - "&7Probabilidad actual: &e+%chance%%"
       - ""
       - "&7Costo: &6%cost%⚡"
       - "%status%"
     base-cost: 300.0
-    cost-multiplier: 2.5
+    cost-multiplier: 2.2
     max-level: 5
   back:
     material: ARROW

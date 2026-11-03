@@ -29,7 +29,7 @@ public final class CoreUpgradesMenu implements Listener {
     private static final Map<CoreEnhancement, Integer> SLOTS = Map.of(
             CoreEnhancement.OVERCHARGE, 11,
             CoreEnhancement.WINDOW, 13,
-            CoreEnhancement.STORAGE, 15);
+            CoreEnhancement.CRITICAL, 15);
 
     private static final class Holder implements InventoryHolder {
         private final long islandIndex;
@@ -149,6 +149,7 @@ public final class CoreUpgradesMenu implements Listener {
                         "%level%", Integer.toString(level),
                         "%max%", Integer.toString(maxLevel),
                         "%cost%", formatEnergy(cost),
+                        "%chance%", Integer.toString(level * 5),
                         "%status%", status)))
                 .map(messages::parseComponent)
                 .toList();

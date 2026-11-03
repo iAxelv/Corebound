@@ -506,6 +506,51 @@ public final class PylonService {
         return true;
     }
 
+    public boolean preservePylons(Player player, long islandIndex) {
+        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+        if (island == null || island.index() != islandIndex || !island.owner().equals(player.getUniqueId())) {
+            messages.send(player, "core-fracture-owner-only");
+            return false;
+        }
+        int returned = 0;
+        for (PylonRecord pylon : repository.forIsland(islandIndex)) {
+            PylonRecord removed = repository.removeAndReserveItem(pylon.pylonId());
+            if (removed == null) {
+                continue;
+            }
+            stopPulse(removed.pylonId());
+            schedulePylonEntityRemoval(removed);
+            ItemStack item = createPylonItem(removed);
+            Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
+            for (ItemStack leftover : overflow.values()) {
+                Item dropped = player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+                dropped.setPersistent(true);
+            }
+            returned++;
+        }
+        if (returned > 0) {
+            messages.send(player, "core-fracture-pylons-returned", Map.of(
+                    "count", Integer.toString(returned)));
+        }
+        return true;
+    }
+
+    private void schedulePylonEntityRemoval(PylonRecord pylon) {
+        World world = plugin.getServer().getWorld(pylon.worldId());
+        if (world == null) {
+            return;
+        }
+        Location location = new Location(world, pylon.x(), pylon.y(), pylon.z());
+        plugin.getServer().getRegionScheduler().run(plugin, location, task -> {
+            removeEntity(world.getEntity(pylon.itemDisplayId()));
+            removeEntity(world.getEntity(pylon.rodDisplayId()));
+            removeEntity(world.getEntity(pylon.interactionId()));
+            if (pylon.textDisplayId() != null) {
+                removeEntity(world.getEntity(pylon.textDisplayId()));
+            }
+        });
+    }
+
     public boolean place(Player player, org.bukkit.block.Block clickedBlock) {
         if (!clickedBlock.getType().isSolid()
                 || !clickedBlock.getRelative(org.bukkit.block.BlockFace.UP).getType().isAir()
@@ -718,7 +763,8 @@ public final class PylonService {
         world.playSound(source, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.7f, 1.6f);
         drawPulseLine(world, source, target, dominantCell(pylon));
         drawLightningLinks(pylon, world);
-        double yieldRatio = baseYieldRatio * lightningMultiplier(pylon);
+        double yieldRatio = baseYieldRatio * lightningMultiplier(pylon)
+                * coreService.energyMultiplier(pylon.islandIndex(), System.currentTimeMillis());
         if (criticalHit(pylon)) {
             yieldRatio *= 3.5;
         }

@@ -72,9 +72,9 @@ class CoreRecordTest {
     }
 
     @Test
-    void growsEnergyCapacityWithLevelAndStorageUpgrades() {
+    void growsEnergyCapacityWithCoreLevelWithoutCriticalUpgrades() {
         CoreRecord base = createCore(1, 499.5);
-        CoreRecord upgraded = new CoreRecord(
+        CoreRecord critical = new CoreRecord(
                 base.islandIndex(),
                 base.worldId(),
                 base.x(),
@@ -92,7 +92,9 @@ class CoreRecordTest {
                 1);
 
         assertEquals(500.0, base.maxEnergy(), 0.0001);
-        assertEquals(750.0, upgraded.maxEnergy(), 0.0001);
+        assertEquals(1100.0, createCore(2).maxEnergy(), 0.0001);
+        assertEquals(500.0, critical.maxEnergy(), 0.0001);
+        assertEquals(0.05, critical.criticalChance(), 0.0001);
         assertEquals(500.0, base.withHit(1000, COMBO_WINDOW_MILLIS).energy(), 0.0001);
         assertEquals(500.0, base.withPassiveEnergy(10).energy(), 0.0001);
         assertEquals(500.0, createCore(1, 700).energy(), 0.0001);
@@ -120,22 +122,38 @@ class CoreRecordTest {
         assertEquals(4.0, enhanced.maxCombo(), 0.0001);
         assertEquals(75, enhanced.maxComboHits());
         assertEquals(4500, enhanced.comboWindowMillis(3000));
-        assertEquals(750, enhanced.maxEnergy(), 0.0001);
+        assertEquals(500, enhanced.maxEnergy(), 0.0001);
+        assertEquals(0.05, enhanced.criticalChance(), 0.0001);
         assertEquals(100.0, createCore(1).upgradeCost(), 0.0001);
     }
 
     @Test
-    void enhancementUpgradeSpendsEnergyAndPreservesItsLevel() {
+    void criticalUpgradeSpendsEnergyAndPreservesItsLevel() {
         CoreRecord core = createCore(1, 500.0);
-        CoreRecord enhanced = core.upgradeEnhancement(CoreEnhancement.STORAGE, 300.0, 5);
+        CoreRecord enhanced = core.upgradeEnhancement(CoreEnhancement.CRITICAL, 300.0, 5);
         CoreRecord spent = enhanced.spendEnergy(100.0);
 
         assertEquals(200.0, enhanced.energy(), 0.0001);
-        assertEquals(1, enhanced.upgradeStorage());
-        assertEquals(750.0, enhanced.maxEnergy(), 0.0001);
+        assertEquals(1, enhanced.upgradeCritical());
+        assertEquals(0.05, enhanced.criticalChance(), 0.0001);
+        assertEquals(500.0, enhanced.maxEnergy(), 0.0001);
         assertEquals(100.0, spent.energy(), 0.0001);
-        assertEquals(1, spent.upgradeStorage());
-        assertNull(enhanced.upgradeEnhancement(CoreEnhancement.STORAGE, 200.0, 1));
+        assertEquals(1, spent.upgradeCritical());
+        assertNull(enhanced.upgradeEnhancement(CoreEnhancement.CRITICAL, 200.0, 1));
+    }
+
+    @Test
+    void fractureResetsEnergyAndLevelAndIncreasesPermanentProduction() {
+        CoreRecord core = createCore(10, 500.0);
+
+        CoreRecord fractured = core.fracture();
+
+        assertEquals(1, fractured.level());
+        assertEquals(0.0, fractured.energy(), 0.0001);
+        assertEquals(1, fractured.prestigeCount());
+        assertEquals(1.5, fractured.prestigeMultiplier(), 0.0001);
+        assertEquals(0.6, fractured.withPassiveEnergy(0.4).energy(), 0.0001);
+        assertNull(createCore(9).fracture());
     }
 
     @Test

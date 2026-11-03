@@ -28,6 +28,7 @@ public final class CoreMenu implements Listener {
     private static final int UPGRADES_SLOT = 10;
     private static final int STATISTICS_SLOT = 4;
     private static final int CELL_FORGE_SLOT = 12;
+    private static final int FRACTURE_SLOT = 13;
     private static final int PYLON_SLOT = 14;
     private static final int UPGRADE_SLOT = 16;
 
@@ -94,6 +95,9 @@ public final class CoreMenu implements Listener {
         holder.inventory.setItem(STATISTICS_SLOT,
                 createItem(config.getConfigurationSection("items.statistics"), core, false));
         holder.inventory.setItem(CELL_FORGE_SLOT, createCellForgeItem(core));
+        if (core.level() >= 10) {
+            holder.inventory.setItem(FRACTURE_SLOT, createFractureItem(core));
+        }
         holder.inventory.setItem(PYLON_SLOT, createPylonItem(core));
         holder.inventory.setItem(UPGRADE_SLOT, createItem(
                 config.getConfigurationSection("items.upgrade"), core, core.energy() >= core.upgradeCost()));
@@ -117,6 +121,10 @@ public final class CoreMenu implements Listener {
             coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == CELL_FORGE_SLOT && pylonService != null) {
             pylonService.openCellForge(player, holder.islandIndex);
+        } else if (event.getRawSlot() == FRACTURE_SLOT) {
+            if (coreService.fractureCore(player, holder.islandIndex)) {
+                coreService.openCoreMenu(player, holder.islandIndex);
+            }
         } else if (event.getRawSlot() == UPGRADE_SLOT && coreService.upgradeCore(player, holder.islandIndex)) {
             coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == UPGRADE_SLOT) {
@@ -141,6 +149,9 @@ public final class CoreMenu implements Listener {
         }
         Map<String, String> placeholders = Map.of(
                 "%level%", Integer.toString(core.level()),
+                "%prestige%", Integer.toString(core.prestigeCount()),
+                "%prestige_bonus%", String.format(
+                        java.util.Locale.ROOT, "%.0f", (core.prestigeMultiplier() - 1.0) * 100.0),
                 "%energy%", formatEnergy(core.energy()),
                 "%max_energy%", formatEnergy(core.maxEnergy()),
                 "%base_energy%", formatEnergy(core.baseEnergy()),
@@ -155,6 +166,20 @@ public final class CoreMenu implements Listener {
         meta.lore(lore.stream()
                 .map(line -> color(replace(line, placeholders)))
                 .toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createFractureItem(CoreRecord core) {
+        ItemStack item = new ItemStack(Material.NETHER_STAR);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(color("&d&lFRACTURA DIMENSIONAL"));
+        meta.lore(List.of(
+                color("&7Reinicia tu Núcleo a Nivel 1."),
+                color("&aBonus permanente: +50% de producción global."),
+                color("&7Prestigios: &d" + core.prestigeCount()),
+                color(""),
+                color("&eHaz clic para colapsar el Núcleo.")));
         item.setItemMeta(meta);
         return item;
     }
