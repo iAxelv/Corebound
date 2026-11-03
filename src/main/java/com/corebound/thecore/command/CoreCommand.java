@@ -101,7 +101,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         if (args.length == 2 && List.of("invite", "coop", "kick", "ban", "unban").contains(
                 args[0].toLowerCase(Locale.ROOT))) {
             return Bukkit.getOnlinePlayers().stream()
-                    .map(Player::getName)
+                    .map(player -> player.getName())
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT)))
                     .toList();
         }

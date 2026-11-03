@@ -93,7 +93,7 @@ public final class PylonRepository {
     }
 
     public synchronized void reserveReturnedItem(long islandIndex) {
-        pendingItems.merge(islandIndex, 1, Integer::sum);
+        pendingItems.compute(islandIndex, (ignored, count) -> count == null ? 1 : count + 1);
         save();
     }
 
@@ -116,7 +116,7 @@ public final class PylonRepository {
     public synchronized PylonRecord removeAndReserveItem(UUID pylonId) {
         PylonRecord removed = pylons.remove(pylonId);
         if (removed != null) {
-            pendingItems.merge(removed.islandIndex(), 1, Integer::sum);
+            pendingItems.compute(removed.islandIndex(), (ignored, count) -> count == null ? 1 : count + 1);
             save();
         }
         return removed;
@@ -128,7 +128,8 @@ public final class PylonRepository {
                 .toList();
         removed.forEach(pylon -> pylons.remove(pylon.pylonId()));
         pendingItems.remove(islandIndex);
-        islandGenerations.merge(islandIndex, 1L, Long::sum);
+        islandGenerations.compute(islandIndex, (ignored, generation) ->
+                generation == null ? 1L : generation + 1L);
         save();
         return removed;
     }

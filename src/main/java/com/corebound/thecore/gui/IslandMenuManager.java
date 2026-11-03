@@ -112,7 +112,8 @@ public final class IslandMenuManager implements Listener {
         int rows = menuRows(settingsConfig, "is_settings.yml");
         MenuHolder holder = new MenuHolder(MenuType.SETTINGS, island.owner(), 0);
         holder.inventory = Bukkit.createInventory(
-                holder, rows * 9, color(settingsConfig.getString("title", "&8Island Settings")));
+                holder, rows * 9, LegacyComponentSerializer.legacyAmpersand()
+                        .deserialize(settingsConfig.getString("title", "&8Island Settings")));
         ConfigurationSection items = settingsConfig.getConfigurationSection("items");
         if (items != null) {
             for (String key : items.getKeys(false)) {
@@ -152,7 +153,8 @@ public final class IslandMenuManager implements Listener {
                 : permissionsConfig.getString("user-title", "&8Permissions: %user%")
                         .replace("%user%", playerName(target));
         int rows = menuRows(permissionsConfig, "is_perms.yml");
-        holder.inventory = Bukkit.createInventory(holder, rows * 9, color(title));
+        holder.inventory = Bukkit.createInventory(
+                holder, rows * 9, LegacyComponentSerializer.legacyAmpersand().deserialize(title));
         if (target == null) {
             ConfigurationSection items = permissionsConfig.getConfigurationSection("items");
             if (items == null) {
@@ -252,12 +254,13 @@ public final class IslandMenuManager implements Listener {
         island.members().forEach((id, joinedAt) ->
                 entries.add(new MemberEntry(id, joinedAt, island.rank(id))));
         entries.sort(Comparator.comparingInt((MemberEntry entry) -> entry.rank().level()).reversed()
-                .thenComparingLong(MemberEntry::joinedAt));
+                .thenComparingLong(entry -> entry.joinedAt()));
         int pageSize = slots.size();
         int lastPage = Math.max(0, (entries.size() - 1) / Math.max(pageSize, 1));
         MenuHolder holder = new MenuHolder(MenuType.MEMBERS, island.owner(), Math.min(Math.max(page, 0), lastPage));
         holder.inventory = Bukkit.createInventory(
-                holder, rows * 9, color(membersConfig.getString("title", "&8Island Members")));
+                holder, rows * 9, LegacyComponentSerializer.legacyAmpersand()
+                        .deserialize(membersConfig.getString("title", "&8Island Members")));
         int start = holder.page * pageSize;
         for (int i = 0; i < pageSize && start + i < entries.size(); i++) {
             int slot = slots.get(i);
@@ -547,10 +550,6 @@ public final class IslandMenuManager implements Listener {
     private Component messageComponent(String key) {
         return LegacyComponentSerializer.legacySection().deserialize(messages.colored(key))
                 .decoration(TextDecoration.ITALIC, false);
-    }
-
-    private String color(String value) {
-        return org.bukkit.ChatColor.translateAlternateColorCodes('&', value);
     }
 
     private int menuRows(YamlConfiguration config, String filename) {

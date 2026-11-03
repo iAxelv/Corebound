@@ -5,7 +5,6 @@ import com.corebound.thecore.gui.IslandMenuManager;
 import com.corebound.thecore.incremental.CorePlaceListener;
 import com.corebound.thecore.incremental.CoreRepository;
 import com.corebound.thecore.incremental.CoreService;
-import com.corebound.thecore.incremental.CoreMenu;
 import com.corebound.thecore.incremental.PylonRepository;
 import com.corebound.thecore.incremental.PylonService;
 import com.corebound.thecore.island.IslandRepository;

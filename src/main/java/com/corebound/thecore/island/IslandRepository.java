@@ -214,10 +214,10 @@ public final class IslandRepository {
             island.memberRanks().forEach((member, rank) ->
                     yaml.set(path + ".member-ranks." + member, rank.configName()));
             yaml.set(path + ".coops", island.coops().stream()
-                    .map(UUID::toString)
+                    .map(player -> player.toString())
                     .toList());
             yaml.set(path + ".banned", island.bannedPlayers().stream()
-                    .map(UUID::toString)
+                    .map(player -> player.toString())
                     .toList());
             island.settings().save(yaml.createSection(path + ".settings"));
             yaml.set(path + ".permission-minimums", null);
@@ -367,7 +367,7 @@ public final class IslandRepository {
 
         }
 
-        long maximumIndex = islands.values().stream().mapToLong(IslandData::index).max().orElse(-1);
+        long maximumIndex = islands.values().stream().mapToLong(island -> island.index()).max().orElse(-1);
         if (lastIndex < maximumIndex) {
             lastIndex = maximumIndex;
         }

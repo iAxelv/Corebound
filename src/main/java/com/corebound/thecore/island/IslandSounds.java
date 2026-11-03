@@ -28,7 +28,7 @@ public final class IslandSounds {
         String configuredSound = section == null ? null : section.getString("sound");
         NamespacedKey soundKey = configuredSound == null ? null : NamespacedKey.fromString(configuredSound);
         Sound sound = soundKey == null ? null : Registry.SOUNDS.get(soundKey);
-        if (sound == null) {
+        if (section == null || sound == null) {
             plugin.getLogger().warning("Invalid or missing sound configured at is_settings.yml: "
                     + soundPath + ".sound");
             return;

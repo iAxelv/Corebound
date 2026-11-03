@@ -245,7 +245,7 @@ public final class CoreRepository {
                 yaml.set(path + ".prestige-count", core.prestigeCount());
                 yaml.set(path + ".core-fragments", core.coreFragments());
             }
-            yaml.set("pending-items", snapshot.pendingItems().stream().map(UUID::toString).toList());
+            yaml.set("pending-items", snapshot.pendingItems().stream().map(id -> id.toString()).toList());
             Path target = file.toPath();
             Files.createDirectories(target.getParent());
             Path temporary = Files.createTempFile(target.getParent(), "cores-", ".yml.tmp");

@@ -77,7 +77,8 @@ public final class Messages {
         if (message == null) {
             throw new IllegalArgumentException("Missing localized message: " + key);
         }
-        return org.bukkit.ChatColor.translateAlternateColorCodes('&', message);
+        return LegacyComponentSerializer.legacySection().serialize(
+                LegacyComponentSerializer.legacyAmpersand().deserialize(message));
     }
 
     public Component component(String key) {

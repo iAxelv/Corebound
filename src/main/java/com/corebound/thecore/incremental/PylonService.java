@@ -910,14 +910,14 @@ public final class PylonService {
     private CellRecord dominantCell(PylonRecord pylon) {
         return pylon.equippedCells().entrySet().stream()
                 .min(Map.Entry.comparingByKey())
-                .map(Map.Entry::getValue)
+                .map(entry -> entry.getValue())
                 .orElse(null);
     }
 
     private CellRecord highestCell(PylonRecord pylon, CellType type) {
         return pylon.equippedCells().values().stream()
                 .filter(cell -> cell.type() == type)
-                .max(java.util.Comparator.comparingInt(CellRecord::tier))
+                .max(java.util.Comparator.comparingInt(cell -> cell.tier()))
                 .orElse(null);
     }
 
@@ -1132,7 +1132,7 @@ public final class PylonService {
     private Material pylonBaseMaterial(Map<Integer, CellRecord> cells) {
         return cells.entrySet().stream()
                 .min(Map.Entry.comparingByKey())
-                .map(Map.Entry::getValue)
+                .map(entry -> entry.getValue())
                 .map(cell -> cell.type().baseMaterial())
                 .orElse(baseMaterial);
     }

@@ -163,6 +163,12 @@ public final class IslandService {
             return true;
         }
 
+        if (structure == null) {
+            plugin.getLogger().severe("Paper returned no structure for " + schematic.getAbsolutePath() + ".");
+            messages.send(player, "structure-load-failed");
+            releasePending(owner, normalizedName);
+            return false;
+        }
         try {
             structure.place(
                     new Location(world, coordinates.x(), 100, coordinates.z()),
@@ -195,7 +201,7 @@ public final class IslandService {
 
         plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
             try {
-                ClipboardFormat format = ClipboardFormats.findByFile(schematic);
+                ClipboardFormat format = ClipboardFormats.findByPath(schematic.toPath());
                 if (format == null) {
                     throw new IOException("No WorldEdit clipboard format recognized " + schematic.getName() + ".");
                 }
@@ -777,7 +783,7 @@ public final class IslandService {
     private void cancelInvitesForIsland(UUID islandOwner) {
         List<UUID> invitedPlayers = invites.entrySet().stream()
                 .filter(entry -> entry.getValue().islandOwner().equals(islandOwner))
-                .map(Map.Entry::getKey)
+                .map(entry -> entry.getKey())
                 .toList();
         for (UUID invitedPlayer : invitedPlayers) {
             cancelInvite(invitedPlayer, islandOwner);
@@ -844,7 +850,8 @@ public final class IslandService {
         plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
             try (EditSession editSession = WorldEdit.getInstance().newEditSession(editWorld)) {
                 editSession.setBlocks(new CuboidRegion(editWorld, minimum, maximum),
-                        BlockTypes.AIR.getDefaultState());
+                        java.util.Objects.requireNonNull(BlockTypes.AIR, "WorldEdit AIR block type is unavailable.")
+                                .getDefaultState());
                 plugin.getServer().getGlobalRegionScheduler().run(plugin, regionTask -> {
                     try {
                         repository.remove(island.owner());
@@ -953,20 +960,6 @@ public final class IslandService {
             return;
         }
         applyBorder(player, currentIsland);
-    }
-
-    private boolean isIslandBorder(WorldBorder border) {
-        if (border == null) {
-            return false;
-        }
-        double size = islandRadius * 2;
-        if (Math.abs(border.getSize() - size) >= 0.01) {
-            return false;
-        }
-        return islandAt(new Location(world, border.getCenter().getX(), 0, border.getCenter().getZ()))
-                .filter(island -> Math.abs(border.getCenter().getX() - island.centerX() - 0.5) < 0.01
-                        && Math.abs(border.getCenter().getZ() - island.centerZ() - 0.5) < 0.01)
-                .isPresent();
     }
 
     private Optional<IslandData> islandWithinBorder(Location location) {
