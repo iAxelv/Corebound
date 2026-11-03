@@ -19,7 +19,8 @@ public record CoreRecord(
         int upgradeOvercharge,
         int upgradeWindow,
         int upgradeCritical,
-        int prestigeCount) {
+        int prestigeCount,
+        int coreFragments) {
 
     public CoreRecord {
         level = Math.max(1, level);
@@ -27,6 +28,7 @@ public record CoreRecord(
         upgradeWindow = Math.max(0, Math.min(5, upgradeWindow));
         upgradeCritical = Math.max(0, Math.min(5, upgradeCritical));
         prestigeCount = Math.max(0, prestigeCount);
+        coreFragments = Math.max(0, coreFragments);
         double capacity = maxEnergy(level);
         energy = Double.isNaN(energy)
                 ? 0.0
@@ -47,7 +49,7 @@ public record CoreRecord(
             int hits,
             long lastHitAt) {
         this(islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
-                level, energy, hits, lastHitAt, 0, 0, 0, 0);
+                level, energy, hits, lastHitAt, 0, 0, 0, 0, 0);
     }
 
     public CoreRecord(
@@ -67,7 +69,29 @@ public record CoreRecord(
             int upgradeWindow,
             int upgradeCritical) {
         this(islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
-                level, energy, hits, lastHitAt, upgradeOvercharge, upgradeWindow, upgradeCritical, 0);
+                level, energy, hits, lastHitAt, upgradeOvercharge, upgradeWindow, upgradeCritical, 0, 0);
+    }
+
+    public CoreRecord(
+            long islandIndex,
+            UUID worldId,
+            double x,
+            double y,
+            double z,
+            UUID itemDisplayId,
+            UUID interactionId,
+            UUID textDisplayId,
+            int level,
+            double energy,
+            int hits,
+            long lastHitAt,
+            int upgradeOvercharge,
+            int upgradeWindow,
+            int upgradeCritical,
+            int prestigeCount) {
+        this(islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
+                level, energy, hits, lastHitAt, upgradeOvercharge, upgradeWindow, upgradeCritical,
+                prestigeCount, 0);
     }
 
     public CoreRecord withHit(long now, long comboWindowMillis) {
@@ -90,7 +114,7 @@ public record CoreRecord(
         CoreRecord updated = new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, updatedEnergy, updatedHits, now,
-                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount);
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments);
         return new HitResult(updated, critical);
     }
 
@@ -98,13 +122,14 @@ public record CoreRecord(
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, Math.min(maxEnergy(), energy + amount * prestigeMultiplier()), hits, lastHitAt,
-                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount);
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments);
     }
 
     public CoreRecord withoutCombo() {
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
-                level, energy, 0, 0, upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount);
+                level, energy, 0, 0, upgradeOvercharge, upgradeWindow, upgradeCritical,
+                prestigeCount, coreFragments);
     }
 
     public CoreRecord upgrade(double cost) {
@@ -114,7 +139,7 @@ public record CoreRecord(
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level + 1, energy - cost, hits, lastHitAt,
-                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount);
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments);
     }
 
     public CoreRecord spendEnergy(double cost) {
@@ -124,7 +149,7 @@ public record CoreRecord(
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, energy - cost, hits, lastHitAt,
-                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount);
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments);
     }
 
     public CoreRecord upgradeEnhancement(CoreEnhancement enhancement, double cost, int maxLevel) {
@@ -138,7 +163,7 @@ public record CoreRecord(
                 upgradeOvercharge + (enhancement == CoreEnhancement.OVERCHARGE ? 1 : 0),
                 upgradeWindow + (enhancement == CoreEnhancement.WINDOW ? 1 : 0),
                 upgradeCritical + (enhancement == CoreEnhancement.CRITICAL ? 1 : 0),
-                prestigeCount);
+                prestigeCount, coreFragments);
     }
 
     public int enhancementLevel(CoreEnhancement enhancement) {
@@ -181,7 +206,7 @@ public record CoreRecord(
     }
 
     public double upgradeCost() {
-        return 100.0 * Math.pow(2.0, level - 1);
+        return 250.0 * Math.pow(3.0, level - 1);
     }
 
     public double maxEnergy() {
@@ -195,7 +220,7 @@ public record CoreRecord(
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 1, 0.0, 0, 0,
-                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount + 1);
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount + 1, coreFragments + 1);
     }
 
     private static double maxEnergy(int level) {
@@ -204,7 +229,16 @@ public record CoreRecord(
     }
 
     public int pylonCapacity() {
-        return Math.max(0, level - 1);
+        if (level < 4) {
+            return 0;
+        }
+        if (level < 7) {
+            return 1;
+        }
+        if (level < 10) {
+            return 2;
+        }
+        return 3;
     }
 
     public record HitResult(CoreRecord core, boolean critical) {

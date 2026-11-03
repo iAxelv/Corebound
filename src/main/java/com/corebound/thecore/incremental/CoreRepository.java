@@ -134,7 +134,8 @@ public final class CoreRepository {
                 current.upgradeOvercharge(),
                 current.upgradeWindow(),
                 current.upgradeCritical(),
-                current.prestigeCount()));
+                current.prestigeCount(),
+                current.coreFragments()));
         save();
     }
 
@@ -242,6 +243,7 @@ public final class CoreRepository {
                 yaml.set(path + ".upgrade-window", core.upgradeWindow());
                 yaml.set(path + ".upgrade-critical", core.upgradeCritical());
                 yaml.set(path + ".prestige-count", core.prestigeCount());
+                yaml.set(path + ".core-fragments", core.coreFragments());
             }
             yaml.set("pending-items", snapshot.pendingItems().stream().map(UUID::toString).toList());
             Path target = file.toPath();
@@ -290,7 +292,8 @@ public final class CoreRepository {
                         core.getInt("upgrade-overcharge", 0),
                         core.getInt("upgrade-window", 0),
                         core.getInt("upgrade-critical", 0),
-                        core.getInt("prestige-count", 0)));
+                        core.getInt("prestige-count", 0),
+                        core.getInt("core-fragments", core.getInt("prestige-count", 0))));
             }
         }
         for (String playerId : yaml.getStringList("pending-items")) {

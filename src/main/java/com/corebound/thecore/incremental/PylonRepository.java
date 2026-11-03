@@ -23,6 +23,7 @@ public final class PylonRepository {
     private final AtomicLong version = new AtomicLong();
     private final Map<UUID, PylonRecord> pylons = new HashMap<>();
     private final Map<Long, Integer> pendingItems = new HashMap<>();
+    private final Map<Long, Long> islandGenerations = new HashMap<>();
 
     public PylonRepository(File file, JavaPlugin plugin) {
         this.file = file;
@@ -76,6 +77,10 @@ public final class PylonRepository {
         return pendingItems.getOrDefault(islandIndex, 0);
     }
 
+    public synchronized long islandGeneration(long islandIndex) {
+        return islandGenerations.getOrDefault(islandIndex, 0L);
+    }
+
     public synchronized boolean canPlaceItem(long islandIndex, int capacity, boolean reservedItem) {
         long placed = pylons.values().stream()
                 .filter(pylon -> pylon.islandIndex() == islandIndex)
@@ -117,6 +122,17 @@ public final class PylonRepository {
         return removed;
     }
 
+    public synchronized List<PylonRecord> destroyIslandPylons(long islandIndex) {
+        List<PylonRecord> removed = pylons.values().stream()
+                .filter(pylon -> pylon.islandIndex() == islandIndex)
+                .toList();
+        removed.forEach(pylon -> pylons.remove(pylon.pylonId()));
+        pendingItems.remove(islandIndex);
+        islandGenerations.merge(islandIndex, 1L, Long::sum);
+        save();
+        return removed;
+    }
+
     public synchronized void releasePendingItem(long islandIndex) {
         int pending = pendingItems.getOrDefault(islandIndex, 0);
         if (pending <= 1) {
@@ -144,7 +160,8 @@ public final class PylonRepository {
     }
 
     private Snapshot snapshot() {
-        return new Snapshot(List.copyOf(pylons.values()), Map.copyOf(pendingItems));
+        return new Snapshot(
+                List.copyOf(pylons.values()), Map.copyOf(pendingItems), Map.copyOf(islandGenerations));
     }
 
     private void writeSnapshot(Snapshot snapshot, long snapshotVersion) throws IOException {
@@ -176,6 +193,9 @@ public final class PylonRepository {
             for (Map.Entry<Long, Integer> pending : snapshot.pendingItems().entrySet()) {
                 yaml.set("pending-items." + pending.getKey(), pending.getValue());
             }
+            for (Map.Entry<Long, Long> generation : snapshot.islandGenerations().entrySet()) {
+                yaml.set("island-generations." + generation.getKey(), generation.getValue());
+            }
             Path target = file.toPath();
             Files.createDirectories(target.getParent());
             Path temporary = Files.createTempFile(target.getParent(), "pylons-", ".yml.tmp");
@@ -204,6 +224,15 @@ public final class PylonRepository {
                 int count = pendingSection.getInt(islandIndex);
                 if (count > 0) {
                     pendingItems.put(Long.parseLong(islandIndex), count);
+                }
+                ConfigurationSection generations = yaml.getConfigurationSection("island-generations");
+                if (generations != null) {
+                    for (String generationIslandKey : generations.getKeys(false)) {
+                        long generation = generations.getLong(generationIslandKey);
+                        if (generation > 0) {
+                            islandGenerations.put(Long.parseLong(generationIslandKey), generation);
+                        }
+                    }
                 }
             }
         }
@@ -249,6 +278,7 @@ public final class PylonRepository {
         }
     }
 
-    private record Snapshot(List<PylonRecord> pylons, Map<Long, Integer> pendingItems) {
+    private record Snapshot(
+            List<PylonRecord> pylons, Map<Long, Integer> pendingItems, Map<Long, Long> islandGenerations) {
     }
 }

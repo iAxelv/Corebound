@@ -54,19 +54,19 @@ class CoreRecordTest {
 
     @Test
     void upgradesLevelAndDeductsTheExponentialCost() {
-        CoreRecord levelTwoCore = createCore(2, 300.0);
+        CoreRecord levelTwoCore = createCore(2, 1000.0);
 
-        assertEquals(200.0, levelTwoCore.upgradeCost(), 0.0001);
+        assertEquals(750.0, levelTwoCore.upgradeCost(), 0.0001);
         CoreRecord upgraded = levelTwoCore.upgrade(levelTwoCore.upgradeCost());
 
         assertEquals(3, upgraded.level());
-        assertEquals(100.0, upgraded.energy(), 0.0001);
+        assertEquals(250.0, upgraded.energy(), 0.0001);
         assertEquals(1.5625, upgraded.baseEnergy(), 0.0001);
     }
 
     @Test
     void refusesUpgradeWhenEnergyIsInsufficient() {
-        CoreRecord core = createCore(1, 99.99);
+        CoreRecord core = createCore(1, 249.99);
 
         assertNull(core.upgrade(core.upgradeCost()));
     }
@@ -124,7 +124,7 @@ class CoreRecordTest {
         assertEquals(4500, enhanced.comboWindowMillis(3000));
         assertEquals(500, enhanced.maxEnergy(), 0.0001);
         assertEquals(0.05, enhanced.criticalChance(), 0.0001);
-        assertEquals(100.0, createCore(1).upgradeCost(), 0.0001);
+        assertEquals(250.0, createCore(1).upgradeCost(), 0.0001);
     }
 
     @Test
@@ -151,16 +151,22 @@ class CoreRecordTest {
         assertEquals(1, fractured.level());
         assertEquals(0.0, fractured.energy(), 0.0001);
         assertEquals(1, fractured.prestigeCount());
+        assertEquals(1, fractured.coreFragments());
         assertEquals(1.5, fractured.prestigeMultiplier(), 0.0001);
         assertEquals(0.6, fractured.withPassiveEnergy(0.4).energy(), 0.0001);
         assertNull(createCore(9).fracture());
     }
 
     @Test
-    void pylonCapacityGrowsByOnePerCoreLevelAfterUnlock() {
+    void pylonCapacityUnlocksAtLevelsFourSevenAndTen() {
         assertEquals(0, createCore(1).pylonCapacity());
-        assertEquals(1, createCore(2).pylonCapacity());
-        assertEquals(4, createCore(5).pylonCapacity());
+        assertEquals(0, createCore(3).pylonCapacity());
+        assertEquals(1, createCore(4).pylonCapacity());
+        assertEquals(1, createCore(6).pylonCapacity());
+        assertEquals(2, createCore(7).pylonCapacity());
+        assertEquals(2, createCore(9).pylonCapacity());
+        assertEquals(3, createCore(10).pylonCapacity());
+        assertEquals(3, createCore(100).pylonCapacity());
     }
 
     private CoreRecord createCore(int level) {

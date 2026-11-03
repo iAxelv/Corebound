@@ -44,6 +44,23 @@ public final class CoreItem {
             int upgradeWindow,
             int upgradeCritical,
             int prestigeCount) {
+        return create(config, messages, itemKey, level, energy, hits, lastHitAt,
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, prestigeCount);
+    }
+
+    public static ItemStack create(
+            YamlConfiguration config,
+            Messages messages,
+            NamespacedKey itemKey,
+            int level,
+            double energy,
+            int hits,
+            long lastHitAt,
+            int upgradeOvercharge,
+            int upgradeWindow,
+            int upgradeCritical,
+            int prestigeCount,
+            int coreFragments) {
         Material material = Material.matchMaterial(config.getString("item.material", "NETHERITE_BLOCK"));
         if (material == null || !material.isItem() || !material.isBlock()) {
             throw new IllegalArgumentException("core.yml item.material must be a valid block item.");
@@ -68,6 +85,7 @@ public final class CoreItem {
         meta.getPersistentDataContainer().set(windowKey(itemKey), PersistentDataType.INTEGER, upgradeWindow);
         meta.getPersistentDataContainer().set(criticalKey(itemKey), PersistentDataType.INTEGER, upgradeCritical);
         meta.getPersistentDataContainer().set(prestigeKey(itemKey), PersistentDataType.INTEGER, prestigeCount);
+        meta.getPersistentDataContainer().set(fragmentsKey(itemKey), PersistentDataType.INTEGER, coreFragments);
         item.setItemMeta(meta);
         return item;
     }
@@ -89,6 +107,8 @@ public final class CoreItem {
 
     public static Progress progress(ItemStack item, NamespacedKey itemKey) {
         ItemMeta meta = item.getItemMeta();
+        int prestigeCount = meta.getPersistentDataContainer().getOrDefault(
+                prestigeKey(itemKey), PersistentDataType.INTEGER, 0);
         return new Progress(
                 meta.getPersistentDataContainer().getOrDefault(
                         levelKey(itemKey), PersistentDataType.INTEGER, 1),
@@ -104,8 +124,9 @@ public final class CoreItem {
                         windowKey(itemKey), PersistentDataType.INTEGER, 0),
                 meta.getPersistentDataContainer().getOrDefault(
                         criticalKey(itemKey), PersistentDataType.INTEGER, 0),
+                prestigeCount,
                 meta.getPersistentDataContainer().getOrDefault(
-                        prestigeKey(itemKey), PersistentDataType.INTEGER, 0));
+                        fragmentsKey(itemKey), PersistentDataType.INTEGER, prestigeCount));
     }
 
     private static NamespacedKey levelKey(NamespacedKey itemKey) {
@@ -140,6 +161,10 @@ public final class CoreItem {
         return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_prestige_count");
     }
 
+    private static NamespacedKey fragmentsKey(NamespacedKey itemKey) {
+        return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_core_fragments");
+    }
+
     private static String replaceStats(String text, int level, double baseEnergy) {
         return text
                 .replace("%level%", Integer.toString(level))
@@ -163,6 +188,7 @@ public final class CoreItem {
             int upgradeOvercharge,
             int upgradeWindow,
             int upgradeCritical,
-            int prestigeCount) {
+            int prestigeCount,
+            int coreFragments) {
     }
 }

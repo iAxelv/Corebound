@@ -147,18 +147,19 @@ public final class CoreMenu implements Listener {
             String path = canUpgrade ? "lore-enough" : "lore-insufficient";
             lore = itemConfig.getStringList(path);
         }
-        Map<String, String> placeholders = Map.of(
-                "%level%", Integer.toString(core.level()),
-                "%prestige%", Integer.toString(core.prestigeCount()),
-                "%prestige_bonus%", String.format(
-                        java.util.Locale.ROOT, "%.0f", (core.prestigeMultiplier() - 1.0) * 100.0),
-                "%energy%", formatEnergy(core.energy()),
-                "%max_energy%", formatEnergy(core.maxEnergy()),
-                "%base_energy%", formatEnergy(core.baseEnergy()),
-                "%max_combo%", String.format(java.util.Locale.ROOT, "%.1f", core.maxCombo()),
-                "%next_level%", Integer.toString(core.level() + 1),
-                "%cost%", formatEnergy(core.upgradeCost()),
-                "%next_base%", formatEnergy(Math.pow(1.25, core.level())));
+        Map<String, String> placeholders = Map.ofEntries(
+                Map.entry("%level%", Integer.toString(core.level())),
+                Map.entry("%prestige%", Integer.toString(core.prestigeCount())),
+                Map.entry("%fragments%", Integer.toString(core.coreFragments())),
+                Map.entry("%prestige_bonus%", String.format(
+                        java.util.Locale.ROOT, "%.0f", (core.prestigeMultiplier() - 1.0) * 100.0)),
+                Map.entry("%energy%", formatEnergy(core.energy())),
+                Map.entry("%max_energy%", formatEnergy(core.maxEnergy())),
+                Map.entry("%base_energy%", formatEnergy(core.baseEnergy())),
+                Map.entry("%max_combo%", String.format(java.util.Locale.ROOT, "%.1f", core.maxCombo())),
+                Map.entry("%next_level%", Integer.toString(core.level() + 1)),
+                Map.entry("%cost%", formatEnergy(core.upgradeCost())),
+                Map.entry("%next_base%", formatEnergy(Math.pow(1.25, core.level()))));
 
         ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "PAPER")));
         ItemMeta meta = item.getItemMeta();
@@ -178,6 +179,8 @@ public final class CoreMenu implements Listener {
                 color("&7Reinicia tu Núcleo a Nivel 1."),
                 color("&aBonus permanente: +50% de producción global."),
                 color("&7Prestigios: &d" + core.prestigeCount()),
+                color("&7Fragmentos del Núcleo: &b" + core.coreFragments()),
+                color("&cLos Pilones y sus células serán destruidos."),
                 color(""),
                 color("&eHaz clic para colapsar el Núcleo.")));
         item.setItemMeta(meta);
@@ -186,7 +189,7 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createPylonItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.pylon");
-        boolean levelUnlocked = core.level() >= 3;
+        boolean levelUnlocked = core.level() >= 4;
         boolean hasCapacity = pylonService == null
                 || pylonService.hasPylonCapacity(core.islandIndex(), core.pylonCapacity());
         boolean unlocked = levelUnlocked && hasCapacity;
@@ -202,7 +205,7 @@ public final class CoreMenu implements Listener {
         List<String> lore = itemConfig.getStringList(unlocked
                 ? "lore"
                 : atLimit ? "limit-lore" : "locked-lore");
-        double cost = pylonService == null ? 150.0 : pylonService.purchaseCost();
+        double cost = pylonService == null ? 500.0 : pylonService.nextPurchaseCost(core.islandIndex());
         Map<String, String> placeholders = Map.of(
                 "%level%", Integer.toString(core.level()),
                 "%cost%", formatEnergy(cost),

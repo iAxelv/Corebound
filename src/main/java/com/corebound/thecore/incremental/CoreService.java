@@ -82,7 +82,9 @@ public final class CoreService {
     private static final class AnomalyState {
         private volatile long unstableUntil;
         private volatile int hits;
+        private volatile int targetHits;
         private volatile long hyperdriveUntil;
+        private volatile long nextAnomalyAllowedAt;
     }
 
     public CoreService(
@@ -292,7 +294,7 @@ public final class CoreService {
             messages.send(player, "core-fracture-level-required");
             return false;
         }
-        if (pylonService != null && !pylonService.preservePylons(player, islandIndex)) {
+        if (pylonService != null && !pylonService.destroyPylons(player, islandIndex)) {
             return false;
         }
         CoreRecord fractured = repository.fractureCore(islandIndex);
@@ -305,13 +307,14 @@ public final class CoreService {
         player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
         messages.send(player, "core-fractured", Map.of(
                 "prestige", Integer.toString(fractured.prestigeCount()),
+                "fragments", Integer.toString(fractured.coreFragments()),
                 "bonus", formatEnergy((fractured.prestigeMultiplier() - 1.0) * 100.0)));
         return true;
     }
 
     public double energyMultiplier(long islandIndex, long now) {
         AnomalyState state = anomalies.get(islandIndex);
-        return state != null && state.hyperdriveUntil > now ? 5.0 : 1.0;
+        return state != null && state.hyperdriveUntil > now ? 3.0 : 1.0;
     }
 
     public boolean upgradeCore(Player player, long islandIndex) {
@@ -380,7 +383,8 @@ public final class CoreService {
                 removed.upgradeOvercharge(),
                 removed.upgradeWindow(),
                 removed.upgradeCritical(),
-                removed.prestigeCount());
+                removed.prestigeCount(),
+                removed.coreFragments());
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
@@ -496,7 +500,8 @@ public final class CoreService {
                     progress.upgradeOvercharge(),
                     progress.upgradeWindow(),
                     progress.upgradeCritical(),
-                    progress.prestigeCount()));
+                    progress.prestigeCount(),
+                    progress.coreFragments()));
         } catch (RuntimeException exception) {
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);
@@ -593,13 +598,14 @@ public final class CoreService {
                     if (!display.isValid() || repository.core(islandIndex) == null) {
                         task.cancel();
                         anomalyTasks.remove(islandIndex, taskReference[0]);
-                        anomalies.remove(islandIndex);
+                        if (repository.core(islandIndex) == null) {
+                            anomalies.remove(islandIndex);
+                        }
                         return;
                     }
                     tickQuantumAnomaly(display, islandIndex);
                 }, () -> {
                     anomalyTasks.remove(islandIndex, taskReference[0]);
-                    anomalies.remove(islandIndex);
                 }, 1L, 20L);
         if (scheduled != null) {
             taskReference[0] = scheduled;
@@ -639,16 +645,41 @@ public final class CoreService {
         if (state.unstableUntil != 0) {
             state.unstableUntil = 0;
             state.hits = 0;
+            state.targetHits = 0;
+            state.nextAnomalyAllowedAt = now + 10 * 60 * 1000L;
         }
-        if (state.hyperdriveUntil <= now && ThreadLocalRandom.current().nextDouble() < 0.005) {
+        if (state.hyperdriveUntil != 0 && state.hyperdriveUntil <= now) {
+            state.hyperdriveUntil = 0;
+            state.nextAnomalyAllowedAt = now + 10 * 60 * 1000L;
+        }
+        if (now >= state.nextAnomalyAllowedAt
+                && state.hyperdriveUntil <= now
+                && ThreadLocalRandom.current().nextDouble() < 0.002) {
             state.unstableUntil = now + 20_000L;
             state.hits = 0;
-            notifyQuantumAnomaly(islandIndex);
+            state.targetHits = Math.max(
+                    15,
+                    countNearbyBuilders(display, core, islandService.islandAt(
+                            new Location(display.getWorld(), core.x(), core.y(), core.z())).orElse(null)) * 12);
+            notifyQuantumAnomaly(islandIndex, state.targetHits);
         }
     }
 
-    private void notifyQuantumAnomaly(long islandIndex) {
-        String message = "&b&l¡ANOMALÍA DETECTADA! &7Golpea 15 veces rápido (0/15)";
+    private int countNearbyBuilders(ItemDisplay display, CoreRecord core, IslandData island) {
+        if (island == null) {
+            return 0;
+        }
+        Location center = new Location(display.getWorld(), core.x(), core.y(), core.z());
+        return (int) display.getWorld().getNearbyEntities(center, 16, 16, 16).stream()
+                .filter(Player.class::isInstance)
+                .map(Player.class::cast)
+                .filter(player -> island.canBuild(player.getUniqueId()))
+                .filter(player -> player.getLocation().distanceSquared(center) <= 256.0)
+                .count();
+    }
+
+    private void notifyQuantumAnomaly(long islandIndex, int targetHits) {
+        String message = "&b&l¡ANOMALÍA DETECTADA! &7Golpea " + targetHits + " veces rápido (0/" + targetHits + ")";
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             player.getScheduler().run(plugin, task -> {
                 IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
@@ -666,22 +697,22 @@ public final class CoreService {
         }
         if (state.unstableUntil > now) {
             state.hits++;
-            if (state.hits >= 15) {
+            if (state.hits >= state.targetHits) {
                 state.unstableUntil = 0;
                 state.hits = 0;
-                state.hyperdriveUntil = now + 45_000L;
+                state.hyperdriveUntil = now + 30_000L;
                 CoreRecord core = repository.core(islandIndex);
                 org.bukkit.World world = core == null ? null : plugin.getServer().getWorld(core.worldId());
                 if (core != null && world != null) {
                     Location location = new Location(world, core.x(), core.y(), core.z());
                     world.playSound(location, Sound.ENTITY_WITHER_SPAWN, 1.0f, 2.0f);
                 }
-                return "&d&lHIPERIMPULSO ACTIVADO &7x5.0 por 45s";
+                return "&d&lHIPERIMPULSO ACTIVADO &7x3.0 por 30s";
             }
-            return "&b&l¡ANOMALÍA DETECTADA! &7Golpea 15 veces rápido (" + state.hits + "/15)";
+            return "&b&l¡ANOMALÍA DETECTADA! &7Golpea rápido (" + state.hits + "/" + state.targetHits + ")";
         }
         if (state.hyperdriveUntil > now) {
-            return "&d&lHIPERIMPULSO &7x5.0";
+            return "&d&lHIPERIMPULSO &7x3.0";
         }
         return "";
     }

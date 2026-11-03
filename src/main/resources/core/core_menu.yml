@@ -16,6 +16,7 @@ items:
     lore:
       - "&7Nivel: &e%level%"
       - "&7Fracturas: &d%prestige% &8(&a+%prestige_bonus%% producción&8)"
+      - "&7Fragmentos del Núcleo: &b%fragments%"
       - "&7Energía: &6%energy%&7/&6%max_energy%⚡"
       - "&7Producción base: &a+%base_energy%⚡/golpe"
       - "&7Multiplicador máximo de combo: &bx%max_combo%"
@@ -31,7 +32,7 @@ items:
     locked-material: BARRIER
     locked-name: "&cPilón bloqueado"
     locked-lore:
-      - "&cRequiere Núcleo Nivel 3."
+      - "&cRequiere Núcleo Nivel 4."
     limit-name: "&cLímite de Pilones alcanzado"
     limit-lore:
       - "&7Pilones colocados o guardados: &e%owned%&7/&e%pylons%"

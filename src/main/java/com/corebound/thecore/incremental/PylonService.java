@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -51,6 +53,7 @@ public final class PylonService {
     private final Messages messages;
     private final YamlConfiguration config;
     private final NamespacedKey pylonItemKey;
+    private final NamespacedKey pylonItemGenerationKey;
     private final NamespacedKey pylonTierKey;
     private final NamespacedKey pylonCellsKey;
     private final NamespacedKey pylonIslandKey;
@@ -65,6 +68,7 @@ public final class PylonService {
     private final double maximumDistance;
     private final double baseYieldRatio;
     private final double purchaseCost;
+    private final double purchaseCostMultiplier;
     private final double forgeRefreshCost;
     private final Map<CellType, Double> cellForgeCosts = new java.util.EnumMap<>(CellType.class);
     private final Map<Integer, Integer> tierCoreLevelRequirements = Map.of(2, 5, 3, 10);
@@ -96,6 +100,10 @@ public final class PylonService {
         try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
             config.setDefaults(YamlConfiguration.loadConfiguration(reader));
             config.options().copyDefaults(true);
+            if (!config.contains("pylon.purchase-cost-multiplier", true)
+                    && Double.compare(config.getDouble("pylon.purchase-cost", 500.0), 150.0) == 0) {
+                config.set("pylon.purchase-cost", 500.0);
+            }
             config.save(configFile);
         } catch (IOException exception) {
             throw new IllegalArgumentException("Could not migrate core/pylons.yml defaults.", exception);
@@ -113,7 +121,8 @@ public final class PylonService {
         minimumDistance = config.getDouble("pylon.min-distance", 3.0);
         maximumDistance = config.getDouble("pylon.max-distance", 12.0);
         baseYieldRatio = config.getDouble("pylon.base-yield-ratio", 0.4);
-        purchaseCost = config.getDouble("pylon.purchase-cost", 150.0);
+        purchaseCost = config.getDouble("pylon.purchase-cost", 500.0);
+        purchaseCostMultiplier = config.getDouble("pylon.purchase-cost-multiplier", 3.5);
         forgeRefreshCost = config.getDouble("pylon.cells.refresh-cost", 75.0);
         if (!Double.isFinite(forgeRefreshCost) || forgeRefreshCost < 0) {
             throw new IllegalArgumentException("pylons.yml pylon.cells.refresh-cost must be a non-negative finite number.");
@@ -139,10 +148,13 @@ public final class PylonService {
                 || !Double.isFinite(baseYieldRatio)
                 || baseYieldRatio <= 0
                 || !Double.isFinite(purchaseCost)
-                || purchaseCost <= 0) {
+                || purchaseCost <= 0
+                || !Double.isFinite(purchaseCostMultiplier)
+                || purchaseCostMultiplier <= 1.0) {
             throw new IllegalArgumentException("pylons.yml contains invalid distance, interval, yield, or cost.");
         }
         pylonItemKey = new NamespacedKey(plugin, "pylon_item");
+        pylonItemGenerationKey = new NamespacedKey(plugin, "pylon_item_generation");
         pylonTierKey = new NamespacedKey(plugin, "pylon_tier");
         pylonCellsKey = new NamespacedKey(plugin, "pylon_cells");
         pylonIslandKey = new NamespacedKey(plugin, "pylon_island_index");
@@ -153,6 +165,10 @@ public final class PylonService {
 
     public double purchaseCost() {
         return purchaseCost;
+    }
+
+    public double nextPurchaseCost(long islandIndex) {
+        return purchaseCost * Math.pow(purchaseCostMultiplier, ownedPylonCount(islandIndex));
     }
 
     public PylonMenu menuListener() {
@@ -422,15 +438,16 @@ public final class PylonService {
             messages.send(player, "core-already-placed");
             return false;
         }
-        if (core.level() < 3) {
+        if (core.level() < 4) {
             messages.send(player, "pylon-requires-core-level");
             return false;
         }
+        double cost = nextPurchaseCost(islandIndex);
         if (!repository.reserveItem(islandIndex, core.pylonCapacity())) {
             messages.send(player, "pylon-limit-reached");
             return false;
         }
-        CoreRecord chargedCore = coreRepository.spendEnergy(islandIndex, purchaseCost);
+        CoreRecord chargedCore = coreRepository.spendEnergy(islandIndex, cost);
         if (chargedCore == null) {
             repository.releasePendingItem(islandIndex);
             messages.send(player, "pylon-insufficient-energy");
@@ -445,13 +462,13 @@ public final class PylonService {
             }
         } catch (RuntimeException exception) {
             repository.releasePendingItem(islandIndex);
-            coreRepository.restoreEnergy(islandIndex, purchaseCost);
+            coreRepository.restoreEnergy(islandIndex, cost);
             plugin.getLogger().log(Level.SEVERE, "Could not deliver a forged pylon.", exception);
             messages.send(player, "pylon-purchase-failed");
             return false;
         }
         coreService.refreshCore(chargedCore, System.currentTimeMillis());
-        messages.send(player, "pylon-purchased", Map.of("cost", formatEnergy(purchaseCost)));
+        messages.send(player, "pylon-purchased", Map.of("cost", formatEnergy(cost)));
         return true;
     }
 
@@ -506,33 +523,44 @@ public final class PylonService {
         return true;
     }
 
-    public boolean preservePylons(Player player, long islandIndex) {
+    public boolean destroyPylons(Player player, long islandIndex) {
         IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
         if (island == null || island.index() != islandIndex || !island.owner().equals(player.getUniqueId())) {
             messages.send(player, "core-fracture-owner-only");
             return false;
         }
-        int returned = 0;
-        for (PylonRecord pylon : repository.forIsland(islandIndex)) {
-            PylonRecord removed = repository.removeAndReserveItem(pylon.pylonId());
-            if (removed == null) {
+        List<PylonRecord> removedPylons = repository.destroyIslandPylons(islandIndex);
+        for (PylonRecord pylon : removedPylons) {
+            stopPulse(pylon.pylonId());
+            schedulePylonEntityRemoval(pylon);
+        }
+        for (Player online : plugin.getServer().getOnlinePlayers()) {
+            if (!island.canBuild(online.getUniqueId())) {
                 continue;
             }
-            stopPulse(removed.pylonId());
-            schedulePylonEntityRemoval(removed);
-            ItemStack item = createPylonItem(removed);
-            Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
-            for (ItemStack leftover : overflow.values()) {
-                Item dropped = player.getWorld().dropItemNaturally(player.getLocation(), leftover);
-                dropped.setPersistent(true);
+            if (online.getUniqueId().equals(player.getUniqueId())) {
+                removeBoundPylonItems(online, islandIndex);
+            } else {
+                online.getScheduler().run(
+                        plugin, task -> removeBoundPylonItems(online, islandIndex), null);
             }
-            returned++;
-        }
-        if (returned > 0) {
-            messages.send(player, "core-fracture-pylons-returned", Map.of(
-                    "count", Integer.toString(returned)));
         }
         return true;
+    }
+
+    private void removeBoundPylonItems(Player player, long islandIndex) {
+        ItemStack[] contents = player.getInventory().getContents();
+        for (int slot = 0; slot < contents.length; slot++) {
+            ItemStack item = contents[slot];
+            if (!isPylonItem(item)) {
+                continue;
+            }
+            Long boundIsland = item.getItemMeta().getPersistentDataContainer()
+                    .get(pylonIslandKey, PersistentDataType.LONG);
+            if (boundIsland != null && boundIsland == islandIndex) {
+                player.getInventory().setItem(slot, null);
+            }
+        }
     }
 
     private void schedulePylonEntityRemoval(PylonRecord pylon) {
@@ -568,15 +596,24 @@ public final class PylonService {
             messages.send(player, "core-already-placed");
             return false;
         }
-        if (core.level() < 3) {
+        if (core.level() < 4) {
             messages.send(player, "pylon-requires-core-level");
             return false;
         }
         ItemStack heldPylon = player.getInventory().getItemInMainHand();
         Long reservedIsland = heldPylon.getItemMeta().getPersistentDataContainer()
                 .get(pylonIslandKey, PersistentDataType.LONG);
+        Long itemGeneration = heldPylon.getItemMeta().getPersistentDataContainer()
+                .get(pylonItemGenerationKey, PersistentDataType.LONG);
         if (reservedIsland != null && reservedIsland != island.index()) {
             messages.send(player, "pylon-item-wrong-island");
+            return false;
+        }
+        if (reservedIsland != null
+                && (itemGeneration == null
+                        ? repository.islandGeneration(island.index()) != 0
+                        : itemGeneration != repository.islandGeneration(island.index()))) {
+            messages.send(player, "pylon-item-invalidated");
             return false;
         }
         if (!repository.canPlaceItem(island.index(), core.pylonCapacity(), reservedIsland != null)) {
@@ -671,11 +708,29 @@ public final class PylonService {
     public void onEntityLoad(org.bukkit.entity.Entity entity) {
         if (entity instanceof Interaction && isPylonEntity(entity)) {
             PylonRecord pylon = pylonFrom(entity);
-            CoreRecord core = pylon == null ? null : coreRepository.core(pylon.islandIndex());
-            if (pylon != null && core != null) {
+            if (pylon == null) {
+                removeOrphanPylonEntities(entity);
+                return;
+            }
+            CoreRecord core = coreRepository.core(pylon.islandIndex());
+            if (core != null) {
                 ensurePylonHologram(pylon, entity.getWorld(), core);
             }
             startPulse((Interaction) entity);
+        }
+    }
+
+    private void removeOrphanPylonEntities(Entity interaction) {
+        String pylonId = interaction.getPersistentDataContainer().get(pylonIdKey, PersistentDataType.STRING);
+        if (pylonId == null) {
+            removeEntity(interaction);
+            return;
+        }
+        for (Entity entity : interaction.getWorld().getNearbyEntities(
+                interaction.getLocation(), 2.0, 3.0, 2.0,
+                nearby -> pylonId.equals(nearby.getPersistentDataContainer()
+                        .get(pylonIdKey, PersistentDataType.STRING)))) {
+            removeEntity(entity);
         }
     }
 
@@ -987,16 +1042,49 @@ public final class PylonService {
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.parseComponent(config.getString(
                 "pylon.item.display-name", "&bPilón de Resonancia") + " &7[T" + tier + "]"));
-        meta.lore(config.getStringList("pylon.item.lore").stream()
+        List<Component> lore = new ArrayList<>(config.getStringList("pylon.item.lore").stream()
                 .map(messages::parseComponent)
                 .toList());
+        lore.add(messages.parseComponent(""));
+        if (cells.isEmpty()) {
+            lore.add(messages.parseComponent("&8• Ranuras: &7Vacías (" + Math.min(tier, 3) + ")"));
+        } else {
+            lore.add(messages.parseComponent("&7Células instaladas:"));
+            for (int slot = 0; slot < Math.min(tier, 3); slot++) {
+                CellRecord cell = cells.get(slot);
+                if (cell == null) {
+                    lore.add(messages.parseComponent("&8Ranura " + (slot + 1) + ": &7Vacía"));
+                } else {
+                    lore.add(messages.parseComponent("&7Ranura " + (slot + 1) + ": "
+                            + cell.type().color() + "Célula " + cell.type().displayName()
+                            + " T" + cell.tier() + " &8- " + cellEffectLore(cell)));
+                }
+            }
+        }
+        meta.lore(lore);
         meta.getPersistentDataContainer().set(pylonItemKey, PersistentDataType.BYTE, (byte) 1);
         meta.getPersistentDataContainer().set(pylonTierKey, PersistentDataType.INTEGER, tier);
         meta.getPersistentDataContainer().set(pylonCellsKey, PersistentDataType.STRING, encodeCells(cells));
         meta.getPersistentDataContainer().set(pylonIslandKey, PersistentDataType.LONG, islandIndex);
+        meta.getPersistentDataContainer().set(
+                pylonItemGenerationKey, PersistentDataType.LONG, repository.islandGeneration(islandIndex));
         meta.setMaxStackSize(1);
         item.setItemMeta(meta);
         return item;
+    }
+
+    private String cellEffectLore(CellRecord cell) {
+        return switch (cell.type()) {
+            case FIRE -> "&e-" + String.format(
+                    java.util.Locale.ROOT, "%.1f", Math.pow(2.0, cell.tier() - 1))
+                    + "s entre pulsos";
+            case LIGHTNING -> "&e+" + String.format(
+                    java.util.Locale.ROOT, "%.0f", lightningBonusForTier(cell.tier()) * 100.0)
+                    + "% producción por enlace";
+            case VOID -> "&e" + String.format(
+                    java.util.Locale.ROOT, "%.0f", Math.min(1.0, 0.15 * Math.pow(2.0, cell.tier() - 1)) * 100.0)
+                    + "% de crítico x3.5";
+        };
     }
 
     private int pylonTier(ItemStack item) {
