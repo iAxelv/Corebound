@@ -26,16 +26,22 @@ public final class CorePlaceListener implements Listener {
     private final TheCorePlugin plugin;
     private final CoreService coreService;
     private final PylonService pylonService;
+    private final CondenserService condenserService;
     private final Set<InteractionAttempt> interactionAttempts = ConcurrentHashMap.newKeySet();
     private final Set<PylonPlacementAttempt> pylonPlacementAttempts = ConcurrentHashMap.newKeySet();
 
     private record InteractionAttempt(UUID playerId, UUID entityId) {
     }
 
-    public CorePlaceListener(TheCorePlugin plugin, CoreService coreService, PylonService pylonService) {
+    public CorePlaceListener(
+            TheCorePlugin plugin,
+            CoreService coreService,
+            PylonService pylonService,
+            CondenserService condenserService) {
         this.plugin = plugin;
         this.coreService = coreService;
         this.pylonService = pylonService;
+        this.condenserService = condenserService;
     }
 
     @EventHandler
@@ -47,6 +53,7 @@ public final class CorePlaceListener implements Listener {
     public void onJoin(PlayerJoinEvent event) {
         coreService.onPlayerJoin(event.getPlayer());
         pylonService.onPlayerJoin(event.getPlayer());
+        condenserService.onPlayerJoin(event.getPlayer());
     }
 
     @EventHandler
@@ -54,13 +61,15 @@ public final class CorePlaceListener implements Listener {
         event.getEntities().forEach(entity -> {
             coreService.onEntityLoad(entity);
             pylonService.onEntityLoad(entity);
+            condenserService.onEntityLoad(entity);
         });
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onCoreItemUse(PlayerInteractEvent event) {
         if (event.getHand() == EquipmentSlot.OFF_HAND) {
-            if (coreService.isCoreItem(event.getItem()) || pylonService.isPylonItem(event.getItem())) {
+            if (coreService.isCoreItem(event.getItem()) || pylonService.isPylonItem(event.getItem())
+                    || condenserService.isCondenserItem(event.getItem())) {
                 event.setCancelled(true);
             }
             return;
@@ -90,6 +99,28 @@ public final class CorePlaceListener implements Listener {
                             () -> pylonPlacementAttempts.remove(attempt),
                             1L);
                     pylonService.place(player, block);
+                }
+            }
+            return;
+        }
+        if (condenserService.isCondenserItem(event.getItem())) {
+            event.setCancelled(true);
+            if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
+                Player player = event.getPlayer();
+                org.bukkit.block.Block block = event.getClickedBlock();
+                PylonPlacementAttempt attempt = new PylonPlacementAttempt(
+                        player.getUniqueId(),
+                        block.getWorld().getUID(),
+                        block.getX(),
+                        block.getY(),
+                        block.getZ());
+                if (pylonPlacementAttempts.add(attempt)) {
+                    player.getScheduler().runDelayed(
+                            plugin,
+                            task -> pylonPlacementAttempts.remove(attempt),
+                            () -> pylonPlacementAttempts.remove(attempt),
+                            1L);
+                    condenserService.place(player, block);
                 }
             }
         }
@@ -144,6 +175,24 @@ public final class CorePlaceListener implements Listener {
                     }
                 }
             }
+        } else if (condenserService.isCondenserEntity(entity)) {
+            event.setCancelled(true);
+            if (hand == EquipmentSlot.HAND) {
+                Player player = event.getPlayer();
+                InteractionAttempt attempt = new InteractionAttempt(player.getUniqueId(), entity.getUniqueId());
+                if (interactionAttempts.add(attempt)) {
+                    player.getScheduler().runDelayed(
+                            plugin,
+                            task -> interactionAttempts.remove(attempt),
+                            () -> interactionAttempts.remove(attempt),
+                            1L);
+                    if (player.isSneaking()) {
+                        condenserService.pickup(player, entity);
+                    } else {
+                        condenserService.openMenu(player, entity);
+                    }
+                }
+            }
         }
     }
 
@@ -159,7 +208,8 @@ public final class CorePlaceListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onCoreEntityDamage(EntityDamageEvent event) {
-        if (coreService.isCoreEntity(event.getEntity()) || pylonService.isPylonEntity(event.getEntity())) {
+        if (coreService.isCoreEntity(event.getEntity()) || pylonService.isPylonEntity(event.getEntity())
+                || condenserService.isCondenserEntity(event.getEntity())) {
             event.setCancelled(true);
         }
     }

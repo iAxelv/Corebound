@@ -1,9 +1,9 @@
 title: "&5Gestión del Núcleo"
-rows: 5
+rows: 6
 items:
   upgrades:
     material: ENCHANTED_BOOK
-    slot: 19
+    slot: 10
     display-name: "&dUpgrades"
     lore:
       - "&7Permite mejorar aspectos del Núcleo."
@@ -19,10 +19,11 @@ items:
       - "&7Fragmentos del Núcleo: &b%fragments%"
       - "&7Energía: &6%energy%&7/&6%max_energy%⚡"
       - "&7Producción base: &a+%base_energy%⚡/golpe"
+      - "&7Capacidad adicional: &b+%capacity_bonus%%"
       - "&7Multiplicador máximo de combo: &bx%max_combo%"
   fracture:
     material: NETHER_STAR
-    slot: 44
+    slot: 51
     display-name: "&d&lFRACTURA DIMENSIONAL"
     lore:
       - "&7Reinicia tu Núcleo a Nivel 1."
@@ -39,7 +40,7 @@ items:
       - "&7Nivel actual: &e%level%"
   astral-tree:
     material: NETHERITE_UPGRADE_SMITHING_TEMPLATE
-    slot: 21
+    slot: 12
     display-name: "&5Árbol de Fracturas"
     lore:
       - "&7Desbloquea habilidades astrales con Fragmentos del Núcleo."
@@ -47,7 +48,7 @@ items:
       - "&eHaz clic para explorar el árbol."
   pylon:
     material: SEA_LANTERN
-    slot: 25
+    slot: 15
     display-name: "&bForjar Pilón I"
     lore:
       - "&7Costo: &6%cost%⚡"
@@ -63,7 +64,7 @@ items:
       - "&7Pilones colocados o guardados: &e%owned%&7/&e%pylons%"
   cell-forge:
     material: ENCHANTING_TABLE
-    slot: 23
+    slot: 11
     display-name: "&5Forja Elemental"
     lore:
       - "&7Sintetiza células de Fuego, Sobrecarga y Vacío."
@@ -73,9 +74,24 @@ items:
     locked-name: "&cForja bloqueada"
     locked-lore:
       - "&cRequiere Núcleo Nivel 5."
+  condenser:
+    material: BLAST_FURNACE
+    slot: 14
+    display-name: "&bCondensador de Materia"
+    lore:
+      - "&7Coloca un condensador para convertir generadores"
+      - "&7de piedra en una fuente de minerales."
+      - "&7Costo: &6%cost%⚡"
+      - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
+      - ""
+      - "&eHaz clic para adquirirlo."
+    locked-material: BARRIER
+    locked-name: "&cCondensador ya colocado"
+    locked-lore:
+      - "&7Solo se permite uno por isla."
   upgrade:
     material: NETHER_STAR
-    slot: 36
+    slot: 47
     display-name: "&aMejorar Núcleo &7(Nvl. %next_level%)"
     lore-enough:
       - "&7Costo: &6%cost%⚡"
@@ -89,7 +105,7 @@ items:
       - "&cEnergía insuficiente."
   close:
     material: ARROW
-    slot: 40
+    slot: 49
     display-name: "&cCerrar"
     lore:
       - "&7Cierra el menú del Núcleo."

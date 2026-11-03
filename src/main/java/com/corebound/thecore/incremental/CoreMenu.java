@@ -32,6 +32,7 @@ public final class CoreMenu implements Listener {
     private final File configFile;
     private YamlConfiguration config;
     private PylonService pylonService;
+    private CondenserService condenserService;
 
     private static final class MenuHolder implements InventoryHolder {
         private final long islandIndex;
@@ -80,14 +81,23 @@ public final class CoreMenu implements Listener {
         } catch (IOException exception) {
             throw new IllegalArgumentException("Could not load core/core_menu.yml defaults.", exception);
         }
-        if (loaded.getInt("rows", 5) != 5) {
-            throw new IllegalArgumentException("core_menu.yml rows must be 5.");
+        int rows = loaded.getInt("rows", 6);
+        if (rows == 5) {
+            loaded.set("rows", 6);
+            try {
+                loaded.save(configFile);
+            } catch (IOException exception) {
+                throw new IllegalArgumentException("Could not migrate core/core_menu.yml to six rows.", exception);
+            }
+        } else if (rows != 6) {
+            throw new IllegalArgumentException("core_menu.yml rows must be 6.");
         }
         validateItem(loaded, "items.upgrades");
         validateItem(loaded, "items.statistics");
         validateItem(loaded, "items.fracture");
         validateItem(loaded, "items.astral-tree");
         validateItem(loaded, "items.pylon");
+        validateItem(loaded, "items.condenser");
         validateItem(loaded, "items.cell-forge");
         validateItem(loaded, "items.upgrade");
         validateItem(loaded, "items.close");
@@ -100,6 +110,9 @@ public final class CoreMenu implements Listener {
         if (Material.matchMaterial(loaded.getString("items.cell-forge.locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.cell-forge.locked-material must be valid.");
         }
+        if (Material.matchMaterial(loaded.getString("items.condenser.locked-material", "BARRIER")) == null) {
+            throw new IllegalArgumentException("core_menu.yml items.condenser.locked-material must be valid.");
+        }
         config = loaded;
     }
 
@@ -107,10 +120,14 @@ public final class CoreMenu implements Listener {
         this.pylonService = pylonService;
     }
 
+    public void attachCondenserService(CondenserService condenserService) {
+        this.condenserService = condenserService;
+    }
+
     public void open(Player player, CoreRecord core) {
         MenuHolder holder = new MenuHolder(core.islandIndex(), menuSlots());
         holder.inventory = Bukkit.createInventory(
-                holder, 45, color(config.getString("title", "&5Gestión del Núcleo")));
+                holder, 54, color(config.getString("title", "&5Gestión del Núcleo")));
         holder.inventory.setItem(slot("upgrades"),
                 createItem(config.getConfigurationSection("items.upgrades"), core, false));
         holder.inventory.setItem(slot("statistics"),
@@ -119,6 +136,7 @@ public final class CoreMenu implements Listener {
         holder.inventory.setItem(slot("cell-forge"), createCellForgeItem(core));
         holder.inventory.setItem(slot("fracture"), createFractureItem(core));
         holder.inventory.setItem(slot("pylon"), createPylonItem(core));
+        holder.inventory.setItem(slot("condenser"), createCondenserItem(core));
         holder.inventory.setItem(slot("upgrade"), createItem(
                 config.getConfigurationSection("items.upgrade"), core, core.energy() >= core.upgradeCost()));
         holder.inventory.setItem(slot("close"), createSimpleItem("items.close"));
@@ -142,6 +160,10 @@ public final class CoreMenu implements Listener {
             coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("cell-forge") && pylonService != null) {
             pylonService.openCellForge(player, holder.islandIndex);
+        } else if (event.getRawSlot() == holder.slot("condenser") && condenserService != null) {
+            if (condenserService.buy(player, holder.islandIndex)) {
+                coreService.openCoreMenu(player, holder.islandIndex);
+            }
         } else if (event.getRawSlot() == holder.slot("astral-tree")) {
             coreService.openAstralTree(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("fracture")) {
@@ -185,7 +207,8 @@ public final class CoreMenu implements Listener {
                 Map.entry("%max_combo%", String.format(java.util.Locale.ROOT, "%.1f", core.maxCombo())),
                 Map.entry("%next_level%", Integer.toString(core.level() + 1)),
                 Map.entry("%cost%", formatEnergy(core.upgradeCost())),
-                Map.entry("%next_base%", formatEnergy(Math.pow(1.25, core.level()))));
+                Map.entry("%next_base%", formatEnergy(Math.pow(1.25, core.level()))),
+                Map.entry("%capacity_bonus%", Integer.toString(core.upgradeCapacity() * 10)));
 
         ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "PAPER")));
         ItemMeta meta = item.getItemMeta();
@@ -280,6 +303,29 @@ public final class CoreMenu implements Listener {
         return item;
     }
 
+    private ItemStack createCondenserItem(CoreRecord core) {
+        ConfigurationSection itemConfig = config.getConfigurationSection("items.condenser");
+        boolean available = condenserService != null && !condenserService.hasCondenser(core.islandIndex());
+        String material = available
+                ? itemConfig.getString("material", "BLAST_FURNACE")
+                : itemConfig.getString("locked-material", "BARRIER");
+        String displayName = available
+                ? itemConfig.getString("display-name", "&bCondensador de Materia")
+                : itemConfig.getString("locked-name", "&cCondensador ya colocado");
+        List<String> lore = itemConfig.getStringList(available ? "lore" : "locked-lore");
+        double cost = condenserService == null ? 500.0 : condenserService.purchaseCost();
+        Map<String, String> placeholders = Map.of(
+                "%cost%", formatEnergy(cost),
+                "%min_distance%", formatEnergy(pylonService == null ? 3.0 : pylonService.minimumDistance()),
+                "%max_distance%", formatEnergy(pylonService == null ? 12.0 : pylonService.maximumDistance()));
+        ItemStack item = new ItemStack(Material.matchMaterial(material));
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(color(replace(displayName, placeholders)));
+        meta.lore(lore.stream().map(line -> color(replace(line, placeholders))).toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+
     private void validateItem(YamlConfiguration loaded, String path) {
         ConfigurationSection section = loaded.getConfigurationSection(path);
         int slot = section == null ? -1 : section.getInt("slot", -1);
@@ -291,7 +337,7 @@ public final class CoreMenu implements Listener {
         }
         for (String otherPath : List.of(
                 "items.upgrades", "items.statistics", "items.fracture", "items.astral-tree", "items.pylon",
-                "items.cell-forge", "items.upgrade", "items.close")) {
+                "items.condenser", "items.cell-forge", "items.upgrade", "items.close")) {
             if (!otherPath.equals(path)
                     && loaded.getInt(otherPath + ".slot", -1) == slot) {
                 throw new IllegalArgumentException("core_menu.yml item slots must be unique.");
@@ -310,6 +356,7 @@ public final class CoreMenu implements Listener {
                 "fracture", slot("fracture"),
                 "astral-tree", slot("astral-tree"),
                 "pylon", slot("pylon"),
+                "condenser", slot("condenser"),
                 "cell-forge", slot("cell-forge"),
                 "upgrade", slot("upgrade"),
                 "close", slot("close"));

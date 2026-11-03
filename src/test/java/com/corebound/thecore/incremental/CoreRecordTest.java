@@ -61,7 +61,7 @@ class CoreRecordTest {
         CoreRecord upgraded = levelTwoCore.upgrade(levelTwoCore.upgradeCost());
 
         assertEquals(3, upgraded.level());
-        assertEquals(450.0, upgraded.energy(), 0.0001);
+        assertEquals(55.0, upgraded.energy(), 0.0001);
         assertEquals(1.5625, upgraded.baseEnergy(), 0.0001);
     }
 
@@ -69,20 +69,20 @@ class CoreRecordTest {
     void upgradeCostAlwaysFitsWithinCurrentCapacity() {
         for (int level = 1; level <= 100; level++) {
             CoreRecord core = createCore(level);
-            assertEquals(core.maxEnergy() * 0.5, core.upgradeCost(), 0.0001);
             assertTrue(core.upgradeCost() <= core.maxEnergy());
         }
     }
 
     @Test
     void levelFourCoreCanAffordItsNextUpgradeAtFullCapacity() {
-        CoreRecord levelFourCore = createCore(4, 5324.0);
+        CoreRecord levelFourCore = createCore(4, 2928.2);
 
         assertEquals(2662.0, levelFourCore.upgradeCost(), 0.0001);
         CoreRecord upgraded = levelFourCore.upgrade(levelFourCore.upgradeCost());
 
         assertEquals(5, upgraded.level());
-        assertEquals(2662.0, upgraded.energy(), 0.0001);
+        assertEquals(266.2, upgraded.energy(), 0.0001);
+        assertEquals(6442.04, upgraded.maxEnergy(), 0.0001);
     }
 
     @Test
@@ -113,7 +113,7 @@ class CoreRecordTest {
                 1);
 
         assertEquals(500.0, base.maxEnergy(), 0.0001);
-        assertEquals(1100.0, createCore(2).maxEnergy(), 0.0001);
+        assertEquals(605.0, createCore(2).maxEnergy(), 0.0001);
         assertEquals(500.0, critical.maxEnergy(), 0.0001);
         assertEquals(0.05, critical.criticalChance(), 0.0001);
         assertEquals(500.0, base.withHit(1000, COMBO_WINDOW_MILLIS).energy(), 0.0001);
@@ -161,6 +161,17 @@ class CoreRecordTest {
         assertEquals(100.0, spent.energy(), 0.0001);
         assertEquals(1, spent.upgradeCritical());
         assertNull(enhanced.upgradeEnhancement(CoreEnhancement.CRITICAL, 200.0, 1));
+    }
+
+    @Test
+    void capacityUpgradeAddsTenPercentAndSurvivesCoreProgression() {
+        CoreRecord core = createCore(5, 6442.04);
+        CoreRecord enhanced = core.upgradeEnhancement(CoreEnhancement.CAPACITY, 500.0, 5);
+
+        assertEquals(1, enhanced.upgradeCapacity());
+        assertEquals(7086.244, enhanced.maxEnergy(), 0.0001);
+        assertEquals(5942.04, enhanced.energy(), 0.0001);
+        assertEquals(1, enhanced.upgrade(1000).upgradeCapacity());
     }
 
     @Test

@@ -150,7 +150,8 @@ public final class CoreRepository {
                 current.prestigeCount(),
                 current.coreFragments(),
                 current.astralResonance(),
-                current.astralPylonAttunement()));
+                current.astralPylonAttunement(),
+                current.upgradeCapacity()));
         save();
     }
 
@@ -261,6 +262,7 @@ public final class CoreRepository {
                 yaml.set(path + ".core-fragments", core.coreFragments());
                 yaml.set(path + ".astral-resonance", core.astralResonance());
                 yaml.set(path + ".astral-pylon-attunement", core.astralPylonAttunement());
+                yaml.set(path + ".upgrade-capacity", core.upgradeCapacity());
             }
             yaml.set("pending-items", snapshot.pendingItems().stream().map(id -> id.toString()).toList());
             Path target = file.toPath();
@@ -312,7 +314,8 @@ public final class CoreRepository {
                         core.getInt("prestige-count", 0),
                         core.getInt("core-fragments", core.getInt("prestige-count", 0)),
                         core.getInt("astral-resonance", 0),
-                        core.getInt("astral-pylon-attunement", 0)));
+                        core.getInt("astral-pylon-attunement", 0),
+                        core.getInt("upgrade-capacity", 0)));
             }
         }
         for (String playerId : yaml.getStringList("pending-items")) {

@@ -253,6 +253,34 @@ public final class PylonService {
         return intervalTicks;
     }
 
+    public double minimumDistance() {
+        return minimumDistance;
+    }
+
+    public double maximumDistance() {
+        return maximumDistance;
+    }
+
+    public void showPlacementRange(Player player) {
+        if (!player.isOnline()) {
+            return;
+        }
+        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+        if (island == null) {
+            return;
+        }
+        CoreRecord core = coreRepository.core(island.index());
+        if (core == null) {
+            return;
+        }
+        World world = plugin.getServer().getWorld(core.worldId());
+        if (world == null || !world.getUID().equals(player.getWorld().getUID())) {
+            return;
+        }
+        drawRangeCircle(world, core, minimumDistance, Particle.FLAME);
+        drawRangeCircle(world, core, maximumDistance, Particle.END_ROD);
+    }
+
     public CellType[] randomCellOffers() {
         CellType[] types = CellType.values();
         ThreadLocalRandom random = ThreadLocalRandom.current();
@@ -1255,20 +1283,7 @@ public final class PylonService {
         if (!player.isOnline() || !isPylonItem(player.getInventory().getItemInMainHand())) {
             return;
         }
-        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
-        if (island == null) {
-            return;
-        }
-        CoreRecord core = coreRepository.core(island.index());
-        if (core == null) {
-            return;
-        }
-        World world = plugin.getServer().getWorld(core.worldId());
-        if (world == null || !world.getUID().equals(player.getWorld().getUID())) {
-            return;
-        }
-        drawRangeCircle(world, core, minimumDistance, Particle.FLAME);
-        drawRangeCircle(world, core, maximumDistance, Particle.END_ROD);
+        showPlacementRange(player);
     }
 
     private void drawRangeCircle(World world, CoreRecord core, double radius, Particle particle) {

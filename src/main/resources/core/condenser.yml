@@ -1,0 +1,16 @@
+condenser:
+  item:
+    material: BLAST_FURNACE
+  display:
+    scale: 1.2
+    height-offset: 1.8
+    rotation-speed-ticks: 20
+  purchase-cost: 500.0
+  max-level: 8
+  upgrade:
+    base-cost: 500.0
+    cost-multiplier: 1.8
+  generation:
+    ore-chance: 0.1
+    energy-cost: 1.0
+    energy-cost-per-level: 0.5

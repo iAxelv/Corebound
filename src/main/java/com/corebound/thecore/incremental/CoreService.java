@@ -263,6 +263,10 @@ public final class CoreService {
         coreMenu.attachPylonService(pylonService);
     }
 
+    public void attachCondenserService(CondenserService condenserService) {
+        coreMenu.attachCondenserService(condenserService);
+    }
+
     public void openCoreMenu(Player player, org.bukkit.entity.Entity entity) {
         Long islandIndex = entity.getPersistentDataContainer().get(islandIndexKey, PersistentDataType.LONG);
         if (islandIndex == null) {
@@ -475,7 +479,8 @@ public final class CoreService {
                 removed.prestigeCount(),
                 removed.coreFragments(),
                 removed.astralResonance(),
-                removed.astralPylonAttunement());
+                removed.astralPylonAttunement(),
+                removed.upgradeCapacity());
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
@@ -594,7 +599,8 @@ public final class CoreService {
                     progress.prestigeCount(),
                     progress.coreFragments(),
                     progress.astralResonance(),
-                    progress.astralPylonAttunement()));
+                    progress.astralPylonAttunement(),
+                    progress.upgradeCapacity()));
         } catch (RuntimeException exception) {
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);

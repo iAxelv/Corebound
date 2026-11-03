@@ -5,6 +5,8 @@ import com.corebound.thecore.gui.IslandMenuManager;
 import com.corebound.thecore.incremental.CorePlaceListener;
 import com.corebound.thecore.incremental.CoreRepository;
 import com.corebound.thecore.incremental.CoreService;
+import com.corebound.thecore.incremental.CondenserRepository;
+import com.corebound.thecore.incremental.CondenserService;
 import com.corebound.thecore.incremental.PylonRepository;
 import com.corebound.thecore.incremental.PylonService;
 import com.corebound.thecore.island.IslandRepository;
@@ -25,6 +27,7 @@ public final class TheCorePlugin extends JavaPlugin {
     private IslandService islandService;
     private CoreService coreService;
     private PylonService pylonService;
+    private CondenserService condenserService;
     private Messages messages;
     private IslandSounds sounds;
     private IslandMenuManager menus;
@@ -41,6 +44,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("core/core_upgrades.yml");
         saveResourceIfMissing("core/astral_tree.yml");
         saveResourceIfMissing("core/pylons.yml");
+        saveResourceIfMissing("core/condenser.yml");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");
@@ -88,6 +92,16 @@ public final class TheCorePlugin extends JavaPlugin {
                     messages,
                     new File(getDataFolder(), "core/pylons.yml"));
             coreService.attachPylonService(pylonService);
+            condenserService = new CondenserService(
+                    this,
+                    islandService,
+                    coreService,
+                    coreRepository,
+                    new CondenserRepository(new File(getDataFolder(), "data/condensers.yml"), this),
+                    pylonService,
+                    messages,
+                    new File(getDataFolder(), "core/condenser.yml"));
+            coreService.attachCondenserService(condenserService);
         } catch (IllegalArgumentException exception) {
             getLogger().severe("Could not initialize the core modules: " + exception.getMessage());
             getServer().getPluginManager().disablePlugin(this);
@@ -112,14 +126,17 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
         getServer().getPluginManager().registerEvents(
-                new CorePlaceListener(this, coreService, pylonService), this);
+                new CorePlaceListener(this, coreService, pylonService, condenserService), this);
         getServer().getPluginManager().registerEvents(pylonService.menuListener(), this);
+        getServer().getPluginManager().registerEvents(condenserService, this);
+        getServer().getPluginManager().registerEvents(condenserService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.upgradesMenuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.astralTreeMenuListener(), this);
         getServer().getPluginManager().registerEvents(menus, this);
         coreService.initializeLoadedEntities();
         pylonService.initializeLoadedEntities();
+        condenserService.initializeLoadedEntities();
         pylonService.initializeRangeGuides();
         getLogger().info("Corebound island foundation enabled.");
     }
@@ -144,6 +161,13 @@ public final class TheCorePlugin extends JavaPlugin {
                     pylonService.flush();
                 } catch (IOException exception) {
                     getLogger().severe("Could not save pylon data: " + exception.getMessage());
+                }
+            }
+            if (condenserService != null) {
+                try {
+                    condenserService.flush();
+                } catch (IOException exception) {
+                    getLogger().severe("Could not save condenser data: " + exception.getMessage());
                 }
             }
         }
@@ -174,6 +198,7 @@ public final class TheCorePlugin extends JavaPlugin {
         menus.reload();
         coreService.reloadConfiguration();
         pylonService.reloadConfiguration();
+        condenserService.reloadConfiguration();
     }
 
     private void validateIslandSpacing(org.bukkit.configuration.ConfigurationSection config) throws IOException {

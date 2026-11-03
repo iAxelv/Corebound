@@ -41,6 +41,20 @@ items:
     base-cost: 300.0
     cost-multiplier: 2.2
     max-level: 5
+  capacity:
+    material: AMETHYST_SHARD
+    slot: 17
+    display-name: "&bCapacidad del Núcleo &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Aumenta la energía máxima del Núcleo."
+      - "&7Capacidad adicional actual: &b+%capacity%%"
+      - "&7Bonus por rango: &b+10% de capacidad base"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 500.0
+    cost-multiplier: 2.0
+    max-level: 5
   back:
     material: ARROW
     slot: 22
