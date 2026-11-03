@@ -58,8 +58,11 @@ weather and time are refreshed only on island entry or settings changes.
   redstone, mob and spawner controls
 - Island Core with persistent animation, combo-reactive scaling, hit feedback,
   combo actionbar, and an upgrade menu; configured in `plugins/Corebound/core/`.
-  Level 2 unlocks purchasable extraction pylons with persistent, periodic
-  energy pulses. Pylons can be upgraded to Tier III, fitted with up to three
+  Level 3 unlocks purchasable extraction pylons with persistent, periodic
+  energy pulses. Pylons require Core level 5 for Tier II and level 10 for Tier
+  III by default, configurable in `plugins/Corebound/core/pylons.yml`. Core
+  energy is capped at 500 for now, and the Core's pylon capacity applies to
+  both placed pylons and forged items awaiting placement. Pylons can be fitted with up to three
   elemental cells, and recovered with their tier and cells intact. The
   Core's level-3 Elemental Forge offers three random Fire, Lightning, or Void
   cells (duplicates are possible); each offer can be purchased once, and the

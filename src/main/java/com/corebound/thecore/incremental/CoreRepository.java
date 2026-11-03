@@ -2,6 +2,7 @@ package com.corebound.thecore.incremental;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -100,7 +101,7 @@ public final class CoreRepository {
                 current.interactionId(),
                 current.textDisplayId(),
                 current.level(),
-                current.energy() + amount,
+                Math.min(CoreRecord.MAX_ENERGY, current.energy() + amount),
                 current.hits(),
                 current.lastHitAt()));
         save();
@@ -209,7 +210,7 @@ public final class CoreRepository {
                 try {
                     Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE,
                             StandardCopyOption.REPLACE_EXISTING);
-                } catch (AtomicMoveNotSupportedException exception) {
+                } catch (AtomicMoveNotSupportedException | AccessDeniedException exception) {
                     Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
                 }
             } finally {

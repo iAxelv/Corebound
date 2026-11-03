@@ -53,6 +53,7 @@ public final class PylonService {
     private final NamespacedKey pylonItemKey;
     private final NamespacedKey pylonTierKey;
     private final NamespacedKey pylonCellsKey;
+    private final NamespacedKey pylonIslandKey;
     private final NamespacedKey pylonEntityKey;
     private final NamespacedKey pylonIdKey;
     private final Material itemMaterial;
@@ -66,6 +67,7 @@ public final class PylonService {
     private final double purchaseCost;
     private final double forgeRefreshCost;
     private final Map<CellType, Double> cellForgeCosts = new java.util.EnumMap<>(CellType.class);
+    private final Map<Integer, Integer> tierCoreLevelRequirements = Map.of(2, 5, 3, 10);
     private final Map<Long, CellType[]> cellForgeOffers = new ConcurrentHashMap<>();
     private final Map<Long, boolean[]> availableCellForgeOffers = new ConcurrentHashMap<>();
     private final Map<UUID, ScheduledTask> activePylons = new ConcurrentHashMap<>();
@@ -123,6 +125,12 @@ public final class PylonService {
             }
             cellForgeCosts.put(type, cost);
         }
+        int tierTwoCoreLevel = pylonUpgradeRequiredCoreLevel(2);
+        int tierThreeCoreLevel = pylonUpgradeRequiredCoreLevel(3);
+        if (tierTwoCoreLevel < 3 || tierThreeCoreLevel <= tierTwoCoreLevel) {
+            throw new IllegalArgumentException(
+                    "pylons.yml tier-required-core-levels must be at least 3 and increase for each tier.");
+        }
         if (intervalTicks <= 0
                 || !Double.isFinite(minimumDistance)
                 || !Double.isFinite(maximumDistance)
@@ -137,6 +145,7 @@ public final class PylonService {
         pylonItemKey = new NamespacedKey(plugin, "pylon_item");
         pylonTierKey = new NamespacedKey(plugin, "pylon_tier");
         pylonCellsKey = new NamespacedKey(plugin, "pylon_cells");
+        pylonIslandKey = new NamespacedKey(plugin, "pylon_island_index");
         pylonEntityKey = new NamespacedKey(plugin, "pylon_entity");
         pylonIdKey = new NamespacedKey(plugin, "pylon_id");
         pylonMenu = new PylonMenu(messages, this);
@@ -308,6 +317,18 @@ public final class PylonService {
             return false;
         }
         int nextTier = pylon.tier() + 1;
+        int requiredCoreLevel = pylonUpgradeRequiredCoreLevel(nextTier);
+        CoreRecord core = coreRepository.core(pylon.islandIndex());
+        if (core == null) {
+            messages.send(player, "core-already-placed");
+            return false;
+        }
+        if (core.level() < requiredCoreLevel) {
+            messages.send(player, "pylon-upgrade-requires-core-level", Map.of(
+                    "tier", Integer.toString(nextTier),
+                    "level", Integer.toString(requiredCoreLevel)));
+            return false;
+        }
         double cost = config.getDouble("pylon.tier-upgrade-costs." + nextTier, Double.NaN);
         if (!Double.isFinite(cost) || cost <= 0) {
             plugin.getLogger().severe("Missing or invalid pylon tier-upgrade-costs." + nextTier + " in pylons.yml.");
@@ -331,6 +352,24 @@ public final class PylonService {
 
     public double pylonUpgradeCost(int nextTier) {
         return config.getDouble("pylon.tier-upgrade-costs." + nextTier, Double.NaN);
+    }
+
+    public int pylonUpgradeRequiredCoreLevel(int nextTier) {
+        return config.getInt("pylon.tier-required-core-levels." + nextTier,
+                tierCoreLevelRequirements.getOrDefault(nextTier, Integer.MAX_VALUE));
+    }
+
+    public int coreLevel(long islandIndex) {
+        CoreRecord core = coreRepository.core(islandIndex);
+        return core == null ? 0 : core.level();
+    }
+
+    public int ownedPylonCount(long islandIndex) {
+        return repository.forIsland(islandIndex).size() + repository.pendingItems(islandIndex);
+    }
+
+    public boolean hasPylonCapacity(long islandIndex, int capacity) {
+        return ownedPylonCount(islandIndex) < capacity;
     }
 
     public boolean canManagePylon(Player player, PylonRecord pylon) {
@@ -383,16 +422,21 @@ public final class PylonService {
             messages.send(player, "core-already-placed");
             return false;
         }
-        if (core.level() < 2) {
+        if (core.level() < 3) {
             messages.send(player, "pylon-requires-core-level");
+            return false;
+        }
+        if (!repository.reserveItem(islandIndex, core.pylonCapacity())) {
+            messages.send(player, "pylon-limit-reached");
             return false;
         }
         CoreRecord chargedCore = coreRepository.spendEnergy(islandIndex, purchaseCost);
         if (chargedCore == null) {
+            repository.releasePendingItem(islandIndex);
             messages.send(player, "pylon-insufficient-energy");
             return false;
         }
-        ItemStack item = createPylonItem();
+        ItemStack item = createPylonItem(islandIndex);
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
             for (ItemStack leftover : overflow.values()) {
@@ -400,6 +444,7 @@ public final class PylonService {
                 dropped.setPersistent(true);
             }
         } catch (RuntimeException exception) {
+            repository.releasePendingItem(islandIndex);
             coreRepository.restoreEnergy(islandIndex, purchaseCost);
             plugin.getLogger().log(Level.SEVERE, "Could not deliver a forged pylon.", exception);
             messages.send(player, "pylon-purchase-failed");
@@ -437,7 +482,7 @@ public final class PylonService {
             messages.send(player, "pylon-place-access-denied");
             return false;
         }
-        PylonRecord removed = repository.remove(pylonId);
+        PylonRecord removed = repository.removeAndReserveItem(pylonId);
         if (removed == null) {
             return false;
         }
@@ -478,11 +523,18 @@ public final class PylonService {
             messages.send(player, "core-already-placed");
             return false;
         }
-        if (core.level() < 2) {
+        if (core.level() < 3) {
             messages.send(player, "pylon-requires-core-level");
             return false;
         }
-        if (repository.forIsland(island.index()).size() >= core.pylonCapacity()) {
+        ItemStack heldPylon = player.getInventory().getItemInMainHand();
+        Long reservedIsland = heldPylon.getItemMeta().getPersistentDataContainer()
+                .get(pylonIslandKey, PersistentDataType.LONG);
+        if (reservedIsland != null && reservedIsland != island.index()) {
+            messages.send(player, "pylon-item-wrong-island");
+            return false;
+        }
+        if (!repository.canPlaceItem(island.index(), core.pylonCapacity(), reservedIsland != null)) {
             messages.send(player, "pylon-limit-reached");
             return false;
         }
@@ -503,13 +555,13 @@ public final class PylonService {
         }
 
         UUID pylonId = UUID.randomUUID();
-        ItemStack heldPylon = player.getInventory().getItemInMainHand();
         int pylonTier = pylonTier(heldPylon);
         Map<Integer, CellRecord> equippedCells = pylonCells(heldPylon);
         ItemDisplay baseDisplay = null;
         ItemDisplay rodDisplay = null;
         Interaction interaction = null;
         TextDisplay textDisplay = null;
+        PylonRecord placedPylon = null;
         try {
             baseDisplay = clickedBlock.getWorld().spawn(pylonLocation, ItemDisplay.class, display -> {
                 configureDisplay(display, pylonBaseMaterial(equippedCells), 0.75f, island.index(), pylonId);
@@ -530,9 +582,9 @@ public final class PylonService {
             });
             Location textLocation = pylonLocation.clone().add(0, 1.5, 0);
             textDisplay = clickedBlock.getWorld().spawn(textLocation, TextDisplay.class, display -> {
-                configureHologram(display, island.index(), pylonId, core, TIER_ONE);
+                configureHologram(display, island.index(), pylonId, core, pylonTier);
             });
-            repository.add(new PylonRecord(
+            placedPylon = new PylonRecord(
                     island.index(),
                     pylonId,
                     clickedBlock.getWorld().getUID(),
@@ -544,9 +596,13 @@ public final class PylonService {
                     interaction.getUniqueId(),
                     textDisplay.getUniqueId(),
                     pylonTier,
-                    equippedCells));
-            refreshPylon(repository.get(pylonId));
+                    equippedCells);
+            repository.add(placedPylon, reservedIsland != null);
+            refreshPylon(placedPylon);
         } catch (RuntimeException exception) {
+            if (placedPylon != null && repository.remove(pylonId) != null && reservedIsland != null) {
+                repository.reserveReturnedItem(island.index());
+            }
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);
             removeIfPresent(rodDisplay);
@@ -872,15 +928,15 @@ public final class PylonService {
         entity.getPersistentDataContainer().set(pylonIdKey, PersistentDataType.STRING, pylonId.toString());
     }
 
-    private ItemStack createPylonItem() {
-        return createPylonItem(TIER_ONE, Map.of());
+    private ItemStack createPylonItem(long islandIndex) {
+        return createPylonItem(TIER_ONE, Map.of(), islandIndex);
     }
 
     private ItemStack createPylonItem(PylonRecord pylon) {
-        return createPylonItem(pylon.tier(), pylon.equippedCells());
+        return createPylonItem(pylon.tier(), pylon.equippedCells(), pylon.islandIndex());
     }
 
-    private ItemStack createPylonItem(int tier, Map<Integer, CellRecord> cells) {
+    private ItemStack createPylonItem(int tier, Map<Integer, CellRecord> cells, long islandIndex) {
         ItemStack item = new ItemStack(itemMaterial);
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.parseComponent(config.getString(
@@ -891,6 +947,8 @@ public final class PylonService {
         meta.getPersistentDataContainer().set(pylonItemKey, PersistentDataType.BYTE, (byte) 1);
         meta.getPersistentDataContainer().set(pylonTierKey, PersistentDataType.INTEGER, tier);
         meta.getPersistentDataContainer().set(pylonCellsKey, PersistentDataType.STRING, encodeCells(cells));
+        meta.getPersistentDataContainer().set(pylonIslandKey, PersistentDataType.LONG, islandIndex);
+        meta.setMaxStackSize(1);
         item.setItemMeta(meta);
         return item;
     }
@@ -980,15 +1038,20 @@ public final class PylonService {
         if (world == null || !world.getUID().equals(player.getWorld().getUID())) {
             return;
         }
+        drawRangeCircle(world, core, minimumDistance, Particle.FLAME);
+        drawRangeCircle(world, core, maximumDistance, Particle.END_ROD);
+    }
+
+    private void drawRangeCircle(World world, CoreRecord core, double radius, Particle particle) {
         for (int point = 0; point < RANGE_GUIDE_POINTS; point++) {
             double angle = 2.0 * Math.PI * point / RANGE_GUIDE_POINTS;
             Location particleLocation = new Location(
                     world,
-                    core.x() + Math.cos(angle) * maximumDistance,
+                    core.x() + Math.cos(angle) * radius,
                     core.y() + 0.5,
-                    core.z() + Math.sin(angle) * maximumDistance);
+                    core.z() + Math.sin(angle) * radius);
             plugin.getServer().getRegionScheduler().run(plugin, particleLocation, task ->
-                    world.spawnParticle(Particle.END_ROD, particleLocation, 2, 0.04, 0.08, 0.04, 0));
+                    world.spawnParticle(particle, particleLocation, 2, 0.04, 0.08, 0.04, 0));
         }
     }
 

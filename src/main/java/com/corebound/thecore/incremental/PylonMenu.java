@@ -244,14 +244,23 @@ public final class PylonMenu implements Listener {
             lore = List.of("&7Tier máximo alcanzado.", "&7Ranuras: &e" + pylon.maxSlots());
         } else {
             int nextTier = pylon.tier() + 1;
+            int requiredCoreLevel = pylons.pylonUpgradeRequiredCoreLevel(nextTier);
             double cost = pylons.pylonUpgradeCost(nextTier);
-            item = new ItemStack(Material.ANVIL);
-            title = "&aMejorar Pilón &7(T" + nextTier + ")";
-            lore = List.of(
-                    "&7Costo: &6" + formatEnergy(cost) + "⚡",
-                    "&7Ranuras: &e" + pylon.maxSlots() + " &7→ &e" + nextTier,
-                    "",
-                    "&eHaz clic para mejorar.");
+            if (pylons.coreLevel(pylon.islandIndex()) < requiredCoreLevel) {
+                item = new ItemStack(Material.BARRIER);
+                title = "&cMejora bloqueada &7(T" + nextTier + ")";
+                lore = List.of(
+                        "&cRequiere Núcleo nivel &e" + requiredCoreLevel + "&c.",
+                        "&7Ranuras al mejorar: &e" + pylon.maxSlots() + " &7→ &e" + nextTier);
+            } else {
+                item = new ItemStack(Material.ANVIL);
+                title = "&aMejorar Pilón &7(T" + nextTier + ")";
+                lore = List.of(
+                        "&7Costo: &6" + formatEnergy(cost) + "⚡",
+                        "&7Ranuras: &e" + pylon.maxSlots() + " &7→ &e" + nextTier,
+                        "",
+                        "&eHaz clic para mejorar.");
+            }
         }
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.parseComponent(title));

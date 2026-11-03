@@ -1,13 +1,20 @@
 title: "&5Gestión del Núcleo"
 rows: 3
 items:
+  upgrades:
+    material: ENCHANTED_BOOK
+    slot: 10
+    display-name: "&dUpgrades"
+    lore:
+      - "&7Permite mejorar aspectos del Núcleo."
+      - "&cLas mejoras aún están deshabilitadas."
   statistics:
     material: CRYING_OBSIDIAN
-    slot: 10
+    slot: 4
     display-name: "&dEstado del Núcleo"
     lore:
       - "&7Nivel: &e%level%"
-      - "&7Energía actual: &6%energy%⚡"
+      - "&7Energía: &6%energy%&7/&6%max_energy%⚡"
       - "&7Producción base: &a+%base_energy%⚡/golpe"
       - "&7Multiplicador máximo de combo: &bx3.0"
   pylon:
@@ -22,7 +29,10 @@ items:
     locked-material: BARRIER
     locked-name: "&cPilón bloqueado"
     locked-lore:
-      - "&cRequiere Núcleo Nivel 2."
+      - "&cRequiere Núcleo Nivel 3."
+    limit-name: "&cLímite de Pilones alcanzado"
+    limit-lore:
+      - "&7Pilones colocados o guardados: &e%owned%&7/&e%pylons%"
   cell-forge:
     material: ENCHANTING_TABLE
     slot: 12

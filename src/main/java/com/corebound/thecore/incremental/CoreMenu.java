@@ -25,7 +25,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class CoreMenu implements Listener {
-    private static final int STATISTICS_SLOT = 10;
+    private static final int UPGRADES_SLOT = 10;
+    private static final int STATISTICS_SLOT = 4;
     private static final int CELL_FORGE_SLOT = 12;
     private static final int PYLON_SLOT = 14;
     private static final int UPGRADE_SLOT = 16;
@@ -67,6 +68,7 @@ public final class CoreMenu implements Listener {
         if (config.getInt("rows", 3) != 3) {
             throw new IllegalArgumentException("core_menu.yml rows must be 3.");
         }
+        validateItem("items.upgrades", UPGRADES_SLOT);
         validateItem("items.statistics", STATISTICS_SLOT);
         validateItem("items.pylon", PYLON_SLOT);
         validateItem("items.cell-forge", CELL_FORGE_SLOT);
@@ -87,6 +89,8 @@ public final class CoreMenu implements Listener {
         MenuHolder holder = new MenuHolder(core.islandIndex());
         holder.inventory = Bukkit.createInventory(
                 holder, 27, color(config.getString("title", "&5Gestión del Núcleo")));
+        holder.inventory.setItem(UPGRADES_SLOT,
+                createItem(config.getConfigurationSection("items.upgrades"), core, false));
         holder.inventory.setItem(STATISTICS_SLOT,
                 createItem(config.getConfigurationSection("items.statistics"), core, false));
         holder.inventory.setItem(CELL_FORGE_SLOT, createCellForgeItem(core));
@@ -136,6 +140,7 @@ public final class CoreMenu implements Listener {
         Map<String, String> placeholders = Map.of(
                 "%level%", Integer.toString(core.level()),
                 "%energy%", formatEnergy(core.energy()),
+                "%max_energy%", formatEnergy(CoreRecord.MAX_ENERGY),
                 "%base_energy%", formatEnergy(core.baseEnergy()),
                 "%next_level%", Integer.toString(core.level() + 1),
                 "%cost%", formatEnergy(core.upgradeCost()),
@@ -153,19 +158,30 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createPylonItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.pylon");
-        boolean unlocked = core.level() >= 2;
+        boolean levelUnlocked = core.level() >= 3;
+        boolean hasCapacity = pylonService == null
+                || pylonService.hasPylonCapacity(core.islandIndex(), core.pylonCapacity());
+        boolean unlocked = levelUnlocked && hasCapacity;
+        boolean atLimit = levelUnlocked && !hasCapacity;
         String material = unlocked
                 ? itemConfig.getString("material", "SEA_LANTERN")
                 : itemConfig.getString("locked-material", "BARRIER");
         String displayName = unlocked
                 ? itemConfig.getString("display-name", "&bForjar Pilón I")
-                : itemConfig.getString("locked-name", "&cPilón bloqueado");
-        List<String> lore = itemConfig.getStringList(unlocked ? "lore" : "locked-lore");
+                : atLimit
+                        ? itemConfig.getString("limit-name", "&cLímite de Pilones alcanzado")
+                        : itemConfig.getString("locked-name", "&cPilón bloqueado");
+        List<String> lore = itemConfig.getStringList(unlocked
+                ? "lore"
+                : atLimit ? "limit-lore" : "locked-lore");
         double cost = pylonService == null ? 150.0 : pylonService.purchaseCost();
         Map<String, String> placeholders = Map.of(
                 "%level%", Integer.toString(core.level()),
                 "%cost%", formatEnergy(cost),
-                "%pylons%", Integer.toString(core.pylonCapacity()));
+                "%pylons%", Integer.toString(core.pylonCapacity()),
+                "%owned%", Integer.toString(pylonService == null
+                        ? 0
+                        : pylonService.ownedPylonCount(core.islandIndex())));
         ItemStack item = new ItemStack(Material.matchMaterial(material));
         ItemMeta meta = item.getItemMeta();
         meta.displayName(color(replace(displayName, placeholders)));

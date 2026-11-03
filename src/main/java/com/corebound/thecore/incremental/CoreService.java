@@ -418,11 +418,12 @@ public final class CoreService {
             return;
         }
         long now = System.currentTimeMillis();
+        CoreRecord previous = repository.core(islandIndex);
         CoreRecord updated = repository.registerHit(islandIndex, now, comboWindowMillis);
         if (updated == null) {
             return;
         }
-        double gainedEnergy = updated.baseEnergy() * updated.combo(now, comboWindowMillis);
+        double gainedEnergy = previous == null ? 0.0 : updated.energy() - previous.energy();
         float pitch = 1.0f + Math.min(updated.hits(), 50) / 50.0f;
         entity.getWorld().playSound(entity.getLocation(), hitSound, hitSoundVolume, pitch);
         entity.getWorld().spawnParticle(

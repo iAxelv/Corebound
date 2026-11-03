@@ -22,6 +22,7 @@ public final class PylonRepository {
     private final Object writeLock = new Object();
     private final AtomicLong version = new AtomicLong();
     private final Map<UUID, PylonRecord> pylons = new HashMap<>();
+    private final Map<Long, Integer> pendingItems = new HashMap<>();
 
     public PylonRepository(File file, JavaPlugin plugin) {
         this.file = file;
@@ -44,9 +45,50 @@ public final class PylonRepository {
     }
 
     public synchronized void add(PylonRecord pylon) {
+        add(pylon, false);
+    }
+
+    public synchronized void add(PylonRecord pylon, boolean consumePendingItem) {
         if (pylons.putIfAbsent(pylon.pylonId(), pylon) != null) {
             throw new IllegalStateException("Pylon already registered: " + pylon.pylonId());
         }
+        if (consumePendingItem) {
+            releasePendingItem(pylon.islandIndex());
+        } else {
+            save();
+        }
+    }
+
+    public synchronized boolean reserveItem(long islandIndex, int capacity) {
+        int pending = pendingItems.getOrDefault(islandIndex, 0);
+        long total = pylons.values().stream()
+                .filter(pylon -> pylon.islandIndex() == islandIndex)
+                .count() + pending;
+        if (total >= capacity) {
+            return false;
+        }
+        pendingItems.put(islandIndex, pending + 1);
+        save();
+        return true;
+    }
+
+    public synchronized int pendingItems(long islandIndex) {
+        return pendingItems.getOrDefault(islandIndex, 0);
+    }
+
+    public synchronized boolean canPlaceItem(long islandIndex, int capacity, boolean reservedItem) {
+        long placed = pylons.values().stream()
+                .filter(pylon -> pylon.islandIndex() == islandIndex)
+                .count();
+        int pending = pendingItems.getOrDefault(islandIndex, 0);
+        if (reservedItem) {
+            return pending > 0 && placed + pending <= capacity;
+        }
+        return placed + pending < capacity;
+    }
+
+    public synchronized void reserveReturnedItem(long islandIndex) {
+        pendingItems.merge(islandIndex, 1, Integer::sum);
         save();
     }
 
@@ -66,6 +108,25 @@ public final class PylonRepository {
         return removed;
     }
 
+    public synchronized PylonRecord removeAndReserveItem(UUID pylonId) {
+        PylonRecord removed = pylons.remove(pylonId);
+        if (removed != null) {
+            pendingItems.merge(removed.islandIndex(), 1, Integer::sum);
+            save();
+        }
+        return removed;
+    }
+
+    public synchronized void releasePendingItem(long islandIndex) {
+        int pending = pendingItems.getOrDefault(islandIndex, 0);
+        if (pending <= 1) {
+            pendingItems.remove(islandIndex);
+        } else {
+            pendingItems.put(islandIndex, pending - 1);
+        }
+        save();
+    }
+
     public synchronized void flush() throws IOException {
         writeSnapshot(snapshot(), version.incrementAndGet());
     }
@@ -83,7 +144,7 @@ public final class PylonRepository {
     }
 
     private Snapshot snapshot() {
-        return new Snapshot(List.copyOf(pylons.values()));
+        return new Snapshot(List.copyOf(pylons.values()), Map.copyOf(pendingItems));
     }
 
     private void writeSnapshot(Snapshot snapshot, long snapshotVersion) throws IOException {
@@ -112,6 +173,9 @@ public final class PylonRepository {
                     yaml.set(cellPath + ".tier", cell.getValue().tier());
                 }
             }
+            for (Map.Entry<Long, Integer> pending : snapshot.pendingItems().entrySet()) {
+                yaml.set("pending-items." + pending.getKey(), pending.getValue());
+            }
             Path target = file.toPath();
             Files.createDirectories(target.getParent());
             Path temporary = Files.createTempFile(target.getParent(), "pylons-", ".yml.tmp");
@@ -134,6 +198,15 @@ public final class PylonRepository {
             return;
         }
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection pendingSection = yaml.getConfigurationSection("pending-items");
+        if (pendingSection != null) {
+            for (String islandIndex : pendingSection.getKeys(false)) {
+                int count = pendingSection.getInt(islandIndex);
+                if (count > 0) {
+                    pendingItems.put(Long.parseLong(islandIndex), count);
+                }
+            }
+        }
         ConfigurationSection section = yaml.getConfigurationSection("pylons");
         if (section == null) {
             return;
@@ -176,6 +249,6 @@ public final class PylonRepository {
         }
     }
 
-    private record Snapshot(List<PylonRecord> pylons) {
+    private record Snapshot(List<PylonRecord> pylons, Map<Long, Integer> pendingItems) {
     }
 }

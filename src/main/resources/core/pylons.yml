@@ -19,6 +19,9 @@ pylon:
   tier-upgrade-costs:
     '2': 500.0
     '3': 2000.0
+  tier-required-core-levels:
+    '2': 5
+    '3': 10
   cells:
     refresh-cost: 75.0
     costs:

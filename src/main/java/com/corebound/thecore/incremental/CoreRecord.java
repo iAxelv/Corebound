@@ -15,6 +15,11 @@ public record CoreRecord(
         double energy,
         int hits,
         long lastHitAt) {
+    public static final double MAX_ENERGY = 500.0;
+
+    public CoreRecord {
+        energy = Double.isNaN(energy) ? 0.0 : Math.max(0.0, Math.min(MAX_ENERGY, energy));
+    }
 
     public CoreRecord withHit(long now, long comboWindowMillis) {
         return withHit(now, comboWindowMillis, 1.0);
@@ -24,7 +29,7 @@ public record CoreRecord(
         int currentHits = lastHitAt == 0 || now - lastHitAt > comboWindowMillis ? 0 : hits;
         int updatedHits = Math.min(50, currentHits + 1);
         double updatedCombo = Math.min(3.0, 1.0 + updatedHits * 0.04);
-        double updatedEnergy = energy + baseEnergy() * updatedCombo * yieldRatio;
+        double updatedEnergy = Math.min(MAX_ENERGY, energy + baseEnergy() * updatedCombo * yieldRatio);
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, updatedEnergy, updatedHits, now);
@@ -33,7 +38,7 @@ public record CoreRecord(
     public CoreRecord withPassiveEnergy(double amount) {
         return new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
-                level, energy + amount, hits, lastHitAt);
+                level, Math.min(MAX_ENERGY, energy + amount), hits, lastHitAt);
     }
 
     public CoreRecord withoutCombo() {
@@ -72,7 +77,7 @@ public record CoreRecord(
     }
 
     public double upgradeCost() {
-        return 100.0 * Math.pow(2.0, level - 1);
+        return Math.min(MAX_ENERGY, 100.0 * Math.pow(2.0, level - 1));
     }
 
     public int pylonCapacity() {

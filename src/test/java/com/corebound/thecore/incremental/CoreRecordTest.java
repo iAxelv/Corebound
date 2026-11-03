@@ -72,6 +72,20 @@ class CoreRecordTest {
     }
 
     @Test
+    void capsStoredEnergyAtFiveHundred() {
+        CoreRecord almostFull = createCore(1, 499.5);
+
+        assertEquals(CoreRecord.MAX_ENERGY, almostFull.withHit(1000, COMBO_WINDOW_MILLIS).energy());
+        assertEquals(CoreRecord.MAX_ENERGY, almostFull.withPassiveEnergy(10).energy());
+        assertEquals(CoreRecord.MAX_ENERGY, createCore(1, 700).energy());
+    }
+
+    @Test
+    void keepsCoreUpgradesAffordableWithinTheEnergyCapacity() {
+        assertEquals(CoreRecord.MAX_ENERGY, createCore(10).upgradeCost());
+    }
+
+    @Test
     void pylonCapacityGrowsByOnePerCoreLevelAfterUnlock() {
         assertEquals(0, createCore(1).pylonCapacity());
         assertEquals(1, createCore(2).pylonCapacity());
