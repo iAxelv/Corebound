@@ -39,7 +39,7 @@ public final class CellItem {
                     + "% de crítico &7(x3.5 energía).";
         };
         return List.of(
-                "&7Instalación: &fClic derecho al Pilón",
+                "&7Instalación: &fMayús+clic en la GUI del Pilón",
                 "&7Ranura: &fCélula elemental",
                 improvement,
                 "&8Fusiona dos iguales para subir de tier.");

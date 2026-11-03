@@ -63,6 +63,8 @@ public final class PylonMenu implements Listener {
             CellRecord cell = pylon.equippedCells().get(index);
             if (cell != null) {
                 holder.inventory.setItem(slots[index], CellItem.create(cell, pylons.baseIntervalTicks()));
+            } else {
+                holder.inventory.setItem(slots[index], emptyCellSlotItem());
             }
         }
         holder.inventory.setItem(UPGRADE_SLOT, upgradeItem(pylon));
@@ -138,9 +140,15 @@ public final class PylonMenu implements Listener {
             return;
         }
 
+        PylonRecord pylon = pylons.getPylon(holder.pylonId);
+        if (pylon == null || !pylons.canManagePylon(player, pylon)) {
+            player.closeInventory();
+            return;
+        }
         if (event.getClickedInventory() != event.getView().getTopInventory()) {
             if (event.isShiftClick()) {
                 event.setCancelled(true);
+                equipCellFromInventory(player, event, holder.inventory, pylon);
             } else {
                 fuseInventoryCells(event);
             }
@@ -148,11 +156,6 @@ public final class PylonMenu implements Listener {
         }
 
         event.setCancelled(true);
-        PylonRecord pylon = pylons.getPylon(holder.pylonId);
-        if (pylon == null || !pylons.canManagePylon(player, pylon)) {
-            player.closeInventory();
-            return;
-        }
         if (rawSlot == UPGRADE_SLOT) {
             pylons.upgradePylon(player, holder.pylonId);
             PylonRecord updated = pylons.getPylon(holder.pylonId);
@@ -163,7 +166,7 @@ public final class PylonMenu implements Listener {
         }
         int cellIndex = cellIndexAt(rawSlot, pylon);
         if (cellIndex >= 0) {
-            moveCell(player, event, holder.pylonId, cellIndex);
+            withdrawCell(player, holder.inventory, pylon, cellIndex);
         }
     }
 
@@ -174,36 +177,66 @@ public final class PylonMenu implements Listener {
         }
     }
 
-    private void moveCell(Player player, InventoryClickEvent event, UUID pylonId, int cellIndex) {
-        ItemStack cursor = event.getCursor();
-        ItemStack current = event.getCurrentItem();
-        if (event.getClick().isShiftClick()
-                || (event.getClick() != org.bukkit.event.inventory.ClickType.LEFT
-                        && event.getClick() != org.bukkit.event.inventory.ClickType.RIGHT)) {
+    private void equipCellFromInventory(
+            Player player, InventoryClickEvent event, Inventory menu, PylonRecord pylon) {
+        ItemStack item = event.getCurrentItem();
+        CellRecord cell = CellItem.read(item);
+        if (cell == null || item.getAmount() != 1) {
             return;
         }
-        CellRecord cursorCell = CellItem.read(cursor);
-        CellRecord currentCell = CellItem.read(current);
-        if (cursor == null || cursor.getType().isAir()) {
-            if (currentCell != null) {
-                player.setItemOnCursor(current.clone());
-                event.getClickedInventory().setItem(event.getSlot(), null);
-                pylons.setEquippedCell(pylonId, cellIndex, null);
-            }
+        int cellIndex = firstEmptyCellSlot(pylon);
+        if (cellIndex < 0) {
             return;
         }
-        if (cursorCell == null || cursor.getAmount() != 1) {
-            messages.send(player, "cell-slot-only-cells");
-            return;
-        }
-        if (current != null && !current.getType().isAir() && currentCell == null) {
-            messages.send(player, "cell-slot-only-cells");
-            return;
-        }
-        player.setItemOnCursor(currentCell == null ? null : current.clone());
-        event.getClickedInventory().setItem(event.getSlot(), cursor.clone());
-        pylons.setEquippedCell(pylonId, cellIndex, cursorCell);
+        int[] slots = pylonCellSlots(pylon.maxSlots());
+        int menuSlot = slots[cellIndex];
+        pylons.setEquippedCell(pylon.pylonId(), cellIndex, cell);
+        event.getClickedInventory().setItem(event.getSlot(), null);
+        menu.setItem(menuSlot, CellItem.create(cell, pylons.baseIntervalTicks()));
         player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
+    }
+
+    private void withdrawCell(Player player, Inventory menu, PylonRecord pylon, int cellIndex) {
+        CellRecord cell = pylon.equippedCells().get(cellIndex);
+        if (cell == null) {
+            return;
+        }
+        if (player.getInventory().firstEmpty() == -1) {
+            messages.send(player, "pylon-cell-inventory-full");
+            return;
+        }
+        pylons.setEquippedCell(pylon.pylonId(), cellIndex, null);
+        ItemStack cellItem = CellItem.create(cell, pylons.baseIntervalTicks());
+        if (!player.getInventory().addItem(cellItem).isEmpty()) {
+            pylons.setEquippedCell(pylon.pylonId(), cellIndex, cell);
+            messages.send(player, "pylon-cell-inventory-full");
+            return;
+        }
+        menu.setItem(pylonCellSlots(pylon.maxSlots())[cellIndex], null);
+        player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
+    }
+
+    private int firstEmptyCellSlot(PylonRecord pylon) {
+        for (int slot = 0; slot < pylon.maxSlots(); slot++) {
+            if (!pylon.equippedCells().containsKey(slot)) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    private ItemStack emptyCellSlotItem() {
+        ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(messages.parseComponent("&bRanura de célula"));
+        meta.lore(List.of(
+                messages.parseComponent("&7Mayús+clic en una célula de tu inventario"),
+                messages.parseComponent("&7para instalarla."),
+                Component.empty(),
+                messages.parseComponent("&7Haz clic en una célula instalada"),
+                messages.parseComponent("&7para devolverla a tu inventario.")));
+        item.setItemMeta(meta);
+        return item;
     }
 
     private void fuseInventoryCells(InventoryClickEvent event) {

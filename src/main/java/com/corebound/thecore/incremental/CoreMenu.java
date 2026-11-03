@@ -110,7 +110,9 @@ public final class CoreMenu implements Listener {
                 || !(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        if (event.getRawSlot() == PYLON_SLOT && pylonService != null) {
+        if (event.getRawSlot() == UPGRADES_SLOT) {
+            coreService.openCoreUpgrades(player, holder.islandIndex);
+        } else if (event.getRawSlot() == PYLON_SLOT && pylonService != null) {
             pylonService.buy(player, holder.islandIndex);
             coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == CELL_FORGE_SLOT && pylonService != null) {
@@ -140,8 +142,9 @@ public final class CoreMenu implements Listener {
         Map<String, String> placeholders = Map.of(
                 "%level%", Integer.toString(core.level()),
                 "%energy%", formatEnergy(core.energy()),
-                "%max_energy%", formatEnergy(CoreRecord.MAX_ENERGY),
+                "%max_energy%", formatEnergy(core.maxEnergy()),
                 "%base_energy%", formatEnergy(core.baseEnergy()),
+                "%max_combo%", String.format(java.util.Locale.ROOT, "%.1f", core.maxCombo()),
                 "%next_level%", Integer.toString(core.level() + 1),
                 "%cost%", formatEnergy(core.upgradeCost()),
                 "%next_base%", formatEnergy(Math.pow(1.25, core.level())));

@@ -36,6 +36,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("is/is_perms.yml");
         saveResourceIfMissing("core/core.yml");
         saveResourceIfMissing("core/core_menu.yml");
+        saveResourceIfMissing("core/core_upgrades.yml");
         saveResourceIfMissing("core/pylons.yml");
 
         try {
@@ -104,6 +105,7 @@ public final class TheCorePlugin extends JavaPlugin {
                 new CorePlaceListener(this, coreService, pylonService), this);
         getServer().getPluginManager().registerEvents(pylonService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.menuListener(), this);
+        getServer().getPluginManager().registerEvents(coreService.upgradesMenuListener(), this);
         getServer().getPluginManager().registerEvents(menus, this);
         coreService.initializeLoadedEntities();
         pylonService.initializeLoadedEntities();

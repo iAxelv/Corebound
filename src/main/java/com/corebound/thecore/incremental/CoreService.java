@@ -60,6 +60,7 @@ public final class CoreService {
     private final Set<UUID> rotatingDisplays = ConcurrentHashMap.newKeySet();
     private final Map<UUID, DisplayAnimation> displayAnimations = new ConcurrentHashMap<>();
     private final CoreMenu coreMenu;
+    private final CoreUpgradesMenu coreUpgradesMenu;
 
     private static final class DisplayAnimation {
         private float yaw;
@@ -127,6 +128,11 @@ public final class CoreService {
                 messages,
                 this,
                 new File(plugin.getDataFolder(), "core/core_menu.yml"));
+        coreUpgradesMenu = new CoreUpgradesMenu(
+                plugin,
+                messages,
+                this,
+                new File(plugin.getDataFolder(), "core/core_upgrades.yml"));
     }
 
     public void onIslandCreated(IslandCreatedEvent event) {
@@ -195,6 +201,10 @@ public final class CoreService {
         return coreMenu;
     }
 
+    public CoreUpgradesMenu upgradesMenuListener() {
+        return coreUpgradesMenu;
+    }
+
     public void attachPylonService(PylonService pylonService) {
         coreMenu.attachPylonService(pylonService);
     }
@@ -212,6 +222,48 @@ public final class CoreService {
         if (core != null) {
             coreMenu.open(player, core);
         }
+    }
+
+    public void openCoreUpgrades(Player player, long islandIndex) {
+        coreUpgradesMenu.open(player, islandIndex);
+    }
+
+    public CoreRecord getCoreForMenu(Player player, long islandIndex) {
+        return coreForPlayer(player, islandIndex);
+    }
+
+    public boolean upgradeEnhancement(
+            Player player,
+            long islandIndex,
+            CoreEnhancement enhancement,
+            double cost,
+            int maxLevel) {
+        CoreRecord current = coreForPlayer(player, islandIndex);
+        if (current == null) {
+            return false;
+        }
+        if (current.enhancementLevel(enhancement) >= maxLevel) {
+            messages.send(player, "core-enhancement-max-level");
+            return false;
+        }
+        CoreRecord upgraded = repository.upgradeEnhancement(islandIndex, enhancement, cost, maxLevel);
+        if (upgraded == null) {
+            messages.send(player, "core-enhancement-insufficient-energy");
+            return false;
+        }
+        updateCoreVisuals(upgraded, System.currentTimeMillis());
+        if (upgraded.hits() > 0) {
+            org.bukkit.World world = plugin.getServer().getWorld(upgraded.worldId());
+            org.bukkit.entity.Entity entity = world == null ? null : world.getEntity(upgraded.interactionId());
+            if (entity != null) {
+                scheduleComboExpiration(entity, upgraded);
+            }
+        }
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_CHIME, 1.0f, 1.5f);
+        messages.send(player, "core-enhancement-upgraded", Map.of(
+                "level", Integer.toString(upgraded.enhancementLevel(enhancement)),
+                "cost", formatEnergy(cost)));
+        return true;
     }
 
     public boolean upgradeCore(Player player, long islandIndex) {
@@ -270,7 +322,16 @@ public final class CoreService {
         }
 
         ItemStack coreItem = CoreItem.create(
-                config, messages, coreItemKey, removed.level(), removed.energy(), removed.hits(), removed.lastHitAt());
+                config,
+                messages,
+                coreItemKey,
+                removed.level(),
+                removed.energy(),
+                removed.hits(),
+                removed.lastHitAt(),
+                removed.upgradeOvercharge(),
+                removed.upgradeWindow(),
+                removed.upgradeStorage());
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
@@ -381,7 +442,10 @@ public final class CoreService {
                     progress.level(),
                     progress.energy(),
                     progress.hits(),
-                    progress.lastHitAt()));
+                    progress.lastHitAt(),
+                    progress.upgradeOvercharge(),
+                    progress.upgradeWindow(),
+                    progress.upgradeStorage()));
         } catch (RuntimeException exception) {
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);
@@ -419,24 +483,43 @@ public final class CoreService {
         }
         long now = System.currentTimeMillis();
         CoreRecord previous = repository.core(islandIndex);
-        CoreRecord updated = repository.registerHit(islandIndex, now, comboWindowMillis);
+        long activeComboWindow = previous == null ? comboWindowMillis : previous.comboWindowMillis(comboWindowMillis);
+        CoreRecord updated = repository.registerHit(islandIndex, now, activeComboWindow);
         if (updated == null) {
             return;
         }
         double gainedEnergy = previous == null ? 0.0 : updated.energy() - previous.energy();
-        float pitch = 1.0f + Math.min(updated.hits(), 50) / 50.0f;
+        float pitch = 1.0f + Math.min(updated.hits(), updated.maxComboHits())
+                / (float) updated.maxComboHits();
         entity.getWorld().playSound(entity.getLocation(), hitSound, hitSoundVolume, pitch);
         entity.getWorld().spawnParticle(
                 Particle.WAX_OFF, entity.getLocation().add(0, 0.65, 0), 8, 0.2, 0.2, 0.2, 0.05);
-        if (updated.hits() >= 50) {
+        if (updated.hits() >= updated.maxComboHits()) {
             entity.getWorld().spawnParticle(
                     Particle.ELECTRIC_SPARK, entity.getLocation().add(0, 0.65, 0), 24, 0.35, 0.35, 0.35, 0.1);
         }
         sendHitActionBar(player, updated, gainedEnergy, now);
         updateCoreVisuals(updated, now);
-        long delayTicks = Math.max(1L, (comboWindowMillis + 49L) / 50L);
+        scheduleComboExpiration(entity, updated);
+    }
+
+    private void scheduleComboExpiration(org.bukkit.entity.Entity entity, CoreRecord core) {
+        long activeWindow = core.comboWindowMillis(comboWindowMillis);
+        long elapsed = Math.max(0L, System.currentTimeMillis() - core.lastHitAt());
+        long remaining = Math.max(1L, activeWindow - elapsed);
+        long delayTicks = Math.max(1L, (remaining + 49L) / 50L);
         entity.getScheduler().runDelayed(plugin, task -> {
-            CoreRecord expired = repository.expireCombo(islandIndex, updated.lastHitAt());
+            CoreRecord current = repository.core(core.islandIndex());
+            if (current == null || current.lastHitAt() != core.lastHitAt() || current.hits() == 0) {
+                return;
+            }
+            long currentRemaining = current.comboWindowMillis(comboWindowMillis)
+                    - Math.max(0L, System.currentTimeMillis() - current.lastHitAt());
+            if (currentRemaining > 0) {
+                scheduleComboExpiration(entity, current);
+                return;
+            }
+            CoreRecord expired = repository.expireCombo(core.islandIndex(), core.lastHitAt());
             if (expired != null) {
                 updateCoreVisuals(expired, System.currentTimeMillis());
             }
@@ -461,11 +544,17 @@ public final class CoreService {
     }
 
     private void sendHitActionBar(Player player, CoreRecord core, double gainedEnergy, long now) {
-        int filledSegments = (int) Math.round(Math.min(core.hits(), 50) / 50.0 * 10);
+        int filledSegments = (int) Math.round(Math.min(core.hits(), core.maxComboHits())
+                / (double) core.maxComboHits() * 10);
         String bar = "&a" + "|".repeat(filledSegments)
                 + "&8" + ".".repeat(10 - filledSegments);
-        String actionBar = "&6+" + formatEnergy(gainedEnergy) + "⚡"
-                + " &8| &bCombo x" + String.format(Locale.ROOT, "%.2f", core.combo(now, comboWindowMillis))
+        String energyFeedback = core.energy() >= core.maxEnergy()
+                ? "&cTanque lleno &7(" + formatEnergy(core.energy()) + "/" +
+                        formatEnergy(core.maxEnergy()) + "⚡)"
+                : "&6+" + formatEnergy(gainedEnergy) + "⚡";
+        String actionBar = energyFeedback
+                + " &8| &bCombo x" + String.format(
+                        Locale.ROOT, "%.2f", core.combo(now, core.comboWindowMillis(comboWindowMillis)))
                 + " &7[" + bar + "&7]";
         player.sendActionBar(messages.parseComponent(actionBar));
     }
@@ -509,10 +598,11 @@ public final class CoreService {
         }
         Location coreLocation = new Location(world, core.x(), core.y(), core.z());
         plugin.getServer().getRegionScheduler().run(plugin, coreLocation, task -> {
-            int activeHits = core.lastHitAt() != 0 && now - core.lastHitAt() <= comboWindowMillis
-                    ? Math.min(core.hits(), 50)
+            long activeComboWindow = core.comboWindowMillis(comboWindowMillis);
+            int activeHits = core.lastHitAt() != 0 && now - core.lastHitAt() <= activeComboWindow
+                    ? Math.min(core.hits(), core.maxComboHits())
                     : 0;
-            float comboScale = displayScale * (1.0f + (activeHits / 50.0f) * 0.35f);
+            float comboScale = displayScale * (1.0f + (activeHits / (float) core.maxComboHits()) * 0.35f);
             org.bukkit.entity.Entity itemEntity = world.getEntity(core.itemDisplayId());
             if (itemEntity instanceof ItemDisplay itemDisplay) {
                 startRotation(itemDisplay);
@@ -549,9 +639,14 @@ public final class CoreService {
                         .replace("%level%", Integer.toString(core.level()))
                         .replace("%base_energy%", formatEnergy(core.baseEnergy()))
                         .replace("%energy%", formatEnergy(core.energy()))
-                        .replace("%combo%", String.format(Locale.ROOT, "%.2f", core.combo(now, comboWindowMillis)))
+                        .replace("%combo%", String.format(
+                                Locale.ROOT,
+                                "%.2f",
+                                core.combo(now, core.comboWindowMillis(comboWindowMillis))))
                         .replace("%hits%", Integer.toString(
-                                now - core.lastHitAt() > comboWindowMillis ? 0 : core.hits()));
+                                now - core.lastHitAt() > core.comboWindowMillis(comboWindowMillis)
+                                        ? 0
+                                        : core.hits()));
                 lines.add(messages.parseComponent(rendered));
             }
             Component text = Component.empty();

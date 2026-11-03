@@ -29,6 +29,20 @@ public final class CoreItem {
             double energy,
             int hits,
             long lastHitAt) {
+        return create(config, messages, itemKey, level, energy, hits, lastHitAt, 0, 0, 0);
+    }
+
+    public static ItemStack create(
+            YamlConfiguration config,
+            Messages messages,
+            NamespacedKey itemKey,
+            int level,
+            double energy,
+            int hits,
+            long lastHitAt,
+            int upgradeOvercharge,
+            int upgradeWindow,
+            int upgradeStorage) {
         Material material = Material.matchMaterial(config.getString("item.material", "NETHERITE_BLOCK"));
         if (material == null || !material.isItem() || !material.isBlock()) {
             throw new IllegalArgumentException("core.yml item.material must be a valid block item.");
@@ -49,6 +63,9 @@ public final class CoreItem {
         meta.getPersistentDataContainer().set(energyKey(itemKey), PersistentDataType.DOUBLE, energy);
         meta.getPersistentDataContainer().set(hitsKey(itemKey), PersistentDataType.INTEGER, hits);
         meta.getPersistentDataContainer().set(lastHitKey(itemKey), PersistentDataType.LONG, lastHitAt);
+        meta.getPersistentDataContainer().set(overchargeKey(itemKey), PersistentDataType.INTEGER, upgradeOvercharge);
+        meta.getPersistentDataContainer().set(windowKey(itemKey), PersistentDataType.INTEGER, upgradeWindow);
+        meta.getPersistentDataContainer().set(storageKey(itemKey), PersistentDataType.INTEGER, upgradeStorage);
         item.setItemMeta(meta);
         return item;
     }
@@ -63,7 +80,13 @@ public final class CoreItem {
                 meta.getPersistentDataContainer().getOrDefault(
                         hitsKey(itemKey), PersistentDataType.INTEGER, 0),
                 meta.getPersistentDataContainer().getOrDefault(
-                        lastHitKey(itemKey), PersistentDataType.LONG, 0L));
+                        lastHitKey(itemKey), PersistentDataType.LONG, 0L),
+                meta.getPersistentDataContainer().getOrDefault(
+                        overchargeKey(itemKey), PersistentDataType.INTEGER, 0),
+                meta.getPersistentDataContainer().getOrDefault(
+                        windowKey(itemKey), PersistentDataType.INTEGER, 0),
+                meta.getPersistentDataContainer().getOrDefault(
+                        storageKey(itemKey), PersistentDataType.INTEGER, 0));
     }
 
     private static NamespacedKey levelKey(NamespacedKey itemKey) {
@@ -82,6 +105,18 @@ public final class CoreItem {
         return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_last_hit");
     }
 
+    private static NamespacedKey overchargeKey(NamespacedKey itemKey) {
+        return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_upgrade_overcharge");
+    }
+
+    private static NamespacedKey windowKey(NamespacedKey itemKey) {
+        return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_upgrade_window");
+    }
+
+    private static NamespacedKey storageKey(NamespacedKey itemKey) {
+        return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_upgrade_storage");
+    }
+
     private static String replaceStats(String text, int level, double baseEnergy) {
         return text
                 .replace("%level%", Integer.toString(level))
@@ -97,6 +132,13 @@ public final class CoreItem {
         return marker != null && marker == (byte) 1;
     }
 
-    public record Progress(int level, double energy, int hits, long lastHitAt) {
+    public record Progress(
+            int level,
+            double energy,
+            int hits,
+            long lastHitAt,
+            int upgradeOvercharge,
+            int upgradeWindow,
+            int upgradeStorage) {
     }
 }

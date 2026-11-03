@@ -72,17 +72,70 @@ class CoreRecordTest {
     }
 
     @Test
-    void capsStoredEnergyAtFiveHundred() {
-        CoreRecord almostFull = createCore(1, 499.5);
+    void growsEnergyCapacityWithLevelAndStorageUpgrades() {
+        CoreRecord base = createCore(1, 499.5);
+        CoreRecord upgraded = new CoreRecord(
+                base.islandIndex(),
+                base.worldId(),
+                base.x(),
+                base.y(),
+                base.z(),
+                base.itemDisplayId(),
+                base.interactionId(),
+                base.textDisplayId(),
+                base.level(),
+                499.5,
+                base.hits(),
+                base.lastHitAt(),
+                0,
+                0,
+                1);
 
-        assertEquals(CoreRecord.MAX_ENERGY, almostFull.withHit(1000, COMBO_WINDOW_MILLIS).energy());
-        assertEquals(CoreRecord.MAX_ENERGY, almostFull.withPassiveEnergy(10).energy());
-        assertEquals(CoreRecord.MAX_ENERGY, createCore(1, 700).energy());
+        assertEquals(500.0, base.maxEnergy(), 0.0001);
+        assertEquals(750.0, upgraded.maxEnergy(), 0.0001);
+        assertEquals(500.0, base.withHit(1000, COMBO_WINDOW_MILLIS).energy(), 0.0001);
+        assertEquals(500.0, base.withPassiveEnergy(10).energy(), 0.0001);
+        assertEquals(500.0, createCore(1, 700).energy(), 0.0001);
     }
 
     @Test
-    void keepsCoreUpgradesAffordableWithinTheEnergyCapacity() {
-        assertEquals(CoreRecord.MAX_ENERGY, createCore(10).upgradeCost());
+    void enhancementLevelsIncreaseComboWindowAndCapacity() {
+        CoreRecord enhanced = new CoreRecord(
+                1,
+                UUID.randomUUID(),
+                0,
+                64,
+                0,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                1,
+                500,
+                50,
+                1000,
+                2,
+                3,
+                1);
+
+        assertEquals(4.0, enhanced.maxCombo(), 0.0001);
+        assertEquals(75, enhanced.maxComboHits());
+        assertEquals(4500, enhanced.comboWindowMillis(3000));
+        assertEquals(750, enhanced.maxEnergy(), 0.0001);
+        assertEquals(100.0, createCore(1).upgradeCost(), 0.0001);
+    }
+
+    @Test
+    void enhancementUpgradeSpendsEnergyAndPreservesItsLevel() {
+        CoreRecord core = createCore(1, 500.0);
+        CoreRecord enhanced = core.upgradeEnhancement(CoreEnhancement.STORAGE, 300.0, 5);
+        CoreRecord spent = enhanced.spendEnergy(100.0);
+
+        assertEquals(200.0, enhanced.energy(), 0.0001);
+        assertEquals(1, enhanced.upgradeStorage());
+        assertEquals(750.0, enhanced.maxEnergy(), 0.0001);
+        assertEquals(100.0, spent.energy(), 0.0001);
+        assertEquals(1, spent.upgradeStorage());
+        assertNull(enhanced.upgradeEnhancement(CoreEnhancement.STORAGE, 200.0, 1));
     }
 
     @Test

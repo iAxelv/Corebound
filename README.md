@@ -61,8 +61,11 @@ weather and time are refreshed only on island entry or settings changes.
   Level 3 unlocks purchasable extraction pylons with persistent, periodic
   energy pulses. Pylons require Core level 5 for Tier II and level 10 for Tier
   III by default, configurable in `plugins/Corebound/core/pylons.yml`. Core
-  energy is capped at 500 for now, and the Core's pylon capacity applies to
-  both placed pylons and forged items awaiting placement. Pylons can be fitted with up to three
+  energy capacity starts at 500 and scales with Core level and Storage upgrades.
+  The Upgrades menu improves manual combo ceiling, combo duration, or storage
+  capacity; those levels persist when the Core is picked up and placed again.
+  The Core's pylon capacity applies to both placed pylons and forged items
+  awaiting placement. Pylons can be fitted with up to three
   elemental cells, and recovered with their tier and cells intact. The
   Core's level-3 Elemental Forge offers three random Fire, Lightning, or Void
   cells (duplicates are possible); each offer can be purchased once, and the

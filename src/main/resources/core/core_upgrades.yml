@@ -1,0 +1,46 @@
+title: "&5Mejoras del Núcleo"
+rows: 3
+items:
+  overcharge:
+    material: LIGHTNING_ROD
+    slot: 11
+    display-name: "&eSobrevoltaje &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Aumenta el límite de combo manual."
+      - "&7Multiplicador máximo: &b+0.5x"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 250.0
+    cost-multiplier: 2.0
+    max-level: 5
+  window:
+    material: CLOCK
+    slot: 13
+    display-name: "&bVentana Resonante &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Extiende la duración del combo activo."
+      - "&7Tiempo adicional: &e+0.5s"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 200.0
+    cost-multiplier: 1.8
+    max-level: 5
+  storage:
+    material: HOPPER
+    slot: 15
+    display-name: "&dCondensadores de Vacío &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Expande la capacidad máxima de almacenamiento."
+      - "&7Capacidad extra: &a+50%"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 300.0
+    cost-multiplier: 2.5
+    max-level: 5
+  back:
+    material: ARROW
+    slot: 22
+    display-name: "&cVolver al Menú Principal"

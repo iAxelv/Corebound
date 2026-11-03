@@ -86,6 +86,20 @@ public final class CoreRepository {
         return updated;
     }
 
+    public synchronized CoreRecord upgradeEnhancement(
+            long islandIndex, CoreEnhancement enhancement, double cost, int maxLevel) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null) {
+            return null;
+        }
+        CoreRecord updated = current.upgradeEnhancement(enhancement, cost, maxLevel);
+        if (updated != null) {
+            cores.put(islandIndex, updated);
+            save();
+        }
+        return updated;
+    }
+
     public synchronized void restoreEnergy(long islandIndex, double amount) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null || !Double.isFinite(amount) || amount <= 0) {
@@ -101,9 +115,12 @@ public final class CoreRepository {
                 current.interactionId(),
                 current.textDisplayId(),
                 current.level(),
-                Math.min(CoreRecord.MAX_ENERGY, current.energy() + amount),
+                Math.min(current.maxEnergy(), current.energy() + amount),
                 current.hits(),
-                current.lastHitAt()));
+                current.lastHitAt(),
+                current.upgradeOvercharge(),
+                current.upgradeWindow(),
+                current.upgradeStorage()));
         save();
     }
 
@@ -200,6 +217,9 @@ public final class CoreRepository {
                 yaml.set(path + ".energy", core.energy());
                 yaml.set(path + ".hits", core.hits());
                 yaml.set(path + ".last-hit-at", core.lastHitAt());
+                yaml.set(path + ".upgrade-overcharge", core.upgradeOvercharge());
+                yaml.set(path + ".upgrade-window", core.upgradeWindow());
+                yaml.set(path + ".upgrade-storage", core.upgradeStorage());
             }
             yaml.set("pending-items", snapshot.pendingItems().stream().map(UUID::toString).toList());
             Path target = file.toPath();
@@ -244,7 +264,10 @@ public final class CoreRepository {
                         core.getInt("level", 1),
                         core.getDouble("energy", 0.0),
                         core.getInt("hits", 0),
-                        core.getLong("last-hit-at", 0L)));
+                        core.getLong("last-hit-at", 0L),
+                        core.getInt("upgrade-overcharge", 0),
+                        core.getInt("upgrade-window", 0),
+                        core.getInt("upgrade-storage", 0)));
             }
         }
         for (String playerId : yaml.getStringList("pending-items")) {
