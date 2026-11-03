@@ -69,6 +69,7 @@ public final class CoreService {
     private final CoreUpgradesMenu coreUpgradesMenu;
     private final AstralTreeMenu astralTreeMenu;
     private PylonService pylonService;
+    private CondenserService condenserService;
 
     private static final class DisplayAnimation {
         private float yaw;
@@ -264,6 +265,7 @@ public final class CoreService {
     }
 
     public void attachCondenserService(CondenserService condenserService) {
+        this.condenserService = condenserService;
         coreMenu.attachCondenserService(condenserService);
     }
 
@@ -388,6 +390,9 @@ public final class CoreService {
             return false;
         }
         if (pylonService != null && !pylonService.destroyPylons(player, islandIndex)) {
+            return false;
+        }
+        if (condenserService != null && !condenserService.destroyForFracture(player, islandIndex)) {
             return false;
         }
         CoreRecord fractured = repository.fractureCore(islandIndex);

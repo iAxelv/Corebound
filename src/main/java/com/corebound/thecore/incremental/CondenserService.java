@@ -77,6 +77,7 @@ public final class CondenserService implements Listener {
     private final Map<UUID, ScheduledTask> visualTasks = new ConcurrentHashMap<>();
     private final Set<UUID> rangeGuidePlayers = ConcurrentHashMap.newKeySet();
     private final CondenserMenu menu;
+    private final CondenserRuneMenu runeMenu;
     private YamlConfiguration config;
     private Material itemMaterial;
     private double displayScale;
@@ -89,6 +90,8 @@ public final class CondenserService implements Listener {
     private double oreChance;
     private double baseEnergyCost;
     private double energyCostPerLevel;
+    private int minimumCoreLevel;
+    private int pickupLockCoreLevel;
 
     public CondenserService(
             TheCorePlugin plugin,
@@ -116,6 +119,7 @@ public final class CondenserService implements Listener {
         entityIdKey = new NamespacedKey(plugin, "condenser_id");
         applyConfiguration(loadConfiguration(true));
         menu = new CondenserMenu(messages, this);
+        runeMenu = new CondenserRuneMenu(messages, this, pylons);
     }
 
     public void reloadConfiguration() {
@@ -149,22 +153,35 @@ public final class CondenserService implements Listener {
         double loadedPurchaseCost = loaded.getDouble("condenser.purchase-cost", 500.0);
         double loadedUpgradeBaseCost = loaded.getDouble("condenser.upgrade.base-cost", 500.0);
         double loadedUpgradeMultiplier = loaded.getDouble("condenser.upgrade.cost-multiplier", 1.8);
-        int loadedMaximumLevel = loaded.getInt("condenser.max-level", ORES.size() - 1);
+        int loadedMaximumLevel = loaded.getInt("condenser.max-level", ORES.size());
+        if (loadedMaximumLevel == ORES.size() - 1) {
+            loadedMaximumLevel = ORES.size();
+            loaded.set("condenser.max-level", loadedMaximumLevel);
+            try {
+                loaded.save(configFile);
+            } catch (IOException exception) {
+                throw new IllegalArgumentException("Could not migrate condenser.yml to unlock all ores.", exception);
+            }
+        }
         double loadedOreChance = loaded.getDouble("condenser.generation.ore-chance", 0.10);
         double loadedBaseEnergyCost = loaded.getDouble("condenser.generation.energy-cost", 1.0);
         double loadedEnergyCostPerLevel = loaded.getDouble("condenser.generation.energy-cost-per-level", 0.5);
+        int loadedMinimumCoreLevel = loaded.getInt("condenser.minimum-core-level", 3);
+        int loadedPickupLockCoreLevel = loaded.getInt("condenser.pickup-lock-core-level", 10);
         if (!Double.isFinite(loadedScale) || loadedScale <= 0
                 || !Double.isFinite(loadedHeightOffset) || loadedHeightOffset < 1 || loadedHeightOffset >= 2
                 || loadedRotationSpeedTicks <= 0 || !Double.isFinite(loadedPurchaseCost)
                 || loadedPurchaseCost <= 0 || !Double.isFinite(loadedUpgradeBaseCost) || loadedUpgradeBaseCost <= 0
                 || !Double.isFinite(loadedUpgradeMultiplier) || loadedUpgradeMultiplier <= 1
-                || loadedMaximumLevel < 0 || loadedMaximumLevel >= ORES.size()
+                || loadedMaximumLevel < 0 || loadedMaximumLevel > ORES.size()
                 || !Double.isFinite(loadedOreChance) || loadedOreChance < 0 || loadedOreChance > 1
                 || !Double.isFinite(loadedBaseEnergyCost) || loadedBaseEnergyCost <= 0
-                || !Double.isFinite(loadedEnergyCostPerLevel) || loadedEnergyCostPerLevel < 0) {
+                || !Double.isFinite(loadedEnergyCostPerLevel) || loadedEnergyCostPerLevel < 0
+                || loadedMinimumCoreLevel < 1 || loadedPickupLockCoreLevel < 1) {
             throw new IllegalArgumentException("condenser.yml contains invalid cost, level, or generation settings.");
         }
-        if (repository.all().stream().anyMatch(condenser -> condenser.level() > loadedMaximumLevel)) {
+        int configuredMaximumLevel = loadedMaximumLevel;
+        if (repository.all().stream().anyMatch(condenser -> condenser.level() > configuredMaximumLevel)) {
             throw new IllegalArgumentException(
                     "condenser.yml max-level cannot be lower than an existing condenser level.");
         }
@@ -180,6 +197,8 @@ public final class CondenserService implements Listener {
         oreChance = loadedOreChance;
         baseEnergyCost = loadedBaseEnergyCost;
         energyCostPerLevel = loadedEnergyCostPerLevel;
+        minimumCoreLevel = loadedMinimumCoreLevel;
+        pickupLockCoreLevel = loadedPickupLockCoreLevel;
     }
 
     private Material configuredMaterial(YamlConfiguration loaded, String path, String fallback, boolean item) {
@@ -195,12 +214,12 @@ public final class CondenserService implements Listener {
         return menu;
     }
 
-    public double purchaseCost() {
-        return purchaseCost;
+    public CondenserRuneMenu runeMenuListener() {
+        return runeMenu;
     }
 
-    public boolean hasCondenser(long islandIndex) {
-        return repository.get(islandIndex) != null || repository.hasPendingItem(islandIndex);
+    public double purchaseCost() {
+        return purchaseCost;
     }
 
     public boolean isCondenserItem(ItemStack item) {
@@ -224,6 +243,11 @@ public final class CondenserService implements Listener {
         CoreRecord core = coreRepository.core(islandIndex);
         if (core == null) {
             messages.send(player, "core-already-placed");
+            return false;
+        }
+        if (core.level() < minimumCoreLevel) {
+            messages.send(player, "condenser-core-level-required", Map.of(
+                    "level", Integer.toString(minimumCoreLevel)));
             return false;
         }
         UUID itemId = repository.reserveItem(islandIndex);
@@ -294,6 +318,11 @@ public final class CondenserService implements Listener {
         CoreRecord core = coreRepository.core(island.index());
         if (core == null) {
             messages.send(player, "core-already-placed");
+            return false;
+        }
+        if (core.level() < minimumCoreLevel) {
+            messages.send(player, "condenser-core-level-required", Map.of(
+                    "level", Integer.toString(minimumCoreLevel)));
             return false;
         }
         ItemStack heldItem = player.getInventory().getItemInMainHand();
@@ -373,7 +402,9 @@ public final class CondenserService implements Listener {
                     interaction.getUniqueId(),
                     textDisplay.getUniqueId(),
                     level,
-                    state);
+                    state,
+                    1,
+                    Map.of());
             repository.add(condenser, itemId);
             refreshVisuals(condenser);
             consumeHeldItem(player, heldItem);
@@ -500,7 +531,7 @@ public final class CondenserService implements Listener {
             }
             if (condenser.state() == CondenserState.IDLE) {
                 CoreRecord core = coreRepository.core(condenser.islandIndex());
-                if (core != null && core.energy() >= energyCost(condenser.level())) {
+                if (core != null && core.energy() >= energyCost(condenser)) {
                     CondenserRecord active = condenser.withState(CondenserState.ACTIVE);
                     repository.update(active);
                     refreshVisuals(active);
@@ -528,7 +559,7 @@ public final class CondenserService implements Listener {
             return;
         }
         CoreRecord chargedCore = coreRepository.spendEnergy(
-                island.index(), energyCost(condenser.level()));
+                island.index(), energyCost(condenser));
         if (chargedCore == null) {
             CondenserRecord idle = condenser.withState(CondenserState.IDLE);
             repository.update(idle);
@@ -536,8 +567,9 @@ public final class CondenserService implements Listener {
             return;
         }
         coreService.refreshCore(chargedCore, System.currentTimeMillis());
-        if (ThreadLocalRandom.current().nextDouble() < oreChance) {
-            int availableOreCount = Math.min(condenser.level() + 1, ORES.size());
+        double effectiveOreChance = mineralChance(condenser);
+        if (condenser.level() > 0 && ThreadLocalRandom.current().nextDouble() < effectiveOreChance) {
+            int availableOreCount = Math.min(condenser.level(), ORES.size());
             event.getNewState().setType(ORES.get(ThreadLocalRandom.current().nextInt(availableOreCount)));
         }
     }
@@ -551,6 +583,20 @@ public final class CondenserService implements Listener {
         return true;
     }
 
+    public void openMenu(Player player, UUID condenserId) {
+        CondenserRecord condenser = repository.getById(condenserId);
+        if (condenser != null && canManage(player, condenser)) {
+            menu.open(player, condenser);
+        }
+    }
+
+    public void openRuneMenu(Player player, UUID condenserId) {
+        CondenserRecord condenser = repository.getById(condenserId);
+        if (condenser != null && canManage(player, condenser)) {
+            runeMenu.open(player, condenser);
+        }
+    }
+
     public boolean pickup(Player player, Entity entity) {
         CondenserRecord condenser = condenserFrom(entity);
         if (condenser == null) {
@@ -562,6 +608,11 @@ public final class CondenserService implements Listener {
             messages.send(player, "condenser-access-denied");
             return false;
         }
+        CoreRecord core = coreRepository.core(condenser.islandIndex());
+        if (core != null && core.level() >= pickupLockCoreLevel) {
+            messages.send(player, "condenser-max-level-pickup-locked");
+            return false;
+        }
         UUID itemId = repository.removeAndReserveItem(condenser.islandIndex(), condenser.condenserId());
         if (itemId == null) {
             return false;
@@ -570,7 +621,7 @@ public final class CondenserService implements Listener {
             deliverItem(player, createItem(
                     condenser.islandIndex(), itemId, condenser.level(), condenser.state()));
         } catch (RuntimeException exception) {
-            repository.restore(condenser);
+            repository.restore(condenser, itemId);
             plugin.getLogger().log(Level.SEVERE, "Could not return a picked-up matter condenser.", exception);
             messages.send(player, "condenser-pickup-failed");
             return false;
@@ -605,6 +656,133 @@ public final class CondenserService implements Listener {
             return false;
         }
         return true;
+    }
+
+    public boolean canRemoveRunes(Player player, CondenserRecord condenser) {
+        CoreRecord core = coreRepository.core(condenser.islandIndex());
+        if (core != null && core.level() >= pickupLockCoreLevel) {
+            messages.send(player, "condenser-runes-locked");
+            return false;
+        }
+        return canManage(player, condenser);
+    }
+
+    public boolean canUseRuneTier(Player player, CondenserRecord condenser, int tier) {
+        if (!canManage(player, condenser)) {
+            return false;
+        }
+        int maximumTier = CellRecord.maximumTierForCondenserLevel(condenser.level());
+        if (tier > maximumTier) {
+            messages.send(player, "condenser-rune-tier-locked", Map.of(
+                    "tier", Integer.toString(tier),
+                    "max_tier", Integer.toString(maximumTier),
+                    "level", Integer.toString(condenser.level())));
+            return false;
+        }
+        return true;
+    }
+
+    public boolean setRune(UUID condenserId, int slot, CellRecord rune) {
+        CondenserRecord condenser = repository.getById(condenserId);
+        if (condenser == null || slot < 0 || slot >= condenser.runeSlots()
+                || (rune != null && !rune.type().isCondenserRune())) {
+            return false;
+        }
+        repository.update(condenser.withRune(slot, rune));
+        return true;
+    }
+
+    public boolean upgradeRuneSlots(Player player, UUID condenserId) {
+        CondenserRecord condenser = repository.getById(condenserId);
+        if (condenser == null || !canManage(player, condenser)) {
+            return false;
+        }
+        int nextSlots = condenser.runeSlots() + 1;
+        if (nextSlots > 3) {
+            messages.send(player, "condenser-rune-slots-max");
+            return false;
+        }
+        int requiredLevel = runeSlotRequiredLevel(nextSlots);
+        if (condenser.level() < requiredLevel) {
+            messages.send(player, "condenser-rune-slot-locked", Map.of(
+                    "level", Integer.toString(requiredLevel)));
+            return false;
+        }
+        double cost = runeSlotUpgradeCost(nextSlots);
+        CoreRecord chargedCore = coreRepository.spendEnergy(condenser.islandIndex(), cost);
+        if (chargedCore == null) {
+            messages.send(player, "condenser-insufficient-energy");
+            return false;
+        }
+        repository.update(condenser.withRuneSlots(nextSlots));
+        coreService.refreshCore(chargedCore, System.currentTimeMillis());
+        messages.send(player, "condenser-rune-slots-upgraded", Map.of(
+                "slots", Integer.toString(nextSlots),
+                "cost", formatEnergy(cost)));
+        return true;
+    }
+
+    public int runeSlotRequiredLevel(int slots) {
+        return config.getInt("condenser.runes.slot-required-level." + slots, slots == 2 ? 3 : 6);
+    }
+
+    public double runeSlotUpgradeCost(int slots) {
+        return config.getDouble("condenser.runes.slot-costs." + slots, slots == 2 ? 1000.0 : 4000.0);
+    }
+
+    public boolean destroyForFracture(Player player, long islandIndex) {
+        IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
+        if (island == null || island.index() != islandIndex || !island.owner().equals(player.getUniqueId())) {
+            messages.send(player, "core-fracture-owner-only");
+            return false;
+        }
+        CondenserRecord removed = repository.removeForFracture(islandIndex);
+        if (removed != null) {
+            cancelTasks(removed.condenserId());
+            World world = plugin.getServer().getWorld(removed.worldId());
+            if (world != null) {
+                removeIfPresent(world.getEntity(removed.itemDisplayId()));
+                removeIfPresent(world.getEntity(removed.interactionId()));
+                removeIfPresent(world.getEntity(removed.textDisplayId()));
+            }
+        }
+        for (Player online : plugin.getServer().getOnlinePlayers()) {
+            if (!island.canBuild(online.getUniqueId())) {
+                continue;
+            }
+            if (online.getUniqueId().equals(player.getUniqueId())) {
+                removeBoundItems(online, islandIndex);
+            } else {
+                online.getScheduler().run(plugin, task -> removeBoundItems(online, islandIndex), null);
+            }
+        }
+        return true;
+    }
+
+    private void removeBoundItems(Player player, long islandIndex) {
+        ItemStack[] contents = player.getInventory().getContents();
+        for (int slot = 0; slot < contents.length; slot++) {
+            ItemStack item = contents[slot];
+            if (!isCondenserItem(item)) {
+                continue;
+            }
+            Long boundIsland = item.getItemMeta().getPersistentDataContainer()
+                    .get(itemIslandKey, PersistentDataType.LONG);
+            if (boundIsland != null && boundIsland == islandIndex) {
+                player.getInventory().setItem(slot, null);
+            }
+        }
+    }
+
+    private void cancelTasks(UUID condenserId) {
+        ScheduledTask monitor = monitorTasks.remove(condenserId);
+        if (monitor != null) {
+            monitor.cancel();
+        }
+        ScheduledTask visual = visualTasks.remove(condenserId);
+        if (visual != null) {
+            visual.cancel();
+        }
     }
 
     public boolean toggleEnabled(Player player, UUID condenserId) {
@@ -652,12 +830,64 @@ public final class CondenserService implements Listener {
         return baseEnergyCost + energyCostPerLevel * level;
     }
 
-    public double oreChance() {
-        return oreChance;
+    public double energyCost(CondenserRecord condenser) {
+        return CondenserMath.energyCost(condenser, baseEnergyCost, energyCostPerLevel);
+    }
+
+    public double mineralChance(CondenserRecord condenser) {
+        if (condenser.level() == 0) {
+            return 0.0;
+        }
+        return 1.0 - CondenserMath.outputChances(condenser, oreChance)[0] / 100.0;
+    }
+
+    public List<Material> unlockedMaterials(int level) {
+        List<Material> materials = new java.util.ArrayList<>();
+        materials.add(Material.COBBLESTONE);
+        if (level > 0) {
+            materials.addAll(ORES.subList(0, Math.min(level, ORES.size())));
+        }
+        return List.copyOf(materials);
+    }
+
+    public double materialChance(CondenserRecord condenser, Material material) {
+        double[] chances = CondenserMath.outputChances(condenser, oreChance);
+        if (material == Material.COBBLESTONE) {
+            return chances[0];
+        }
+        int unlockedOreCount = Math.min(condenser.level(), ORES.size());
+        for (int oreIndex = 0; oreIndex < unlockedOreCount; oreIndex++) {
+            if (ORES.get(oreIndex) == material) {
+                return chances[oreIndex + 1];
+            }
+        }
+        return 0.0;
+    }
+
+    public String oreMessageKey(Material material) {
+        if (material == Material.COBBLESTONE) {
+            return "condenser-ore-stone";
+        }
+        return switch (material) {
+            case COAL_ORE -> "condenser-ore-coal";
+            case COPPER_ORE -> "condenser-ore-copper";
+            case IRON_ORE -> "condenser-ore-iron";
+            case GOLD_ORE -> "condenser-ore-gold";
+            case REDSTONE_ORE -> "condenser-ore-redstone";
+            case LAPIS_ORE -> "condenser-ore-lapis";
+            case EMERALD_ORE -> "condenser-ore-emerald";
+            case DIAMOND_ORE -> "condenser-ore-diamond";
+            case ANCIENT_DEBRIS -> "condenser-ore-ancient-debris";
+            default -> throw new IllegalArgumentException("Unsupported condenser output material: " + material);
+        };
     }
 
     public int maximumLevel() {
         return maximumLevel;
+    }
+
+    public int minimumCoreLevel() {
+        return minimumCoreLevel;
     }
 
     private void refreshVisuals(CondenserRecord condenser) {
@@ -751,10 +981,7 @@ public final class CondenserService implements Listener {
                 .append(messages.parseComponent("&7Estado: " + color + condenser.state().name()))
                 .append(Component.newline())
                 .append(messages.parseComponent("&7Consumo: &e"
-                        + formatEnergy(energyCost(condenser.level())) + "⚡/generación"))
-                .append(Component.newline())
-                .append(messages.parseComponent("&7Probabilidad mineral: &b"
-                        + String.format(java.util.Locale.ROOT, "%.0f", oreChance * 100) + "%"));
+                        + formatEnergy(energyCost(condenser)) + "⚡/generación"));
     }
 
     private void removeIfPresent(Entity entity) {

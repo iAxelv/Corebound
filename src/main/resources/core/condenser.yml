@@ -6,7 +6,9 @@ condenser:
     height-offset: 1.8
     rotation-speed-ticks: 20
   purchase-cost: 500.0
-  max-level: 8
+  minimum-core-level: 3
+  pickup-lock-core-level: 10
+  max-level: 9
   upgrade:
     base-cost: 500.0
     cost-multiplier: 1.8
@@ -14,3 +16,10 @@ condenser:
     ore-chance: 0.1
     energy-cost: 1.0
     energy-cost-per-level: 0.5
+  runes:
+    slot-required-level:
+      '2': 3
+      '3': 6
+    slot-costs:
+      '2': 1000.0
+      '3': 4000.0

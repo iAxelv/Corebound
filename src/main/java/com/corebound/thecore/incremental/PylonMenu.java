@@ -185,6 +185,10 @@ public final class PylonMenu implements Listener {
         if (cell == null || item.getAmount() != 1) {
             return;
         }
+        if (cell.type().isCondenserRune()) {
+            messages.send(player, "cell-wrong-device");
+            return;
+        }
         if (!pylons.canUseCellTier(player, pylon.islandIndex(), cell.tier())) {
             return;
         }
@@ -207,6 +211,9 @@ public final class PylonMenu implements Listener {
     private void withdrawCell(Player player, Inventory menu, PylonRecord pylon, int cellIndex) {
         CellRecord cell = pylon.equippedCells().get(cellIndex);
         if (cell == null) {
+            return;
+        }
+        if (!pylons.canRemovePylonCells(player, pylon)) {
             return;
         }
         if (player.getInventory().firstEmpty() == -1) {
@@ -262,6 +269,9 @@ public final class PylonMenu implements Listener {
         CellRecord cursorCell = CellItem.read(cursor);
         CellRecord targetCell = CellItem.read(target);
         if (cursorCell == null || targetCell == null) {
+            return;
+        }
+        if (cursorCell.type().isCondenserRune() || targetCell.type().isCondenserRune()) {
             return;
         }
         if (cursor.getAmount() != 1 || target.getAmount() != 1
@@ -346,7 +356,8 @@ public final class PylonMenu implements Listener {
     private ItemStack forgeItem(CellType type) {
         ItemStack item = new ItemStack(type.itemMaterial());
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent(type.color() + "Forjar Célula " + type.displayName()));
+        String itemName = type.isCondenserRune() ? "Forjar Runa " : "Forjar Célula ";
+        meta.displayName(messages.parseComponent(type.color() + itemName + type.displayName()));
         List<Component> lore = CellItem.cellLore(new CellRecord(type, 1), pylons.baseIntervalTicks()).stream()
                 .map(messages::parseComponent)
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));

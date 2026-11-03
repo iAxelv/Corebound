@@ -360,9 +360,20 @@ public final class PylonService {
             return false;
         }
         coreService.refreshCore(charged, System.currentTimeMillis());
-        messages.send(player, "cell-forged", Map.of(
+        messages.send(player, type.isCondenserRune() ? "condenser-rune-forged" : "cell-forged", Map.of(
                 "cell", type.displayName(),
                 "cost", formatEnergy(cost)));
+        return true;
+    }
+
+    public boolean canRemovePylonCells(Player player, PylonRecord pylon) {
+        if (!canManagePylon(player, pylon)) {
+            return false;
+        }
+        if (coreLevel(pylon.islandIndex()) >= 10) {
+            messages.send(player, "pylon-runes-locked");
+            return false;
+        }
         return true;
     }
 
@@ -608,6 +619,10 @@ public final class PylonService {
         IslandData island = islandService.islandAt(entity.getLocation()).orElse(null);
         if (island == null || island.index() != pylon.islandIndex() || !island.canBuild(player.getUniqueId())) {
             messages.send(player, "pylon-place-access-denied");
+            return false;
+        }
+        if (coreLevel(pylon.islandIndex()) >= 10) {
+            messages.send(player, "pylon-max-level-pickup-locked");
             return false;
         }
         PylonRecord removed = repository.removeAndReserveItem(pylonId);
@@ -1206,6 +1221,12 @@ public final class PylonService {
                     + "% producción por enlace";
             case VOID -> "&e" + String.format(java.util.Locale.ROOT, "%.0f", cell.voidCriticalChance() * 100.0)
                     + "% de crítico x3.5";
+            case CONDENSER_EFFICIENCY -> "&e-"
+                    + String.format(java.util.Locale.ROOT, "%.0f", cell.condenserEnergyReduction() * 100.0)
+                    + "% de consumo del condensador";
+            case CONDENSER_YIELD -> "&e+"
+                    + String.format(java.util.Locale.ROOT, "%.0f", cell.condenserOreChanceBonus() * 100.0)
+                    + "% de probabilidad de mineral";
         };
     }
 

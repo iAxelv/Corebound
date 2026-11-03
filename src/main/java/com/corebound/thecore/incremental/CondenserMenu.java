@@ -1,7 +1,9 @@
 package com.corebound.thecore.incremental;
 
 import com.corebound.thecore.message.Messages;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -16,16 +18,17 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 public final class CondenserMenu implements Listener {
-    private static final int STATE_SLOT = 11;
-    private static final int INFO_SLOT = 13;
-    private static final int UPGRADE_SLOT = 15;
-    private static final int CLOSE_SLOT = 22;
+    private static final int INFO_SLOT = 4;
+    private static final int STATE_SLOT = 20;
+    private static final int RUNES_SLOT = 22;
+    private static final int UPGRADE_SLOT = 24;
+    private static final int CLOSE_SLOT = 40;
 
     private static final class Holder implements InventoryHolder {
-        private final java.util.UUID condenserId;
+        private final UUID condenserId;
         private Inventory inventory;
 
-        private Holder(java.util.UUID condenserId) {
+        private Holder(UUID condenserId) {
             this.condenserId = condenserId;
         }
 
@@ -46,9 +49,11 @@ public final class CondenserMenu implements Listener {
     public void open(Player player, CondenserRecord condenser) {
         Holder holder = new Holder(condenser.condenserId());
         holder.inventory = Bukkit.createInventory(
-                holder, 27, messages.parseComponent("&5Condensador de Materia"));
-        holder.inventory.setItem(STATE_SLOT, stateItem(condenser));
+                holder, 45, messages.parseComponent("&5Condensador de Materia"));
+        fill(holder.inventory);
         holder.inventory.setItem(INFO_SLOT, infoItem(condenser));
+        holder.inventory.setItem(STATE_SLOT, stateItem(condenser));
+        holder.inventory.setItem(RUNES_SLOT, runesItem(condenser));
         holder.inventory.setItem(UPGRADE_SLOT, upgradeItem(condenser));
         holder.inventory.setItem(CLOSE_SLOT, closeItem());
         player.openInventory(holder.inventory);
@@ -68,15 +73,19 @@ public final class CondenserMenu implements Listener {
             player.closeInventory();
             return;
         }
-        boolean updated = switch (event.getRawSlot()) {
-            case STATE_SLOT -> condensers.toggleEnabled(player, holder.condenserId);
-            case UPGRADE_SLOT -> condensers.upgrade(player, holder.condenserId);
-            default -> false;
-        };
+        if (event.getRawSlot() == RUNES_SLOT) {
+            condensers.openRuneMenu(player, holder.condenserId);
+            return;
+        }
+        if (event.getRawSlot() == STATE_SLOT) {
+            condensers.toggleEnabled(player, holder.condenserId);
+        } else if (event.getRawSlot() == UPGRADE_SLOT) {
+            condensers.upgrade(player, holder.condenserId);
+        }
         CondenserRecord condenser = condensers.record(holder.condenserId);
         if (condenser == null) {
             player.closeInventory();
-        } else if (updated || event.getRawSlot() == STATE_SLOT || event.getRawSlot() == UPGRADE_SLOT) {
+        } else if (event.getRawSlot() == STATE_SLOT || event.getRawSlot() == UPGRADE_SLOT) {
             open(player, condenser);
         }
     }
@@ -88,38 +97,54 @@ public final class CondenserMenu implements Listener {
         }
     }
 
-    private ItemStack stateItem(CondenserRecord condenser) {
-        Material material = switch (condenser.state()) {
-            case ACTIVE -> Material.LIME_DYE;
-            case IDLE -> Material.YELLOW_DYE;
-            case DISABLED -> Material.RED_DYE;
-        };
-        ItemStack item = new ItemStack(material);
+    private ItemStack infoItem(CondenserRecord condenser) {
+        ItemStack item = new ItemStack(Material.BOOK);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&bEstado: &f" + condenser.state().name()));
-        meta.lore(List.of(
-                messages.parseComponent("&7El condensador se pausa automáticamente"),
-                messages.parseComponent("&7si el Núcleo no tiene energía suficiente."),
-                Component.empty(),
-                messages.parseComponent(condenser.state() == CondenserState.DISABLED
-                        ? "&eHaz clic para activarlo."
-                        : "&eHaz clic para desactivarlo.")));
+        meta.displayName(messages.parseComponent("&dCondensador &7[Nivel "
+                + condenser.level() + "/" + condensers.maximumLevel() + "]"));
+        List<Component> lore = new ArrayList<>();
+        lore.add(messages.parseComponent("&7Consumo por generación: &6"
+                + format(condensers.energyCost(condenser)) + "⚡"));
+        lore.add(Component.empty());
+        lore.add(messages.parseComponent("&eGeneración posible:"));
+        for (Material material : condensers.unlockedMaterials(condenser.level())) {
+            lore.add(messages.parseComponent("&7" + messages.text(condensers.oreMessageKey(material))
+                    + ": &a" + format(condensers.materialChance(condenser, material)) + "%"));
+        }
+        meta.lore(lore);
         item.setItemMeta(meta);
         return item;
     }
 
-    private ItemStack infoItem(CondenserRecord condenser) {
-        ItemStack item = new ItemStack(Material.BOOK);
+    private ItemStack stateItem(CondenserRecord condenser) {
+        ItemStack item = new ItemStack(Material.LEVER);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&dInformación del Condensador"));
+        String stateColor = switch (condenser.state()) {
+            case ACTIVE -> "&a";
+            case IDLE -> "&e";
+            case DISABLED -> "&c";
+        };
+        meta.displayName(messages.parseComponent("&aSwitch del Condensador"));
         meta.lore(List.of(
-                messages.parseComponent("&7Nivel: &e" + condenser.level() + "/" + condensers.maximumLevel()),
-                messages.parseComponent("&7Probabilidad de mineral: &b"
-                        + String.format(java.util.Locale.ROOT, "%.0f", condensers.oreChance() * 100) + "%"),
-                messages.parseComponent("&7Consumo por generación: &6"
-                        + String.format(java.util.Locale.ROOT, "%.1f", condensers.energyCost(condenser.level()))
-                        + "⚡"),
-                messages.parseComponent("&7Los minerales disponibles aumentan con cada nivel.")));
+                messages.parseComponent("&7Estado: " + stateColor + condenser.state().name()),
+                Component.empty(),
+                messages.parseComponent(condenser.state() == CondenserState.DISABLED
+                        ? "&eHaz clic para activar."
+                        : "&eHaz clic para desactivar.")));
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack runesItem(CondenserRecord condenser) {
+        ItemStack item = new ItemStack(Material.RED_STAINED_GLASS_PANE);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(messages.parseComponent("&cRunas de Materia"));
+        meta.lore(List.of(
+                messages.parseComponent("&7Ranuras: &e" + condenser.runes().size()
+                        + "&7/&e" + condenser.runeSlots()),
+                messages.parseComponent("&7Equipa runas y desbloquea más ranuras."),
+                Component.empty(),
+                messages.parseComponent("&eHaz clic para administrar las runas.")));
         item.setItemMeta(meta);
         return item;
     }
@@ -132,16 +157,12 @@ public final class CondenserMenu implements Listener {
                 ? "&aNivel máximo alcanzado"
                 : "&eMejorar al nivel " + (condenser.level() + 1)));
         List<Component> lore = maxed
-                ? List.of(messages.parseComponent("&7Ya están desbloqueados todos los minerales."))
+                ? List.of(messages.parseComponent("&7El Condensador ya alcanzó su nivel máximo."))
                 : List.of(
                         messages.parseComponent("&7Costo: &6"
-                                + String.format(java.util.Locale.ROOT, "%.1f",
-                                        condensers.upgradeCost(condenser.level()))
-                                + "⚡"),
-                        messages.parseComponent("&7Desbloquea un nuevo mineral."),
+                                + format(condensers.upgradeCost(condenser.level())) + "⚡"),
                         messages.parseComponent("&7Consumo siguiente: &e"
-                                + String.format(java.util.Locale.ROOT, "%.1f",
-                                        condensers.energyCost(condenser.level() + 1))
+                                + format(condensers.energyCost(condenser.withLevel(condenser.level() + 1)))
                                 + "⚡/generación"),
                         Component.empty(),
                         messages.parseComponent("&eHaz clic para mejorar."));
@@ -156,5 +177,19 @@ public final class CondenserMenu implements Listener {
         meta.displayName(messages.parseComponent("&cCerrar"));
         item.setItemMeta(meta);
         return item;
+    }
+
+    private void fill(Inventory inventory) {
+        ItemStack pane = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        ItemMeta meta = pane.getItemMeta();
+        meta.displayName(Component.empty());
+        pane.setItemMeta(meta);
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            inventory.setItem(slot, pane);
+        }
+    }
+
+    private String format(double value) {
+        return String.format(java.util.Locale.ROOT, "%.1f", value);
     }
 }

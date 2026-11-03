@@ -130,6 +130,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(pylonService.menuListener(), this);
         getServer().getPluginManager().registerEvents(condenserService, this);
         getServer().getPluginManager().registerEvents(condenserService.menuListener(), this);
+        getServer().getPluginManager().registerEvents(condenserService.runeMenuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.upgradesMenuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.astralTreeMenuListener(), this);

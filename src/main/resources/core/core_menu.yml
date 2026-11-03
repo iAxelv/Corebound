@@ -79,16 +79,22 @@ items:
     slot: 14
     display-name: "&bCondensador de Materia"
     lore:
-      - "&7Coloca un condensador para convertir generadores"
-      - "&7de piedra en una fuente de minerales."
+      - "&7Convierte generadores de piedra en minerales."
+      - "&7Solo puedes colocar uno por isla a la vez."
+      - "&7Puedes comprar cuantos repuestos quieras."
+      - "&7Requiere Núcleo nivel 3."
       - "&7Costo: &6%cost%⚡"
       - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
       - ""
-      - "&eHaz clic para adquirirlo."
+      - "&eHaz clic para comprar un condensador."
     locked-material: BARRIER
     locked-name: "&cCondensador ya colocado"
     locked-lore:
       - "&7Solo se permite uno por isla."
+    level-locked-material: BARRIER
+    level-locked-name: "&cCondensador bloqueado"
+    level-locked-lore:
+      - "&7Requiere Núcleo nivel &e%required_level%&7."
   upgrade:
     material: NETHER_STAR
     slot: 47

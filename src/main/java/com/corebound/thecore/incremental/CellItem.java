@@ -18,8 +18,9 @@ public final class CellItem {
         ItemStack item = new ItemStack(cell.type().itemMaterial());
         ItemMeta meta = item.getItemMeta();
         LegacyComponentSerializer legacy = LegacyComponentSerializer.legacyAmpersand();
+        String itemName = cell.type().isCondenserRune() ? "Runa de Materia " : "Célula ";
         meta.displayName(legacy.deserialize(
-                cell.type().color() + "Célula " + cell.type().displayName() + " T" + cell.tier()));
+                cell.type().color() + itemName + cell.type().displayName() + " T" + cell.tier()));
         meta.lore(cellLore(cell, baseIntervalTicks).stream().map(legacy::deserialize).toList());
         meta.setMaxStackSize(1);
         meta.getPersistentDataContainer().set(CELL_TYPE_KEY, PersistentDataType.STRING, cell.type().name());
@@ -37,10 +38,16 @@ public final class CellItem {
                     + "% de producción por enlace.";
             case VOID -> "&6Mejora: &e" + formatNumber(cell.voidCriticalChance() * 100)
                     + "% de crítico &7(x3.5 energía).";
+            case CONDENSER_EFFICIENCY -> "&6Mejora: &e-"
+                    + formatNumber(cell.condenserEnergyReduction() * 100) + "% de consumo del condensador.";
+            case CONDENSER_YIELD -> "&6Mejora: &e+"
+                    + formatNumber(cell.condenserOreChanceBonus() * 100) + "% de probabilidad de mineral.";
         };
         return List.of(
-                "&7Instalación: &fMayús+clic en la GUI del Pilón",
-                "&7Ranura: &fCélula elemental",
+                cell.type().isCondenserRune()
+                        ? "&7Instalación: &fMayús+clic en la GUI de runas del Condensador"
+                        : "&7Instalación: &fMayús+clic en la GUI del Pilón",
+                cell.type().isCondenserRune() ? "&7Ranura: &fRuna de materia" : "&7Ranura: &fCélula elemental",
                 improvement,
                 "&8Fusiona dos iguales para subir de tier.");
     }

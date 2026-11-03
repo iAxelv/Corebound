@@ -25,6 +25,10 @@ public record CellRecord(CellType type, int tier) {
         return Math.max(1, Math.min(MAX_TIER, coreLevel / 5));
     }
 
+    public static int maximumTierForCondenserLevel(int condenserLevel) {
+        return Math.max(1, Math.min(MAX_TIER, 1 + condenserLevel / 2));
+    }
+
     public int fireIntervalReductionTicks() {
         return type == CellType.FIRE ? 20 * tier : 0;
     }
@@ -35,5 +39,13 @@ public record CellRecord(CellType type, int tier) {
 
     public double voidCriticalChance() {
         return type == CellType.VOID ? 0.05 * tier : 0.0;
+    }
+
+    public double condenserEnergyReduction() {
+        return type == CellType.CONDENSER_EFFICIENCY ? 0.05 * tier : 0.0;
+    }
+
+    public double condenserOreChanceBonus() {
+        return type == CellType.CONDENSER_YIELD ? 0.05 * tier : 0.0;
     }
 }

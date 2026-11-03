@@ -23,7 +23,7 @@ public final class CondenserRepository {
     private final Object writeLock = new Object();
     private final AtomicLong version = new AtomicLong();
     private final Map<Long, CondenserRecord> condensers = new HashMap<>();
-    private final Map<Long, UUID> pendingItems = new HashMap<>();
+    private final Map<Long, java.util.Set<UUID>> pendingItems = new HashMap<>();
 
     public CondenserRepository(File file, JavaPlugin plugin) {
         this.file = file;
@@ -43,7 +43,7 @@ public final class CondenserRepository {
     }
 
     public synchronized boolean hasPendingItem(long islandIndex) {
-        return pendingItems.containsKey(islandIndex);
+        return !pendingItems.getOrDefault(islandIndex, java.util.Set.of()).isEmpty();
     }
 
     public synchronized List<CondenserRecord> all() {
@@ -51,11 +51,8 @@ public final class CondenserRepository {
     }
 
     public synchronized UUID reserveItem(long islandIndex) {
-        if (condensers.containsKey(islandIndex) || pendingItems.containsKey(islandIndex)) {
-            return null;
-        }
         UUID itemId = UUID.randomUUID();
-        pendingItems.put(islandIndex, itemId);
+        pendingItems.computeIfAbsent(islandIndex, ignored -> new java.util.HashSet<>()).add(itemId);
         save();
         return itemId;
     }
@@ -63,14 +60,14 @@ public final class CondenserRepository {
     public synchronized boolean canPlace(long islandIndex, UUID itemId) {
         return itemId != null
                 && !condensers.containsKey(islandIndex)
-                && itemId.equals(pendingItems.get(islandIndex));
+                && pendingItems.getOrDefault(islandIndex, java.util.Set.of()).contains(itemId);
     }
 
     public synchronized void add(CondenserRecord condenser, UUID itemId) {
         if (!canPlace(condenser.islandIndex(), itemId)) {
             throw new IllegalStateException("Condenser placement was not reserved for this island.");
         }
-        pendingItems.remove(condenser.islandIndex());
+        releaseItem(condenser.islandIndex(), itemId);
         condensers.put(condenser.islandIndex(), condenser);
         save();
     }
@@ -79,14 +76,13 @@ public final class CondenserRepository {
         CondenserRecord current = condensers.get(islandIndex);
         if (current != null && current.condenserId().equals(condenserId)) {
             condensers.remove(islandIndex);
-            pendingItems.put(islandIndex, itemId);
+            pendingItems.computeIfAbsent(islandIndex, ignored -> new java.util.HashSet<>()).add(itemId);
             save();
         }
     }
 
     public synchronized void releasePendingItem(long islandIndex, UUID itemId) {
-        if (itemId != null && itemId.equals(pendingItems.get(islandIndex))) {
-            pendingItems.remove(islandIndex);
+        if (itemId != null && releaseItem(islandIndex, itemId)) {
             save();
         }
     }
@@ -101,21 +97,38 @@ public final class CondenserRepository {
 
     public synchronized UUID removeAndReserveItem(long islandIndex, UUID condenserId) {
         CondenserRecord existing = condensers.get(islandIndex);
-        if (existing == null || !existing.condenserId().equals(condenserId)
-                || pendingItems.containsKey(islandIndex)) {
+        if (existing == null || !existing.condenserId().equals(condenserId)) {
             return null;
         }
         condensers.remove(islandIndex);
         UUID itemId = UUID.randomUUID();
-        pendingItems.put(islandIndex, itemId);
+        pendingItems.computeIfAbsent(islandIndex, ignored -> new java.util.HashSet<>()).add(itemId);
         save();
         return itemId;
     }
 
-    public synchronized void restore(CondenserRecord condenser) {
+    public synchronized void restore(CondenserRecord condenser, UUID itemId) {
         condensers.put(condenser.islandIndex(), condenser);
-        pendingItems.remove(condenser.islandIndex());
+        releaseItem(condenser.islandIndex(), itemId);
         save();
+    }
+
+    public synchronized CondenserRecord removeForFracture(long islandIndex) {
+        CondenserRecord removed = condensers.remove(islandIndex);
+        pendingItems.remove(islandIndex);
+        save();
+        return removed;
+    }
+
+    private boolean releaseItem(long islandIndex, UUID itemId) {
+        java.util.Set<UUID> islandItems = pendingItems.get(islandIndex);
+        if (islandItems == null || !islandItems.remove(itemId)) {
+            return false;
+        }
+        if (islandItems.isEmpty()) {
+            pendingItems.remove(islandIndex);
+        }
+        return true;
     }
 
     public synchronized void flush() throws IOException {
@@ -135,7 +148,9 @@ public final class CondenserRepository {
     }
 
     private Snapshot snapshot() {
-        return new Snapshot(Map.copyOf(condensers), Map.copyOf(pendingItems));
+        Map<Long, java.util.Set<UUID>> pendingSnapshot = new HashMap<>();
+        pendingItems.forEach((island, ids) -> pendingSnapshot.put(island, java.util.Set.copyOf(ids)));
+        return new Snapshot(Map.copyOf(condensers), Map.copyOf(pendingSnapshot));
     }
 
     private void writeSnapshot(Snapshot snapshot, long snapshotVersion) throws IOException {
@@ -156,9 +171,15 @@ public final class CondenserRepository {
                 yaml.set(path + ".text-display", condenser.textDisplayId().toString());
                 yaml.set(path + ".level", condenser.level());
                 yaml.set(path + ".state", condenser.state().name());
+                yaml.set(path + ".rune-slots", condenser.runeSlots());
+                condenser.runes().forEach((slot, rune) -> {
+                    String runePath = path + ".runes." + slot;
+                    yaml.set(runePath + ".type", rune.type().name());
+                    yaml.set(runePath + ".tier", rune.tier());
+                });
             }
-            snapshot.pendingItems().forEach((island, itemId) ->
-                    yaml.set("pending-items." + island, itemId.toString()));
+            snapshot.pendingItems().forEach((island, itemIds) -> itemIds.forEach(itemId ->
+                    yaml.set("pending-items." + island + "." + itemId, true)));
 
             Path target = file.toPath();
             Files.createDirectories(target.getParent());
@@ -201,17 +222,49 @@ public final class CondenserRepository {
                         UUID.fromString(condenser.getString("interaction")),
                         UUID.fromString(condenser.getString("text-display")),
                         condenser.getInt("level"),
-                        CondenserState.valueOf(condenser.getString("state", "ACTIVE"))));
+                        CondenserState.valueOf(condenser.getString("state", "ACTIVE")),
+                        condenser.getInt("rune-slots", 1),
+                        loadRunes(condenser.getConfigurationSection("runes"))));
             }
         }
         ConfigurationSection pending = yaml.getConfigurationSection("pending-items");
         if (pending != null) {
             for (String islandKey : pending.getKeys(false)) {
-                pendingItems.put(Long.parseLong(islandKey), UUID.fromString(pending.getString(islandKey)));
+                long islandIndex = Long.parseLong(islandKey);
+                ConfigurationSection items = pending.getConfigurationSection(islandKey);
+                if (items == null) {
+                    String legacyId = pending.getString(islandKey);
+                    if (legacyId != null) {
+                        pendingItems.computeIfAbsent(islandIndex, ignored -> new java.util.HashSet<>())
+                                .add(UUID.fromString(legacyId));
+                    }
+                    continue;
+                }
+                for (String itemId : items.getKeys(false)) {
+                    pendingItems.computeIfAbsent(islandIndex, ignored -> new java.util.HashSet<>())
+                            .add(UUID.fromString(itemId));
+                }
             }
         }
     }
 
-    private record Snapshot(Map<Long, CondenserRecord> condensers, Map<Long, UUID> pendingItems) {
+    private Map<Integer, CellRecord> loadRunes(ConfigurationSection section) {
+        if (section == null) {
+            return Map.of();
+        }
+        Map<Integer, CellRecord> runes = new HashMap<>();
+        for (String key : section.getKeys(false)) {
+            ConfigurationSection rune = section.getConfigurationSection(key);
+            if (rune != null) {
+                runes.put(Integer.parseInt(key), new CellRecord(
+                        CellType.valueOf(rune.getString("type")), rune.getInt("tier")));
+            }
+        }
+        return Map.copyOf(runes);
+    }
+
+    private record Snapshot(
+            Map<Long, CondenserRecord> condensers,
+            Map<Long, java.util.Set<UUID>> pendingItems) {
     }
 }

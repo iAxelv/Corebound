@@ -113,6 +113,9 @@ public final class CoreMenu implements Listener {
         if (Material.matchMaterial(loaded.getString("items.condenser.locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.condenser.locked-material must be valid.");
         }
+        if (Material.matchMaterial(loaded.getString("items.condenser.level-locked-material", "BARRIER")) == null) {
+            throw new IllegalArgumentException("core_menu.yml items.condenser.level-locked-material must be valid.");
+        }
         config = loaded;
     }
 
@@ -305,14 +308,20 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createCondenserItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.condenser");
-        boolean available = condenserService != null && !condenserService.hasCondenser(core.islandIndex());
+        int requiredLevel = condenserService == null ? 3 : condenserService.minimumCoreLevel();
+        boolean levelLocked = core.level() < requiredLevel;
+        boolean available = condenserService != null && !levelLocked;
         String material = available
                 ? itemConfig.getString("material", "BLAST_FURNACE")
-                : itemConfig.getString("locked-material", "BARRIER");
+                : itemConfig.getString("level-locked-material", "BARRIER");
         String displayName = available
                 ? itemConfig.getString("display-name", "&bCondensador de Materia")
-                : itemConfig.getString("locked-name", "&cCondensador ya colocado");
-        List<String> lore = itemConfig.getStringList(available ? "lore" : "locked-lore");
+                : itemConfig.getString("level-locked-name", "&cCondensador bloqueado");
+        List<String> lore = itemConfig.getStringList(
+                available ? "lore" : "level-locked-lore");
+        lore = lore.stream()
+                .map(line -> line.replace("%required_level%", Integer.toString(requiredLevel)))
+                .toList();
         double cost = condenserService == null ? 500.0 : condenserService.purchaseCost();
         Map<String, String> placeholders = Map.of(
                 "%cost%", formatEnergy(cost),
