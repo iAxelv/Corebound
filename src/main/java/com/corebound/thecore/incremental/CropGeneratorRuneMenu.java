@@ -216,18 +216,13 @@ public final class CropGeneratorRuneMenu implements Listener {
     }
 
     private ItemStack statisticsItem(CropGeneratorRecord generator) {
-        ItemStack item = new ItemStack(Material.BOOK);
+        ItemStack item = new ItemStack(Material.CLOCK);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&aEstadísticas del Catalizador"));
+        meta.displayName(messages.parseComponent("&bRunas del Catalizador"));
         meta.lore(List.of(
-                messages.parseComponent("&7Nivel: &e" + generator.level() + "/" + generators.maximumLevel()),
-                messages.parseComponent("&7Aceleración estimada: &a+"
-                        + generators.formatEnergy(generators.growthBonusPercent(generator)) + "%"),
-                messages.parseComponent("&7Bonificación de cosecha: &e+"
-                        + generators.formatEnergy(generators.harvestBonusPercent(generator)) + "%"),
-                messages.parseComponent("&7Consumo: &6" + generators.formatEnergy(
-                        generators.energyCost(generator)) + "⚡/&e"
-                        + generators.formatEnergy(generators.energyIntervalSeconds()) + "s")));
+                messages.parseComponent("&7Runas equipadas: &e"
+                        + generator.activeRunes().size() + "&7/&e" + generator.runeSlots()),
+                messages.parseComponent("&7Nivel del Catalizador: &e" + generator.level())));
         item.setItemMeta(meta);
         return item;
     }
@@ -240,7 +235,7 @@ public final class CropGeneratorRuneMenu implements Listener {
         String materialPath = maxed
                 ? "runes.progression.max-material"
                 : unlocked ? "runes.progression.unlocked-material" : "runes.progression.locked-material";
-        String materialDefault = maxed || unlocked ? "NETHER_STAR" : "BARRIER";
+        String materialDefault = maxed ? "NETHER_STAR" : unlocked ? "ANVIL" : "BARRIER";
         ItemStack item = new ItemStack(generators.menuMaterial(materialPath, materialDefault));
         ItemMeta meta = item.getItemMeta();
         String namePath = maxed
@@ -274,7 +269,8 @@ public final class CropGeneratorRuneMenu implements Listener {
     private ItemStack backItem() {
         ItemStack item = new ItemStack(generators.menuMaterial("runes.back.material", "ARROW"));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent(generators.menuText("runes.back.name", "&cVolver")));
+        meta.displayName(messages.parseComponent(
+                generators.menuText("runes.back.name", "&cVolver al Catalizador")));
         item.setItemMeta(meta);
         return item;
     }
@@ -288,14 +284,12 @@ public final class CropGeneratorRuneMenu implements Listener {
     }
 
     private void fill(Inventory inventory) {
-        ItemStack pane = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        ItemStack pane = new ItemStack(Material.PURPLE_STAINED_GLASS_PANE);
         ItemMeta meta = pane.getItemMeta();
         meta.displayName(Component.empty());
         pane.setItemMeta(meta);
         for (int slot = 0; slot < inventory.getSize(); slot++) {
-            if (slot < 9 || slot >= 18 || slot % 9 == 0 || slot % 9 == 8) {
-                inventory.setItem(slot, pane);
-            }
+            inventory.setItem(slot, pane);
         }
     }
 }

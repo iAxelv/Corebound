@@ -70,7 +70,7 @@ crop-generator:
         material: ARROW
         name: "&cCerrar"
     runes:
-      title: "&2Runas del Catalizador"
+      title: "&5Runas del Catalizador"
       progression-slot: 22
       back-slot: 26
       slot-layout:
@@ -78,7 +78,7 @@ crop-generator:
         '2': [12, 14]
         '3': [11, 13, 15]
       empty-slot:
-        material: GREEN_STAINED_GLASS_PANE
+        material: GRAY_STAINED_GLASS_PANE
         name: "&aRanura de runa"
         lore:
           - "&7Mayús+clic en una runa de tu inventario"
@@ -88,7 +88,7 @@ crop-generator:
           - "&7para devolverla a tu inventario."
       progression:
         locked-material: BARRIER
-        unlocked-material: NETHER_STAR
+        unlocked-material: ANVIL
         max-material: NETHER_STAR
         locked-name: "&cMejora bloqueada"
         unlocked-name: "&aRanura desbloqueada"
@@ -102,4 +102,4 @@ crop-generator:
           - "&7El Catalizador ya tiene sus tres ranuras."
       back:
         material: ARROW
-        name: "&cVolver"
+        name: "&cVolver al Catalizador"

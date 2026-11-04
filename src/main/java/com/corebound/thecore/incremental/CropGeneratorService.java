@@ -345,10 +345,6 @@ public final class CropGeneratorService implements Listener {
                     "level", Integer.toString(minimumCoreLevel())));
             return false;
         }
-        if (hasGenerator(islandIndex)) {
-            messages.send(player, "crop-generator-already-exists");
-            return false;
-        }
         UUID itemId = repository.reserveItem(islandIndex);
         CoreRecord chargedCore = coreRepository.spendEnergy(islandIndex, purchaseCost);
         if (chargedCore == null) {

@@ -187,7 +187,9 @@ public final class CondenserMenu implements Listener {
         meta.displayName(Component.empty());
         pane.setItemMeta(meta);
         for (int slot = 0; slot < inventory.getSize(); slot++) {
-            inventory.setItem(slot, pane);
+            if (slot < 9 || slot >= 36 || slot % 9 == 0 || slot % 9 == 8) {
+                inventory.setItem(slot, pane);
+            }
         }
     }
 

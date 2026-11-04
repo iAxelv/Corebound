@@ -352,19 +352,12 @@ public final class CoreMenu implements Listener {
     private ItemStack createCropGeneratorItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.crop-generator");
         int requiredLevel = cropGeneratorService == null ? 5 : cropGeneratorService.minimumCoreLevel();
-        boolean levelUnlocked = core.level() >= requiredLevel;
-        boolean alreadyPlaced = levelUnlocked && cropGeneratorService != null
-                && cropGeneratorService.hasGenerator(core.islandIndex());
-        boolean unlocked = levelUnlocked && !alreadyPlaced;
-        String material = itemConfig.getString(
-                unlocked ? "material" : "locked-material",
+        boolean unlocked = cropGeneratorService != null && core.level() >= requiredLevel;
+        String material = itemConfig.getString(unlocked ? "material" : "locked-material",
                 unlocked ? "COMPOSTER" : "BARRIER");
-        String displayName = itemConfig.getString(
-                unlocked ? "display-name" : alreadyPlaced ? "placed-name" : "locked-name",
-                unlocked ? "&aCatalizador de Cultivos"
-                        : alreadyPlaced ? "&cCatalizador ya colocado" : "&cCatalizador bloqueado");
-        List<String> lore = itemConfig.getStringList(
-                unlocked ? "lore" : alreadyPlaced ? "placed-lore" : "locked-lore");
+        String displayName = itemConfig.getString(unlocked ? "display-name" : "locked-name",
+                unlocked ? "&aCatalizador de Cultivos" : "&cCatalizador bloqueado");
+        List<String> lore = itemConfig.getStringList(unlocked ? "lore" : "locked-lore");
         Map<String, String> placeholders = Map.of(
                 "%required_level%", Integer.toString(requiredLevel),
                 "%cost%", formatEnergy(cropGeneratorService == null ? 750.0 : cropGeneratorService.purchaseCost()),

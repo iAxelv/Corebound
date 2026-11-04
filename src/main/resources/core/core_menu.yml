@@ -97,12 +97,13 @@ items:
       - "&7Requiere Núcleo nivel &e%required_level%&7."
   crop-generator:
     material: COMPOSTER
-    slot: 17
+    slot: 16
     display-name: "&aCatalizador de Cultivos"
     lore:
       - "&7Acelera el crecimiento de los cultivos de la isla."
       - "&7Consume energía periódicamente mientras está activo."
       - "&7Solo se puede colocar uno por isla."
+      - "&7Puedes comprar cuantos repuestos quieras."
       - "&7Requiere Núcleo nivel &e%required_level%&7."
       - "&7Costo: &6%cost%⚡"
       - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
@@ -112,9 +113,6 @@ items:
     locked-name: "&cCatalizador bloqueado"
     locked-lore:
       - "&7Requiere Núcleo nivel &e%required_level%&7."
-    placed-name: "&cCatalizador ya colocado"
-    placed-lore:
-      - "&7Solo se permite un Catalizador colocado por isla."
   upgrade:
     material: NETHER_STAR
     slot: 47
