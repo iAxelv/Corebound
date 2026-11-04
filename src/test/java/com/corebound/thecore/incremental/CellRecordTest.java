@@ -29,12 +29,14 @@ class CellRecordTest {
     }
 
     @Test
-    void coreLevelUnlocksRuneTiersEveryFiveLevels() {
+    void coreLevelUnlocksSecondRuneTierAtLevelFive() {
         assertEquals(1, CellRecord.maximumTierForCoreLevel(3));
-        assertEquals(1, CellRecord.maximumTierForCoreLevel(9));
-        assertEquals(2, CellRecord.maximumTierForCoreLevel(10));
-        assertEquals(3, CellRecord.maximumTierForCoreLevel(15));
-        assertEquals(4, CellRecord.maximumTierForCoreLevel(20));
+        assertEquals(1, CellRecord.maximumTierForCoreLevel(4));
+        assertEquals(2, CellRecord.maximumTierForCoreLevel(5));
+        assertEquals(2, CellRecord.maximumTierForCoreLevel(9));
+        assertEquals(3, CellRecord.maximumTierForCoreLevel(10));
+        assertEquals(4, CellRecord.maximumTierForCoreLevel(15));
+        assertEquals(5, CellRecord.maximumTierForCoreLevel(20));
         assertEquals(5, CellRecord.maximumTierForCoreLevel(25));
     }
 
@@ -43,6 +45,7 @@ class CellRecordTest {
         assertEquals(100, new CellRecord(CellType.FIRE, 5).fireIntervalReductionTicks());
         assertEquals(0.5, new CellRecord(CellType.LIGHTNING, 5).lightningBonusPerLink(), 0.0001);
         assertEquals(0.25, new CellRecord(CellType.VOID, 5).voidCriticalChance(), 0.0001);
+        assertEquals(0.5, new CellRecord(CellType.ENERGY, 5).pylonEnergyBonus(), 0.0001);
         assertEquals(0.25, new CellRecord(CellType.CONDENSER_EFFICIENCY, 5).condenserEnergyReduction(), 0.0001);
         assertEquals(0.25, new CellRecord(CellType.CONDENSER_YIELD, 5).condenserOreChanceBonus(), 0.0001);
     }

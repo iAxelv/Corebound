@@ -153,6 +153,9 @@ public final class CondenserService implements Listener {
             loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
             if (saveDefaults) {
                 loaded.options().copyDefaults(true);
+                if (loaded.getInt("condenser.pickup-lock-core-level", CoreRecord.MAX_LEVEL) == 10) {
+                    loaded.set("condenser.pickup-lock-core-level", CoreRecord.MAX_LEVEL);
+                }
                 loaded.save(configFile);
             }
         } catch (IOException exception) {
@@ -192,7 +195,8 @@ public final class CondenserService implements Listener {
         double loadedBaseEnergyCost = loaded.getDouble("condenser.generation.energy-cost", 1.0);
         double loadedEnergyCostPerLevel = loaded.getDouble("condenser.generation.energy-cost-per-level", 0.5);
         int loadedMinimumCoreLevel = loaded.getInt("condenser.minimum-core-level", 3);
-        int loadedPickupLockCoreLevel = loaded.getInt("condenser.pickup-lock-core-level", 10);
+        int loadedPickupLockCoreLevel =
+                loaded.getInt("condenser.pickup-lock-core-level", CoreRecord.MAX_LEVEL);
         int loadedSecondRuneLevel = loaded.getInt("condenser.runes.slot-required-level.2", 3);
         int loadedThirdRuneLevel = loaded.getInt("condenser.runes.slot-required-level.3", 6);
         if (!Double.isFinite(loadedScale) || loadedScale <= 0
@@ -211,7 +215,8 @@ public final class CondenserService implements Listener {
                         weight -> !Double.isFinite(weight) || weight <= 0)
                 || !Double.isFinite(loadedBaseEnergyCost) || loadedBaseEnergyCost <= 0
                 || !Double.isFinite(loadedEnergyCostPerLevel) || loadedEnergyCostPerLevel < 0
-                || loadedMinimumCoreLevel < 1 || loadedPickupLockCoreLevel < 1
+                || loadedMinimumCoreLevel < 1
+                || loadedPickupLockCoreLevel < 1 || loadedPickupLockCoreLevel > CoreRecord.MAX_LEVEL
                 || loadedSecondRuneLevel < 1 || loadedThirdRuneLevel <= loadedSecondRuneLevel
                 || loadedThirdRuneLevel > loadedMaximumLevel) {
             throw new IllegalArgumentException("condenser.yml contains invalid cost, level, or generation settings.");

@@ -14,7 +14,7 @@ items:
     slot: 4
     display-name: "&dEstado del Núcleo"
     lore:
-      - "&7Nivel: &e%level%"
+      - "&7Nivel: &e%level%&7/&e%max_level%"
       - "&7Fracturas: &d%prestige% &8(&a+%prestige_bonus%% producción&8)"
       - "&7Fragmentos del Núcleo: &b%fragments%"
       - "&7Energía: &6%energy%&7/&6%max_energy%⚡"
@@ -37,7 +37,7 @@ items:
     locked-material: BARRIER
     locked-name: "&cFractura bloqueada"
     locked-lore:
-      - "&cRequiere Núcleo nivel &e10&c."
+      - "&cRequiere Núcleo nivel &e%max_level%&c."
       - "&7Nivel actual: &e%level%"
   astral-tree:
     material: NETHERITE_UPGRADE_SMITHING_TEMPLATE
@@ -125,6 +125,9 @@ items:
       - "&7Nueva base: &a+%next_base%⚡/golpe"
       - " "
       - "&cEnergía insuficiente."
+    display-name-max-level: "&aNúcleo al máximo &7(%max_level%)"
+    lore-max-level:
+      - "&7Has alcanzado el nivel máximo del Núcleo."
   close:
     material: ARROW
     slot: 49

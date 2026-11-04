@@ -93,6 +93,18 @@ public final class CoreMenu implements Listener {
         } else if (rows != 6) {
             throw new IllegalArgumentException("core_menu.yml rows must be 6.");
         }
+        List<String> fractureLockedLore = loaded.getStringList("items.fracture.locked-lore");
+        List<String> migratedFractureLockedLore = fractureLockedLore.stream()
+                .map(line -> line.replace("&e10&c", "&e%max_level%&c"))
+                .toList();
+        if (!fractureLockedLore.equals(migratedFractureLockedLore)) {
+            loaded.set("items.fracture.locked-lore", migratedFractureLockedLore);
+            try {
+                loaded.save(configFile);
+            } catch (IOException exception) {
+                throw new IllegalArgumentException("Could not migrate core fracture level in core_menu.yml.", exception);
+            }
+        }
         validateItem(loaded, "items.upgrades");
         validateItem(loaded, "items.statistics");
         validateItem(loaded, "items.fracture");
@@ -151,7 +163,8 @@ public final class CoreMenu implements Listener {
         holder.inventory.setItem(slot("condenser"), createCondenserItem(core));
         holder.inventory.setItem(slot("crop-generator"), createCropGeneratorItem(core));
         holder.inventory.setItem(slot("upgrade"), createItem(
-                config.getConfigurationSection("items.upgrade"), core, core.energy() >= core.upgradeCost()));
+                config.getConfigurationSection("items.upgrade"), core,
+                core.level() < CoreRecord.MAX_LEVEL && core.energy() >= core.upgradeCost()));
         holder.inventory.setItem(slot("close"), createSimpleItem("items.close"));
         player.openInventory(holder.inventory);
     }
@@ -206,7 +219,10 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createItem(ConfigurationSection itemConfig, CoreRecord core, boolean canUpgrade) {
         List<String> lore;
-        if (itemConfig.contains("lore")) {
+        boolean atMaxLevel = itemConfig.contains("lore-max-level") && core.level() >= CoreRecord.MAX_LEVEL;
+        if (atMaxLevel) {
+            lore = itemConfig.getStringList("lore-max-level");
+        } else if (itemConfig.contains("lore")) {
             lore = itemConfig.getStringList("lore");
         } else {
             String path = canUpgrade ? "lore-enough" : "lore-insufficient";
@@ -223,6 +239,7 @@ public final class CoreMenu implements Listener {
                 Map.entry("%base_energy%", formatEnergy(core.baseEnergy())),
                 Map.entry("%max_combo%", String.format(java.util.Locale.ROOT, "%.1f", core.maxCombo())),
                 Map.entry("%next_level%", Integer.toString(core.level() + 1)),
+                Map.entry("%max_level%", Integer.toString(CoreRecord.MAX_LEVEL)),
                 Map.entry("%cost%", formatEnergy(core.upgradeCost())),
                 Map.entry("%next_base%", formatEnergy(Math.pow(1.25, core.level()))),
                 Map.entry("%capacity_bonus%", Integer.toString(core.upgradeCapacity() * 12)),
@@ -230,7 +247,10 @@ public final class CoreMenu implements Listener {
 
         ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "PAPER")));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(color(replace(itemConfig.getString("display-name", ""), placeholders)));
+        String displayName = atMaxLevel
+                ? itemConfig.getString("display-name-max-level", itemConfig.getString("display-name", ""))
+                : itemConfig.getString("display-name", "");
+        meta.displayName(color(replace(displayName, placeholders)));
         meta.lore(lore.stream()
                 .map(line -> color(replace(line, placeholders)))
                 .toList());
@@ -240,7 +260,7 @@ public final class CoreMenu implements Listener {
 
     private ItemStack createFractureItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.fracture");
-        boolean unlocked = core.level() >= 10;
+        boolean unlocked = core.level() >= CoreRecord.MAX_LEVEL;
         String material = itemConfig.getString(unlocked ? "material" : "locked-material",
                 unlocked ? "NETHER_STAR" : "BARRIER");
         ItemStack item = new ItemStack(Material.matchMaterial(material));
@@ -249,6 +269,7 @@ public final class CoreMenu implements Listener {
         meta.lore(itemConfig.getStringList(unlocked ? "lore" : "locked-lore").stream()
                 .map(line -> color(replace(line, Map.of(
                         "%level%", Integer.toString(core.level()),
+                        "%max_level%", Integer.toString(CoreRecord.MAX_LEVEL),
                         "%prestige%", Integer.toString(core.prestigeCount()),
                         "%fragments%", Integer.toString(core.coreFragments())))))
                 .toList());

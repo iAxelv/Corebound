@@ -22,7 +22,10 @@ public record CellRecord(CellType type, int tier) {
     }
 
     public static int maximumTierForCoreLevel(int coreLevel) {
-        return Math.max(1, Math.min(MAX_TIER, coreLevel / 5));
+        if (coreLevel < 5) {
+            return 1;
+        }
+        return Math.min(MAX_TIER, 2 + (coreLevel - 5) / 5);
     }
 
     public static int maximumTierForCondenserLevel(int condenserLevel) {
@@ -43,6 +46,10 @@ public record CellRecord(CellType type, int tier) {
 
     public double voidCriticalChance() {
         return type == CellType.VOID ? 0.05 * tier : 0.0;
+    }
+
+    public double pylonEnergyBonus() {
+        return type == CellType.ENERGY ? 0.10 * tier : 0.0;
     }
 
     public double condenserEnergyReduction() {

@@ -25,6 +25,7 @@ public record CoreRecord(
         int astralPylonAttunement,
         int upgradeCapacity,
         int upgradeHitYield) {
+    public static final int MAX_LEVEL = 25;
 
     public CoreRecord {
         level = Math.max(1, level);
@@ -220,7 +221,7 @@ public record CoreRecord(
     }
 
     public CoreRecord upgrade(double cost) {
-        if (energy < cost || level == Integer.MAX_VALUE) {
+        if (energy < cost || level >= MAX_LEVEL) {
             return null;
         }
         return new CoreRecord(
@@ -341,7 +342,7 @@ public record CoreRecord(
     }
 
     public double upgradeCost() {
-        double cost = 250.0 * Math.pow(2.2, level - 1);
+        double cost = 250.0 * Math.pow(1.9, level - 1);
         return Double.isFinite(cost) ? cost : Double.MAX_VALUE;
     }
 
@@ -350,7 +351,7 @@ public record CoreRecord(
     }
 
     public CoreRecord fracture() {
-        if (level < 10) {
+        if (level < MAX_LEVEL) {
             return null;
         }
         return new CoreRecord(
@@ -376,7 +377,13 @@ public record CoreRecord(
         if (level < 10) {
             return 2;
         }
-        return 3;
+        if (level < 15) {
+            return 3;
+        }
+        if (level < 20) {
+            return 4;
+        }
+        return 5;
     }
 
     public record HitResult(CoreRecord core, boolean critical) {

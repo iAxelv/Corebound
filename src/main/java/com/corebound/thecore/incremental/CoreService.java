@@ -400,8 +400,9 @@ public final class CoreService {
             messages.send(player, "core-fracture-owner-only");
             return false;
         }
-        if (current.level() < 10) {
-            messages.send(player, "core-fracture-level-required");
+        if (current.level() < CoreRecord.MAX_LEVEL) {
+            messages.send(player, "core-fracture-level-required",
+                    Map.of("level", Integer.toString(CoreRecord.MAX_LEVEL)));
             return false;
         }
         if (pylonService != null && !pylonService.destroyPylons(player, islandIndex)) {
@@ -415,7 +416,8 @@ public final class CoreService {
         }
         CoreRecord fractured = repository.fractureCore(islandIndex);
         if (fractured == null) {
-            messages.send(player, "core-fracture-level-required");
+            messages.send(player, "core-fracture-level-required",
+                    Map.of("level", Integer.toString(CoreRecord.MAX_LEVEL)));
             return false;
         }
         anomalies.remove(islandIndex);
@@ -437,6 +439,11 @@ public final class CoreService {
         CoreRecord current = coreForPlayer(player, islandIndex);
         if (current == null) {
             return false;
+        }
+        if (current.level() >= CoreRecord.MAX_LEVEL) {
+            messages.send(player, "core-max-level",
+                    Map.of("level", Integer.toString(CoreRecord.MAX_LEVEL)));
+            return true;
         }
         double cost = current.upgradeCost();
         if (current.energy() < cost) {

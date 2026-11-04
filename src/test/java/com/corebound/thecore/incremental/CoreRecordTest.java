@@ -57,11 +57,11 @@ class CoreRecordTest {
     void upgradesLevelAndDeductsTheExponentialCost() {
         CoreRecord levelTwoCore = createCore(2, 1000.0);
 
-        assertEquals(550.0, levelTwoCore.upgradeCost(), 0.0001);
+        assertEquals(475.0, levelTwoCore.upgradeCost(), 0.0001);
         CoreRecord upgraded = levelTwoCore.upgrade(levelTwoCore.upgradeCost());
 
         assertEquals(3, upgraded.level());
-        assertEquals(55.0, upgraded.energy(), 0.0001);
+        assertEquals(130.0, upgraded.energy(), 0.0001);
         assertEquals(1.5625, upgraded.baseEnergy(), 0.0001);
     }
 
@@ -77,11 +77,11 @@ class CoreRecordTest {
     void levelFourCoreCanAffordItsNextUpgradeAtFullCapacity() {
         CoreRecord levelFourCore = createCore(4, 2928.2);
 
-        assertEquals(2662.0, levelFourCore.upgradeCost(), 0.0001);
+        assertEquals(1714.75, levelFourCore.upgradeCost(), 0.0001);
         CoreRecord upgraded = levelFourCore.upgrade(levelFourCore.upgradeCost());
 
         assertEquals(5, upgraded.level());
-        assertEquals(266.2, upgraded.energy(), 0.0001);
+        assertEquals(1213.45, upgraded.energy(), 0.0001);
         assertEquals(6442.04, upgraded.maxEnergy(), 0.0001);
     }
 
@@ -188,7 +188,7 @@ class CoreRecordTest {
 
     @Test
     void fractureResetsEnergyAndLevelAndIncreasesPermanentProduction() {
-        CoreRecord core = createCore(10, 500.0);
+        CoreRecord core = createCore(CoreRecord.MAX_LEVEL, 500.0);
 
         CoreRecord fractured = core.fracture();
 
@@ -198,7 +198,7 @@ class CoreRecordTest {
         assertEquals(1, fractured.coreFragments());
         assertEquals(1.5, fractured.prestigeMultiplier(), 0.0001);
         assertEquals(0.6, fractured.withPassiveEnergy(0.4).energy(), 0.0001);
-        assertNull(createCore(9).fracture());
+        assertNull(createCore(CoreRecord.MAX_LEVEL - 1).fracture());
     }
 
     @Test
@@ -232,7 +232,7 @@ class CoreRecordTest {
 
     @Test
     void astralSkillsSurviveRebirthAndKeepTheirRanks() {
-        CoreRecord core = createCore(10, 500, 3, 5, 2, 1);
+        CoreRecord core = createCore(CoreRecord.MAX_LEVEL, 500, 3, 5, 2, 1);
 
         CoreRecord reborn = core.fracture();
 
@@ -243,14 +243,23 @@ class CoreRecordTest {
     }
 
     @Test
-    void pylonCapacityUnlocksAtLevelsThreeSevenAndTen() {
+    void pylonCapacityGrowsToFiveAsTheCoreLevels() {
         assertEquals(0, createCore(1).pylonCapacity());
         assertEquals(1, createCore(3).pylonCapacity());
         assertEquals(1, createCore(6).pylonCapacity());
         assertEquals(2, createCore(7).pylonCapacity());
         assertEquals(2, createCore(9).pylonCapacity());
         assertEquals(3, createCore(10).pylonCapacity());
-        assertEquals(3, createCore(100).pylonCapacity());
+        assertEquals(4, createCore(15).pylonCapacity());
+        assertEquals(5, createCore(20).pylonCapacity());
+        assertEquals(5, createCore(CoreRecord.MAX_LEVEL).pylonCapacity());
+    }
+
+    @Test
+    void coreCannotUpgradePastMaximumLevel() {
+        CoreRecord maxLevelCore = createCore(CoreRecord.MAX_LEVEL, Double.MAX_VALUE);
+
+        assertNull(maxLevelCore.upgrade(maxLevelCore.upgradeCost()));
     }
 
     private CoreRecord createCore(int level) {

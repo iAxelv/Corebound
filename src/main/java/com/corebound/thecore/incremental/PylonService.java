@@ -81,7 +81,7 @@ public final class PylonService {
     private float forgeRouletteStopVolume;
     private float forgeRouletteStopPitch;
     private final Map<CellType, Double> cellForgeCosts = new java.util.EnumMap<>(CellType.class);
-    private final Map<Integer, Integer> tierCoreLevelRequirements = Map.of(2, 5, 3, 10);
+    private final Map<Integer, Integer> tierCoreLevelRequirements = Map.of(2, 5, 3, 8);
     private final Map<Long, CellType[]> cellForgeOffers = new ConcurrentHashMap<>();
     private final Map<Long, boolean[]> availableCellForgeOffers = new ConcurrentHashMap<>();
     private final Map<UUID, ScheduledTask> activePylons = new ConcurrentHashMap<>();
@@ -130,11 +130,20 @@ public final class PylonService {
             loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
             if (saveDefaults) {
                 loaded.options().copyDefaults(true);
-                if (loaded.getInt("pylon.interval-ticks", 400) == 60) {
-                    loaded.set("pylon.interval-ticks", 400);
+                int previousInterval = loaded.getInt("pylon.interval-ticks", 300);
+                if (previousInterval == 400 || previousInterval == 60) {
+                    loaded.set("pylon.interval-ticks", 300);
+                }
+                if (loaded.getInt("pylon.tier-required-core-levels.3", 8) == 10) {
+                    loaded.set("pylon.tier-required-core-levels.3", 8);
+                }
+                if (Double.compare(loaded.getDouble("pylon.tier-upgrade-costs.3", 1500.0), 2000.0) == 0) {
+                    loaded.set("pylon.tier-upgrade-costs.3", 1500.0);
                 }
                 if (Double.compare(loaded.getDouble("pylon.base-yield-ratio", 2.0), 0.4) == 0) {
-                    loaded.set("pylon.base-yield-ratio", 2.0);
+                    loaded.set("pylon.base-yield-ratio", 3.0);
+                } else if (Double.compare(loaded.getDouble("pylon.base-yield-ratio", 3.0), 2.0) == 0) {
+                    loaded.set("pylon.base-yield-ratio", 3.0);
                 }
                 if (Double.compare(loaded.getDouble("pylon.purchase-cost", 1000.0), 500.0) == 0
                         && Double.compare(loaded.getDouble("pylon.purchase-cost-multiplier", 1.0), 3.5) == 0) {
@@ -158,10 +167,10 @@ public final class PylonService {
         if (!Double.isFinite(configuredScale) || configuredScale <= 0 || configuredScale > Float.MAX_VALUE) {
             throw new IllegalArgumentException("pylons.yml pylon.display.scale must be a positive finite number.");
         }
-        int loadedIntervalTicks = loaded.getInt("pylon.interval-ticks", 400);
+        int loadedIntervalTicks = loaded.getInt("pylon.interval-ticks", 300);
         double loadedMinimumDistance = loaded.getDouble("pylon.min-distance", 3.0);
         double loadedMaximumDistance = loaded.getDouble("pylon.max-distance", 12.0);
-        double loadedBaseYieldRatio = loaded.getDouble("pylon.base-yield-ratio", 2.0);
+        double loadedBaseYieldRatio = loaded.getDouble("pylon.base-yield-ratio", 3.0);
         double loadedPurchaseCost = loaded.getDouble("pylon.purchase-cost", 1000.0);
         double loadedForgeRefreshCost = loaded.getDouble("pylon.cells.refresh-cost", 75.0);
         int loadedRouletteDuration = loaded.getInt("pylon.cells.roulette.duration-ticks", 40);
@@ -190,8 +199,10 @@ public final class PylonService {
             loadedCellForgeCosts.put(type, cost);
         }
         int tierTwoCoreLevel = loaded.getInt("pylon.tier-required-core-levels.2", 5);
-        int tierThreeCoreLevel = loaded.getInt("pylon.tier-required-core-levels.3", 10);
-        if (tierTwoCoreLevel < 3 || tierThreeCoreLevel <= tierTwoCoreLevel) {
+        int tierThreeCoreLevel = loaded.getInt("pylon.tier-required-core-levels.3", 8);
+        if (tierTwoCoreLevel < 3
+                || tierThreeCoreLevel <= tierTwoCoreLevel
+                || tierThreeCoreLevel > CoreRecord.MAX_LEVEL) {
             throw new IllegalArgumentException(
                     "pylons.yml tier-required-core-levels must be at least 3 and increase for each tier.");
         }
@@ -349,7 +360,9 @@ public final class PylonService {
     }
 
     public CellType[] randomCellOffers() {
-        CellType[] types = CellType.values();
+        CellType[] types = java.util.Arrays.stream(CellType.values())
+                .filter(CellType::isPylonCell)
+                .toArray(CellType[]::new);
         ThreadLocalRandom random = ThreadLocalRandom.current();
         return new CellType[] {
             types[random.nextInt(types.length)],
@@ -440,7 +453,7 @@ public final class PylonService {
         if (!canManagePylon(player, pylon)) {
             return false;
         }
-        if (coreLevel(pylon.islandIndex()) >= 10) {
+        if (coreLevel(pylon.islandIndex()) >= CoreRecord.MAX_LEVEL) {
             messages.send(player, "pylon-runes-locked");
             return false;
         }
@@ -692,7 +705,7 @@ public final class PylonService {
             messages.send(player, "pylon-place-access-denied");
             return false;
         }
-        if (coreLevel(pylon.islandIndex()) >= 10) {
+        if (coreLevel(pylon.islandIndex()) >= CoreRecord.MAX_LEVEL) {
             messages.send(player, "pylon-max-level-pickup-locked");
             return false;
         }
@@ -1054,6 +1067,7 @@ public final class PylonService {
         drawPulseLine(world, source, target, dominantCell(pylon));
         drawLightningLinks(pylon, world);
         double yieldRatio = baseYieldRatio * lightningMultiplier(pylon)
+                * pylonEnergyMultiplier(pylon.equippedCells())
                 * coreService.energyMultiplier(pylon.islandIndex(), System.currentTimeMillis());
         if (criticalHit(pylon)) {
             yieldRatio *= 3.5;
@@ -1146,9 +1160,14 @@ public final class PylonService {
         return core.baseEnergy()
                 * baseYieldRatio
                 * lightningMultiplier
+                * pylonEnergyMultiplier(cells)
                 * core.astralPylonMultiplier()
                 * core.prestigeMultiplier()
                 * expectedCriticalMultiplier;
+    }
+
+    private double pylonEnergyMultiplier(Map<Integer, CellRecord> cells) {
+        return 1.0 + cells.values().stream().mapToDouble(CellRecord::pylonEnergyBonus).sum();
     }
 
     private CellRecord dominantCell(PylonRecord pylon) {
@@ -1360,6 +1379,7 @@ public final class PylonService {
             case FIRE -> cell.fireIntervalReductionTicks() / 20.0;
             case LIGHTNING -> cell.lightningBonusPerLink() * 100.0;
             case VOID -> cell.voidCriticalChance() * 100.0;
+            case ENERGY -> cell.pylonEnergyBonus() * 100.0;
             case CONDENSER_EFFICIENCY -> cell.condenserEnergyReduction() * 100.0;
             case CONDENSER_YIELD -> cell.condenserOreChanceBonus() * 100.0;
             case CROP_EFFICIENCY -> cell.cropHarvestBonus() * 100.0;

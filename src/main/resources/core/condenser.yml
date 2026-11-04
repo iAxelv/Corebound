@@ -7,7 +7,7 @@ condenser:
     rotation-speed-ticks: 20
   purchase-cost: 500.0
   minimum-core-level: 3
-  pickup-lock-core-level: 10
+  pickup-lock-core-level: 25
   max-level: 9
   upgrade:
     base-cost: 500.0

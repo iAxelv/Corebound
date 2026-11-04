@@ -42,6 +42,8 @@ public final class CellItem {
                     "bonus", formatNumber(cell.lightningBonusPerLink() * 100)));
             case VOID -> messages.formatText("cell-item.improvement.void", Map.of(
                     "chance", formatNumber(cell.voidCriticalChance() * 100)));
+            case ENERGY -> messages.formatText("cell-item.improvement.energy", Map.of(
+                    "bonus", formatNumber(cell.pylonEnergyBonus() * 100)));
             case CONDENSER_EFFICIENCY -> messages.formatText("cell-item.improvement.condenser-efficiency", Map.of(
                     "bonus", formatNumber(cell.condenserEnergyReduction() * 100)));
             case CONDENSER_YIELD -> messages.formatText("cell-item.improvement.condenser-yield", Map.of(

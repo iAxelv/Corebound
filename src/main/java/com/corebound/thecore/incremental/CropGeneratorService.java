@@ -251,6 +251,9 @@ public final class CropGeneratorService implements Listener {
             loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
             if (saveDefaults) {
                 loaded.options().copyDefaults(true);
+                if (loaded.getInt("crop-generator.pickup-lock-core-level", CoreRecord.MAX_LEVEL) == 10) {
+                    loaded.set("crop-generator.pickup-lock-core-level", CoreRecord.MAX_LEVEL);
+                }
                 loaded.save(configFile);
             }
         } catch (IOException exception) {
@@ -285,7 +288,8 @@ public final class CropGeneratorService implements Listener {
         double loadedGrowthSoundPitch =
                 loaded.getDouble("crop-generator.growth.feedback.pitch", 1.1);
         double loadedMaximumHarvestBonus = loaded.getDouble("crop-generator.runes.maximum-harvest-bonus", 1.0);
-        int loadedPickupLockCoreLevel = loaded.getInt("crop-generator.pickup-lock-core-level", 10);
+        int loadedPickupLockCoreLevel =
+                loaded.getInt("crop-generator.pickup-lock-core-level", CoreRecord.MAX_LEVEL);
         if (loadedItemMaterial == null || !loadedItemMaterial.isItem()
                 || !Double.isFinite(loadedScale) || loadedScale <= 0 || loadedScale > Float.MAX_VALUE
                 || !Double.isFinite(loadedHeightOffset) || loadedHeightOffset <= 0
@@ -303,7 +307,8 @@ public final class CropGeneratorService implements Listener {
                 || !validSoundSetting(loadedGrowthSoundVolume)
                 || !validSoundSetting(loadedGrowthSoundPitch)
                 || !Double.isFinite(loadedMaximumHarvestBonus) || loadedMaximumHarvestBonus < 0
-                || loadedPickupLockCoreLevel < minimumCoreLevel()) {
+                || loadedPickupLockCoreLevel < minimumCoreLevel()
+                || loadedPickupLockCoreLevel > CoreRecord.MAX_LEVEL) {
             throw new IllegalArgumentException("crop_generator.yml contains invalid material, progression, or costs.");
         }
         int secondRuneSlotLevel = loaded.getInt("crop-generator.runes.slot-required-level.2", 3);

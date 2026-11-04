@@ -6,7 +6,7 @@ crop-generator:
     height-offset: 1.8
     rotation-period-ticks: 40
   purchase-cost: 750.0
-  pickup-lock-core-level: 10
+  pickup-lock-core-level: 25
   upgrade:
     base-cost: 400.0
     cost-multiplier: 1.7

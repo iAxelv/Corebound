@@ -8,6 +8,7 @@ public enum CellType {
     FIRE(Material.BLAZE_POWDER, "&6", Material.MAGMA_BLOCK, Particle.FLAME),
     LIGHTNING(Material.COPPER_INGOT, "&e", Material.SEA_LANTERN, Particle.ELECTRIC_SPARK),
     VOID(Material.ENDER_PEARL, "&5", Material.CRYING_OBSIDIAN, Particle.PORTAL),
+    ENERGY(Material.AMETHYST_SHARD, "&d", Material.AMETHYST_BLOCK, Particle.END_ROD),
     CONDENSER_EFFICIENCY(
             Material.QUARTZ, "&b", Material.BLAST_FURNACE, Particle.CRIT),
     CONDENSER_YIELD(

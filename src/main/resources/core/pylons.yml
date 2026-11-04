@@ -11,17 +11,17 @@ pylon:
     base-material: SEA_LANTERN
     material: END_ROD
     scale: 1.2
-  interval-ticks: 400
+  interval-ticks: 300
   min-distance: 3.0
   max-distance: 12.0
-  base-yield-ratio: 2.0
+  base-yield-ratio: 3.0
   purchase-cost: 1000.0
   tier-upgrade-costs:
     '2': 500.0
-    '3': 2000.0
+    '3': 1500.0
   tier-required-core-levels:
     '2': 5
-    '3': 10
+    '3': 8
   cells:
     refresh-cost: 75.0
     roulette:
@@ -36,6 +36,7 @@ pylon:
       FIRE: 100.0
       LIGHTNING: 100.0
       VOID: 150.0
+      ENERGY: 250.0
       CONDENSER_EFFICIENCY: 200.0
       CONDENSER_YIELD: 200.0
       CROP_EFFICIENCY: 200.0
