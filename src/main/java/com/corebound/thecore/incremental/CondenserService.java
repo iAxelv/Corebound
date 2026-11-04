@@ -71,10 +71,14 @@ public final class CondenserService implements Listener {
     private final NamespacedKey itemIdKey;
     private final NamespacedKey itemLevelKey;
     private final NamespacedKey itemStateKey;
+    private final NamespacedKey itemRuneSlotsKey;
+    private final List<NamespacedKey> itemRuneTypeKeys;
+    private final List<NamespacedKey> itemRuneTierKeys;
     private final NamespacedKey entityKey;
     private final NamespacedKey entityIdKey;
     private final Map<UUID, ScheduledTask> monitorTasks = new ConcurrentHashMap<>();
     private final Map<UUID, ScheduledTask> visualTasks = new ConcurrentHashMap<>();
+    private final Set<UUID> generationFeedback = ConcurrentHashMap.newKeySet();
     private final Set<UUID> rangeGuidePlayers = ConcurrentHashMap.newKeySet();
     private final CondenserMenu menu;
     private final CondenserRuneMenu runeMenu;
@@ -88,6 +92,10 @@ public final class CondenserService implements Listener {
     private double upgradeCostMultiplier;
     private int maximumLevel;
     private double oreChance;
+    private double oreChanceIncreasePerLevel;
+    private double maximumOreChance;
+    private double olderOreWeightDecay;
+    private double[] oreWeights;
     private double baseEnergyCost;
     private double energyCostPerLevel;
     private int minimumCoreLevel;
@@ -115,6 +123,13 @@ public final class CondenserService implements Listener {
         itemIdKey = new NamespacedKey(plugin, "condenser_item_id");
         itemLevelKey = new NamespacedKey(plugin, "condenser_item_level");
         itemStateKey = new NamespacedKey(plugin, "condenser_item_state");
+        itemRuneSlotsKey = new NamespacedKey(plugin, "condenser_rune_slots");
+        itemRuneTypeKeys = java.util.stream.IntStream.range(0, 3)
+                .mapToObj(index -> new NamespacedKey(plugin, "condenser_rune_" + index + "_type"))
+                .toList();
+        itemRuneTierKeys = java.util.stream.IntStream.range(0, 3)
+                .mapToObj(index -> new NamespacedKey(plugin, "condenser_rune_" + index + "_tier"))
+                .toList();
         entityKey = new NamespacedKey(plugin, "condenser_entity");
         entityIdKey = new NamespacedKey(plugin, "condenser_id");
         applyConfiguration(loadConfiguration(true));
@@ -164,10 +179,21 @@ public final class CondenserService implements Listener {
             }
         }
         double loadedOreChance = loaded.getDouble("condenser.generation.ore-chance", 0.10);
+        double loadedOreChanceIncrease = loaded.getDouble(
+                "condenser.generation.ore-chance-increase-per-level", 0.04);
+        double loadedMaximumOreChance = loaded.getDouble("condenser.generation.maximum-ore-chance", 0.75);
+        double loadedOlderOreWeightDecay = loaded.getDouble(
+                "condenser.generation.older-ore-weight-decay", 0.45);
+        double[] loadedOreWeights = ORES.stream()
+                .mapToDouble(material -> loaded.getDouble(
+                        "condenser.generation.ore-weights." + material.name(), Double.NaN))
+                .toArray();
         double loadedBaseEnergyCost = loaded.getDouble("condenser.generation.energy-cost", 1.0);
         double loadedEnergyCostPerLevel = loaded.getDouble("condenser.generation.energy-cost-per-level", 0.5);
         int loadedMinimumCoreLevel = loaded.getInt("condenser.minimum-core-level", 3);
         int loadedPickupLockCoreLevel = loaded.getInt("condenser.pickup-lock-core-level", 10);
+        int loadedSecondRuneLevel = loaded.getInt("condenser.runes.slot-required-level.2", 3);
+        int loadedThirdRuneLevel = loaded.getInt("condenser.runes.slot-required-level.3", 6);
         if (!Double.isFinite(loadedScale) || loadedScale <= 0
                 || !Double.isFinite(loadedHeightOffset) || loadedHeightOffset < 1 || loadedHeightOffset >= 2
                 || loadedRotationSpeedTicks <= 0 || !Double.isFinite(loadedPurchaseCost)
@@ -175,9 +201,18 @@ public final class CondenserService implements Listener {
                 || !Double.isFinite(loadedUpgradeMultiplier) || loadedUpgradeMultiplier <= 1
                 || loadedMaximumLevel < 0 || loadedMaximumLevel > ORES.size()
                 || !Double.isFinite(loadedOreChance) || loadedOreChance < 0 || loadedOreChance > 1
+                || !Double.isFinite(loadedOreChanceIncrease) || loadedOreChanceIncrease < 0
+                || !Double.isFinite(loadedMaximumOreChance) || loadedMaximumOreChance < loadedOreChance
+                || loadedMaximumOreChance > 0.95
+                || !Double.isFinite(loadedOlderOreWeightDecay)
+                || loadedOlderOreWeightDecay <= 0 || loadedOlderOreWeightDecay > 1
+                || java.util.Arrays.stream(loadedOreWeights).anyMatch(
+                        weight -> !Double.isFinite(weight) || weight <= 0)
                 || !Double.isFinite(loadedBaseEnergyCost) || loadedBaseEnergyCost <= 0
                 || !Double.isFinite(loadedEnergyCostPerLevel) || loadedEnergyCostPerLevel < 0
-                || loadedMinimumCoreLevel < 1 || loadedPickupLockCoreLevel < 1) {
+                || loadedMinimumCoreLevel < 1 || loadedPickupLockCoreLevel < 1
+                || loadedSecondRuneLevel < 1 || loadedThirdRuneLevel <= loadedSecondRuneLevel
+                || loadedThirdRuneLevel > loadedMaximumLevel) {
             throw new IllegalArgumentException("condenser.yml contains invalid cost, level, or generation settings.");
         }
         int configuredMaximumLevel = loadedMaximumLevel;
@@ -195,10 +230,20 @@ public final class CondenserService implements Listener {
         upgradeCostMultiplier = loadedUpgradeMultiplier;
         maximumLevel = loadedMaximumLevel;
         oreChance = loadedOreChance;
+        oreChanceIncreasePerLevel = loadedOreChanceIncrease;
+        maximumOreChance = loadedMaximumOreChance;
+        olderOreWeightDecay = loadedOlderOreWeightDecay;
+        oreWeights = loadedOreWeights;
         baseEnergyCost = loadedBaseEnergyCost;
         energyCostPerLevel = loadedEnergyCostPerLevel;
         minimumCoreLevel = loadedMinimumCoreLevel;
         pickupLockCoreLevel = loadedPickupLockCoreLevel;
+        for (CondenserRecord condenser : repository.all()) {
+            int unlockedSlots = maximumRuneSlotsForLevel(condenser.level());
+            if (condenser.runeSlots() != unlockedSlots) {
+                repository.update(condenser.withRuneSlots(unlockedSlots));
+            }
+        }
     }
 
     private Material configuredMaterial(YamlConfiguration loaded, String path, String fallback, boolean item) {
@@ -262,7 +307,7 @@ public final class CondenserService implements Listener {
             return false;
         }
         try {
-            deliverItem(player, createItem(islandIndex, itemId, 0, CondenserState.ACTIVE));
+            deliverItem(player, createItem(islandIndex, itemId, 0, CondenserState.ACTIVE, 1, Map.of()));
         } catch (RuntimeException exception) {
             repository.releasePendingItem(islandIndex, itemId);
             coreRepository.restoreEnergy(islandIndex, purchaseCost);
@@ -282,7 +327,13 @@ public final class CondenserService implements Listener {
         }
     }
 
-    private ItemStack createItem(long islandIndex, UUID itemId, int level, CondenserState state) {
+    private ItemStack createItem(
+            long islandIndex,
+            UUID itemId,
+            int level,
+            CondenserState state,
+            int runeSlots,
+            Map<Integer, CellRecord> runes) {
         ItemStack item = new ItemStack(itemMaterial);
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.parseComponent("&bCondensador de Materia"));
@@ -298,9 +349,48 @@ public final class CondenserService implements Listener {
         meta.getPersistentDataContainer().set(itemIdKey, PersistentDataType.STRING, itemId.toString());
         meta.getPersistentDataContainer().set(itemLevelKey, PersistentDataType.INTEGER, level);
         meta.getPersistentDataContainer().set(itemStateKey, PersistentDataType.STRING, state.name());
+        meta.getPersistentDataContainer().set(itemRuneSlotsKey, PersistentDataType.INTEGER, runeSlots);
+        runes.forEach((slot, rune) -> {
+            if (slot >= 0 && slot < itemRuneTypeKeys.size()) {
+                meta.getPersistentDataContainer().set(
+                        itemRuneTypeKeys.get(slot), PersistentDataType.STRING, rune.type().name());
+                meta.getPersistentDataContainer().set(
+                        itemRuneTierKeys.get(slot), PersistentDataType.INTEGER, rune.tier());
+            }
+        });
         meta.setMaxStackSize(1);
         item.setItemMeta(meta);
         return item;
+    }
+
+    private Map<Integer, CellRecord> readItemRunes(ItemMeta meta, int level, int runeSlots) {
+        if (runeSlots < 1 || runeSlots > maximumRuneSlotsForLevel(level)) {
+            return null;
+        }
+        Map<Integer, CellRecord> runes = new java.util.HashMap<>();
+        int maximumTier = CellRecord.maximumTierForCondenserLevel(level);
+        for (int slot = 0; slot < itemRuneTypeKeys.size(); slot++) {
+            String type = meta.getPersistentDataContainer().get(
+                    itemRuneTypeKeys.get(slot), PersistentDataType.STRING);
+            Integer tier = meta.getPersistentDataContainer().get(
+                    itemRuneTierKeys.get(slot), PersistentDataType.INTEGER);
+            if (type == null && tier == null) {
+                continue;
+            }
+            if (type == null || tier == null) {
+                return null;
+            }
+            try {
+                CellRecord rune = new CellRecord(CellType.valueOf(type), tier);
+                if (!rune.type().isCondenserRune() || rune.tier() > maximumTier) {
+                    return null;
+                }
+                runes.put(slot, rune);
+            } catch (IllegalArgumentException exception) {
+                return null;
+            }
+        }
+        return Map.copyOf(runes);
     }
 
     public boolean place(Player player, Block clickedBlock) {
@@ -358,6 +448,13 @@ public final class CondenserService implements Listener {
             messages.send(player, "condenser-item-invalidated");
             return false;
         }
+        int itemRuneSlots = heldMeta.getPersistentDataContainer().getOrDefault(
+                itemRuneSlotsKey, PersistentDataType.INTEGER, 1);
+        Map<Integer, CellRecord> itemRunes = readItemRunes(heldMeta, level, itemRuneSlots);
+        if (itemRunes == null) {
+            messages.send(player, "condenser-item-invalidated");
+            return false;
+        }
         String stateName = heldMeta.getPersistentDataContainer().getOrDefault(
                 itemStateKey, PersistentDataType.STRING, CondenserState.ACTIVE.name());
         CondenserState state = parseState(stateName);
@@ -403,8 +500,8 @@ public final class CondenserService implements Listener {
                     textDisplay.getUniqueId(),
                     level,
                     state,
-                    1,
-                    Map.of());
+                    itemRuneSlots,
+                    itemRunes);
             repository.add(condenser, itemId);
             refreshVisuals(condenser);
             consumeHeldItem(player, heldItem);
@@ -567,11 +664,76 @@ public final class CondenserService implements Listener {
             return;
         }
         coreService.refreshCore(chargedCore, System.currentTimeMillis());
-        double effectiveOreChance = mineralChance(condenser);
-        if (condenser.level() > 0 && ThreadLocalRandom.current().nextDouble() < effectiveOreChance) {
-            int availableOreCount = Math.min(condenser.level(), ORES.size());
-            event.getNewState().setType(ORES.get(ThreadLocalRandom.current().nextInt(availableOreCount)));
+        double[] outputChances = outputChances(condenser);
+        int oreIndex = CondenserMath.outputOreIndex(
+                outputChances, ThreadLocalRandom.current().nextDouble(100.0));
+        Material generatedMaterial = vanillaResult;
+        if (oreIndex >= 0 && oreIndex < Math.min(condenser.level(), ORES.size())) {
+            generatedMaterial = ORES.get(oreIndex);
+            event.getNewState().setType(generatedMaterial);
         }
+        showGenerationFeedback(condenser, generatedMaterial);
+    }
+
+    private void showGenerationFeedback(CondenserRecord condenser, Material generatedMaterial) {
+        if (!generationFeedback.add(condenser.condenserId())) {
+            return;
+        }
+        World world = plugin.getServer().getWorld(condenser.worldId());
+        if (world == null) {
+            generationFeedback.remove(condenser.condenserId());
+            return;
+        }
+        Location condenserLocation = new Location(world, condenser.x(), condenser.y(), condenser.z());
+        plugin.getServer().getRegionScheduler().run(plugin, condenserLocation, regionTask -> {
+            Entity entity = world.getEntity(condenser.itemDisplayId());
+            if (!(entity instanceof ItemDisplay display) || !display.isValid()) {
+                generationFeedback.remove(condenser.condenserId());
+                return;
+            }
+            int[] animationTick = {0};
+            ScheduledTask task = display.getScheduler().runAtFixedRate(plugin, scheduled -> {
+                if (!display.isValid() || animationTick[0] >= 14) {
+                    scheduled.cancel();
+                    return;
+                }
+                Location origin = display.getLocation();
+                double height = 0.08 + animationTick[0] * 0.045;
+                double radius = 0.2 + animationTick[0] * 0.025;
+                for (int particleIndex = 0; particleIndex < 8; particleIndex++) {
+                    double angle = animationTick[0] * 0.48 + particleIndex * Math.PI / 4.0;
+                    Location point = origin.clone().add(
+                            Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+                    display.getWorld().spawnParticle(
+                            Particle.ELECTRIC_SPARK, point, 3, 0.025, 0.035, 0.025, 0.02);
+                    if (generatedMaterial != Material.COBBLESTONE && generatedMaterial != Material.STONE) {
+                        display.getWorld().spawnParticle(
+                                Particle.END_ROD, point, 2, 0.025, 0.04, 0.025, 0.015);
+                    } else {
+                        display.getWorld().spawnParticle(
+                                Particle.WAX_ON, point, 1, 0.02, 0.03, 0.02, 0.01);
+                    }
+                }
+                if (animationTick[0] == 13) {
+                    Location burst = display.getLocation().add(0, 0.65, 0);
+                    display.getWorld().spawnParticle(Particle.FLASH, burst, 1);
+                    display.getWorld().spawnParticle(
+                            generatedMaterial == Material.COBBLESTONE || generatedMaterial == Material.STONE
+                                    ? Particle.WAX_ON
+                                    : Particle.HAPPY_VILLAGER,
+                            burst,
+                            24,
+                            0.35,
+                            0.4,
+                            0.35,
+                            0.08);
+                }
+                animationTick[0]++;
+            }, () -> generationFeedback.remove(condenser.condenserId()), 1L, 1L);
+            if (task == null) {
+                generationFeedback.remove(condenser.condenserId());
+            }
+        });
     }
 
     public boolean openMenu(Player player, Entity entity) {
@@ -619,7 +781,12 @@ public final class CondenserService implements Listener {
         }
         try {
             deliverItem(player, createItem(
-                    condenser.islandIndex(), itemId, condenser.level(), condenser.state()));
+                    condenser.islandIndex(),
+                    itemId,
+                    condenser.level(),
+                    condenser.state(),
+                    condenser.runeSlots(),
+                    condenser.runes()));
         } catch (RuntimeException exception) {
             repository.restore(condenser, itemId);
             plugin.getLogger().log(Level.SEVERE, "Could not return a picked-up matter condenser.", exception);
@@ -688,37 +855,9 @@ public final class CondenserService implements Listener {
                 || (rune != null && !rune.type().isCondenserRune())) {
             return false;
         }
-        repository.update(condenser.withRune(slot, rune));
-        return true;
-    }
-
-    public boolean upgradeRuneSlots(Player player, UUID condenserId) {
-        CondenserRecord condenser = repository.getById(condenserId);
-        if (condenser == null || !canManage(player, condenser)) {
-            return false;
-        }
-        int nextSlots = condenser.runeSlots() + 1;
-        if (nextSlots > 3) {
-            messages.send(player, "condenser-rune-slots-max");
-            return false;
-        }
-        int requiredLevel = runeSlotRequiredLevel(nextSlots);
-        if (condenser.level() < requiredLevel) {
-            messages.send(player, "condenser-rune-slot-locked", Map.of(
-                    "level", Integer.toString(requiredLevel)));
-            return false;
-        }
-        double cost = runeSlotUpgradeCost(nextSlots);
-        CoreRecord chargedCore = coreRepository.spendEnergy(condenser.islandIndex(), cost);
-        if (chargedCore == null) {
-            messages.send(player, "condenser-insufficient-energy");
-            return false;
-        }
-        repository.update(condenser.withRuneSlots(nextSlots));
-        coreService.refreshCore(chargedCore, System.currentTimeMillis());
-        messages.send(player, "condenser-rune-slots-upgraded", Map.of(
-                "slots", Integer.toString(nextSlots),
-                "cost", formatEnergy(cost)));
+        CondenserRecord updated = condenser.withRune(slot, rune);
+        repository.update(updated);
+        refreshVisuals(updated);
         return true;
     }
 
@@ -726,8 +865,14 @@ public final class CondenserService implements Listener {
         return config.getInt("condenser.runes.slot-required-level." + slots, slots == 2 ? 3 : 6);
     }
 
-    public double runeSlotUpgradeCost(int slots) {
-        return config.getDouble("condenser.runes.slot-costs." + slots, slots == 2 ? 1000.0 : 4000.0);
+    public int maximumRuneSlotsForLevel(int level) {
+        if (level >= runeSlotRequiredLevel(3)) {
+            return 3;
+        }
+        if (level >= runeSlotRequiredLevel(2)) {
+            return 2;
+        }
+        return 1;
     }
 
     public boolean destroyForFracture(Player player, long islandIndex) {
@@ -812,7 +957,9 @@ public final class CondenserService implements Listener {
             messages.send(player, "condenser-insufficient-energy");
             return false;
         }
-        CondenserRecord updated = condenser.withLevel(condenser.level() + 1);
+        int updatedLevel = condenser.level() + 1;
+        CondenserRecord updated = condenser.withLevel(
+                updatedLevel, maximumRuneSlotsForLevel(updatedLevel));
         repository.update(updated);
         coreService.refreshCore(chargedCore, System.currentTimeMillis());
         refreshVisuals(updated);
@@ -838,7 +985,7 @@ public final class CondenserService implements Listener {
         if (condenser.level() == 0) {
             return 0.0;
         }
-        return 1.0 - CondenserMath.outputChances(condenser, oreChance)[0] / 100.0;
+        return 1.0 - outputChances(condenser)[0] / 100.0;
     }
 
     public List<Material> unlockedMaterials(int level) {
@@ -851,7 +998,7 @@ public final class CondenserService implements Listener {
     }
 
     public double materialChance(CondenserRecord condenser, Material material) {
-        double[] chances = CondenserMath.outputChances(condenser, oreChance);
+        double[] chances = outputChances(condenser);
         if (material == Material.COBBLESTONE) {
             return chances[0];
         }
@@ -862,6 +1009,42 @@ public final class CondenserService implements Listener {
             }
         }
         return 0.0;
+    }
+
+    private double[] outputChances(CondenserRecord condenser) {
+        return CondenserMath.outputChances(
+                condenser,
+                oreChance,
+                oreChanceIncreasePerLevel,
+                maximumOreChance,
+                olderOreWeightDecay,
+                oreWeights);
+    }
+
+    public String runeSlotDisplayName() {
+        return config.getString(
+                "condenser.runes.empty-slot.display-name", "&bRanura de runa");
+    }
+
+    public List<String> runeSlotLore() {
+        List<String> lore = config.getStringList("condenser.runes.empty-slot.lore");
+        return lore.isEmpty()
+                ? List.of(
+                        "&7Mayús+clic en una runa de tu inventario",
+                        "&7para instalarla.",
+                        "",
+                        "&7Haz clic en una runa instalada",
+                        "&7para devolverla a tu inventario.")
+                : lore;
+    }
+
+    public String runeMenuText(String path, String fallback) {
+        return config.getString("condenser.runes.menu." + path, fallback);
+    }
+
+    public List<String> runeMenuLore(String path, List<String> fallback) {
+        List<String> configured = config.getStringList("condenser.runes.menu." + path);
+        return configured.isEmpty() ? fallback : configured;
     }
 
     public String oreMessageKey(Material material) {

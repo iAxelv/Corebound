@@ -18,8 +18,10 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 public final class CondenserRuneMenu implements Listener {
-    private static final int[] RUNE_SLOTS = {10, 13, 16};
-    private static final int UPGRADE_SLOT = 22;
+    private static final int[] ONE_RUNE_SLOT = {13};
+    private static final int[] TWO_RUNE_SLOTS = {12, 14};
+    private static final int[] THREE_RUNE_SLOTS = {11, 13, 15};
+    private static final int PROGRESSION_SLOT = 22;
     private static final int BACK_SLOT = 26;
 
     private static final class Holder implements InventoryHolder {
@@ -51,13 +53,15 @@ public final class CondenserRuneMenu implements Listener {
         holder.inventory = Bukkit.createInventory(
                 holder, 27, messages.parseComponent("&5Runas del Condensador"));
         fill(holder.inventory);
-        for (int index = 0; index < condenser.runeSlots(); index++) {
+        int[] slots = runeMenuSlots(condenser.runeSlots());
+        for (int index = 0; index < slots.length; index++) {
             CellRecord rune = condenser.runes().get(index);
             holder.inventory.setItem(
-                    RUNE_SLOTS[index],
+                    slots[index],
                     rune == null ? emptyRuneSlot() : CellItem.create(rune, pylons.baseIntervalTicks()));
         }
-        holder.inventory.setItem(UPGRADE_SLOT, upgradeItem(condenser));
+        holder.inventory.setItem(4, statisticsItem(condenser));
+        holder.inventory.setItem(PROGRESSION_SLOT, progressionItem(condenser));
         holder.inventory.setItem(BACK_SLOT, backItem());
         player.openInventory(holder.inventory);
     }
@@ -89,14 +93,8 @@ public final class CondenserRuneMenu implements Listener {
             condensers.openMenu(player, condenser.condenserId());
             return;
         }
-        if (rawSlot == UPGRADE_SLOT) {
-            condensers.upgradeRuneSlots(player, condenser.condenserId());
-            reopen(player, holder.condenserId);
-            return;
-        }
-        int runeIndex = runeIndex(rawSlot);
-        if (runeIndex >= 0 && runeIndex < condenser.runeSlots()
-                && condenser.runes().containsKey(runeIndex)) {
+        int runeIndex = runeIndex(rawSlot, condenser.runeSlots());
+        if (runeIndex >= 0 && condenser.runes().containsKey(runeIndex)) {
             if (!condensers.canRemoveRunes(player, condenser)) {
                 return;
             }
@@ -185,13 +183,22 @@ public final class CondenserRuneMenu implements Listener {
         return -1;
     }
 
-    private int runeIndex(int rawSlot) {
-        for (int index = 0; index < RUNE_SLOTS.length; index++) {
-            if (RUNE_SLOTS[index] == rawSlot) {
+    private int runeIndex(int rawSlot, int unlockedSlots) {
+        int[] slots = runeMenuSlots(unlockedSlots);
+        for (int index = 0; index < slots.length; index++) {
+            if (slots[index] == rawSlot) {
                 return index;
             }
         }
         return -1;
+    }
+
+    private int[] runeMenuSlots(int unlockedSlots) {
+        return switch (unlockedSlots) {
+            case 1 -> ONE_RUNE_SLOT;
+            case 2 -> TWO_RUNE_SLOTS;
+            default -> THREE_RUNE_SLOTS;
+        };
     }
 
     private boolean giveItem(Player player, ItemStack item) {
@@ -204,32 +211,57 @@ public final class CondenserRuneMenu implements Listener {
     private ItemStack emptyRuneSlot() {
         ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&bRanura de runa"));
-        meta.lore(List.of(messages.parseComponent("&7Mayús+clic en una runa de tu inventario para instalarla.")));
+        meta.displayName(messages.parseComponent(condensers.runeSlotDisplayName()));
+        meta.lore(condensers.runeSlotLore().stream().map(messages::parseComponent).toList());
         item.setItemMeta(meta);
         return item;
     }
 
-    private ItemStack upgradeItem(CondenserRecord condenser) {
-        int nextSlots = condenser.runeSlots() + 1;
-        boolean maxed = condenser.runeSlots() >= RUNE_SLOTS.length;
-        ItemStack item = new ItemStack(maxed ? Material.NETHER_STAR : Material.ANVIL);
+    private ItemStack statisticsItem(CondenserRecord condenser) {
+        ItemStack item = new ItemStack(Material.CLOCK);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent(maxed
-                ? "&aRanuras de runa al máximo"
-                : "&eDesbloquear ranura " + nextSlots));
-        List<Component> lore = maxed
-                ? List.of(messages.parseComponent("&7El Condensador tiene todas sus ranuras."))
-                : List.of(
-                        messages.parseComponent("&7Requiere Condensador nivel "
-                                + condensers.runeSlotRequiredLevel(nextSlots) + "."),
-                        messages.parseComponent("&7Costo: &6"
-                                + String.format(java.util.Locale.ROOT, "%.1f",
-                                        condensers.runeSlotUpgradeCost(nextSlots))
-                                + "⚡"),
-                        Component.empty(),
-                        messages.parseComponent("&eHaz clic para desbloquear."));
-        meta.lore(lore);
+        meta.displayName(messages.parseComponent("&bRunas del Condensador"));
+        meta.lore(List.of(
+                messages.parseComponent("&7Runas equipadas: &e"
+                        + condenser.activeRunes().size() + "&7/&e" + condenser.runeSlots()),
+                messages.parseComponent("&7Nivel del Condensador: &e" + condenser.level())));
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack progressionItem(CondenserRecord condenser) {
+        boolean maxed = condenser.runeSlots() >= 3;
+        int nextSlots = condenser.runeSlots() + 1;
+        int requiredLevel = maxed ? condenser.level() : condensers.runeSlotRequiredLevel(nextSlots);
+        boolean unlocked = !maxed && condenser.level() >= requiredLevel;
+        ItemStack item = new ItemStack(maxed ? Material.NETHER_STAR
+                : unlocked ? Material.ANVIL : Material.BARRIER);
+        ItemMeta meta = item.getItemMeta();
+        String title = maxed
+                ? condensers.runeMenuText("max-name", "&aRanuras de runa al máximo")
+                : unlocked
+                        ? condensers.runeMenuText("unlocked-name", "&aRanura desbloqueada")
+                        : condensers.runeMenuText("locked-name", "&cMejora bloqueada");
+        List<String> lore;
+        if (maxed) {
+            lore = condensers.runeMenuLore("max-lore",
+                    List.of("&7El Condensador ya tiene sus tres ranuras."));
+        } else if (unlocked) {
+            lore = condensers.runeMenuLore("unlocked-lore",
+                    List.of("&7Ranuras desbloqueadas: &e" + condenser.runeSlots()));
+        } else {
+            lore = condensers.runeMenuLore("locked-lore", List.of(
+                    "&cRequiere Condensador nivel &e%required_level%&c.",
+                    "&7Ranuras al mejorar: &e%slots_current% &7→ &e%slots_next%"));
+        }
+        meta.displayName(messages.parseComponent(title));
+        meta.lore(lore.stream()
+                .map(line -> line
+                        .replace("%required_level%", Integer.toString(requiredLevel))
+                        .replace("%slots_current%", Integer.toString(condenser.runeSlots()))
+                        .replace("%slots_next%", Integer.toString(nextSlots)))
+                .map(messages::parseComponent)
+                .toList());
         item.setItemMeta(meta);
         return item;
     }

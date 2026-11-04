@@ -2,6 +2,7 @@ package com.corebound.thecore.incremental;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import java.util.UUID;
@@ -9,6 +10,10 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class CellRecordTest {
+    private static final double[] CONDENSER_ORE_WEIGHTS = {
+        1.0, 0.4, 0.15, 0.05, 0.02, 0.01, 0.005, 0.002, 0.0005
+    };
+
     @Test
     void fusesMatchingCellsAndCapsAtTierFive() {
         CellRecord tierOne = new CellRecord(CellType.FIRE, 1);
@@ -55,30 +60,39 @@ class CellRecordTest {
         CondenserRecord levelZero = createCondenser(0, Map.of());
         CondenserRecord levelOne = createCondenser(1, Map.of());
         CondenserRecord levelTwo = createCondenser(2, Map.of());
+        CondenserRecord levelFive = createCondenser(5, Map.of());
         CondenserRecord levelNine = createCondenser(9, Map.of());
         CondenserRecord levelTwoWithYieldRune = createCondenser(
                 2, Map.of(0, new CellRecord(CellType.CONDENSER_YIELD, 2)));
 
-        double[] levelZeroChances = CondenserMath.outputChances(levelZero, 0.10);
-        double[] levelOneChances = CondenserMath.outputChances(levelOne, 0.10);
-        double[] levelTwoChances = CondenserMath.outputChances(levelTwo, 0.10);
-        double[] boostedChances = CondenserMath.outputChances(levelTwoWithYieldRune, 0.10);
+        double[] levelZeroChances = condenserChances(levelZero);
+        double[] levelOneChances = condenserChances(levelOne);
+        double[] levelTwoChances = condenserChances(levelTwo);
+        double[] levelFiveChances = condenserChances(levelFive);
+        double[] boostedChances = condenserChances(levelTwoWithYieldRune);
 
         assertEquals(100.0, levelZeroChances[0], 0.0001);
         assertEquals(90.0, levelOneChances[0], 0.0001);
         assertEquals(10.0, levelOneChances[1], 0.0001);
-        assertEquals(5.0, levelTwoChances[1], 0.0001);
-        assertEquals(5.0, levelTwoChances[2], 0.0001);
+        assertEquals(86.0, levelTwoChances[0], 0.0001);
+        assertEquals(14.0 * 0.45 / 0.85, levelTwoChances[1], 0.0001);
+        assertEquals(14.0 * 0.4 / 0.85, levelTwoChances[2], 0.0001);
         assertEquals(0.0, levelOneChances[2], 0.0001);
-        assertEquals(80.0, boostedChances[0], 0.0001);
-        assertEquals(10.0, boostedChances[1], 0.0001);
-        assertEquals(10.0, boostedChances[2], 0.0001);
+        assertEquals(76.0, boostedChances[0], 0.0001);
+        assertEquals(24.0 * 0.45 / 0.85, boostedChances[1], 0.0001);
+        assertEquals(24.0 * 0.4 / 0.85, boostedChances[2], 0.0001);
+        assertTrue(levelFiveChances[0] < levelOneChances[0]);
+        assertTrue(levelFiveChances[1] < levelOneChances[1]);
+        assertTrue(levelFiveChances[1] > levelFiveChances[5]);
+        assertEquals(-1, CondenserMath.outputOreIndex(levelTwoChances, 85.99));
+        assertEquals(0, CondenserMath.outputOreIndex(levelTwoChances, 86.0));
+        assertEquals(1, CondenserMath.outputOreIndex(levelTwoChances, 95.0));
 
-        double[] maximumLevelChances = CondenserMath.outputChances(levelNine, 0.10);
+        double[] maximumLevelChances = condenserChances(levelNine);
         assertEquals(100.0,
                 java.util.Arrays.stream(maximumLevelChances).sum(), 0.0001);
-        assertEquals(0.10 * 100.0 / 9,
-                maximumLevelChances[9], 0.0001);
+        assertTrue(maximumLevelChances[0] < levelFiveChances[0]);
+        assertTrue(maximumLevelChances[9] < maximumLevelChances[1]);
     }
 
     @Test
@@ -87,6 +101,33 @@ class CellRecordTest {
                 2, Map.of(0, new CellRecord(CellType.CONDENSER_EFFICIENCY, 2)));
 
         assertEquals(1.8, CondenserMath.energyCost(condenser, 1.0, 0.5), 0.0001);
+    }
+
+    @Test
+    void condenserRuneSlotsUnlockAtConfiguredProgressionAndInactiveRunesDoNotApply() {
+        CondenserRecord levelTwo = createCondenser(2, Map.of());
+        CondenserRecord levelThree = levelTwo.withLevel(3, 2);
+        CondenserRecord storedLockedRune = new CondenserRecord(
+                levelTwo.islandIndex(),
+                levelTwo.condenserId(),
+                levelTwo.worldId(),
+                levelTwo.x(),
+                levelTwo.y(),
+                levelTwo.z(),
+                levelTwo.itemDisplayId(),
+                levelTwo.interactionId(),
+                levelTwo.textDisplayId(),
+                levelTwo.level(),
+                levelTwo.state(),
+                1,
+                Map.of(
+                        0, new CellRecord(CellType.CONDENSER_EFFICIENCY, 1),
+                        1, new CellRecord(CellType.CONDENSER_EFFICIENCY, 1)));
+
+        assertEquals(1, levelTwo.runeSlots());
+        assertEquals(2, levelThree.runeSlots());
+        assertEquals(1, storedLockedRune.activeRunes().size());
+        assertEquals(0.95, CondenserMath.energyCost(storedLockedRune, 1.0, 0.0), 0.0001);
     }
 
     @Test
@@ -129,7 +170,11 @@ class CellRecordTest {
                 UUID.randomUUID(),
                 level,
                 CondenserState.ACTIVE,
-                3,
+                level >= 6 ? 3 : level >= 3 ? 2 : 1,
                 runes);
+    }
+
+    private double[] condenserChances(CondenserRecord condenser) {
+        return CondenserMath.outputChances(condenser, 0.10, 0.04, 0.75, 0.45, CONDENSER_ORE_WEIGHTS);
     }
 }

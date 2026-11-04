@@ -14,12 +14,41 @@ condenser:
     cost-multiplier: 1.8
   generation:
     ore-chance: 0.1
+    ore-chance-increase-per-level: 0.04
+    maximum-ore-chance: 0.75
+    older-ore-weight-decay: 0.45
+    ore-weights:
+      COAL_ORE: 1.0
+      COPPER_ORE: 0.4
+      IRON_ORE: 0.15
+      GOLD_ORE: 0.05
+      REDSTONE_ORE: 0.02
+      LAPIS_ORE: 0.01
+      EMERALD_ORE: 0.005
+      DIAMOND_ORE: 0.002
+      ANCIENT_DEBRIS: 0.0005
     energy-cost: 1.0
     energy-cost-per-level: 0.5
   runes:
+    empty-slot:
+      display-name: "&bRanura de runa"
+      lore:
+        - "&7Mayús+clic en una runa de tu inventario"
+        - "&7para instalarla."
+        - ""
+        - "&7Haz clic en una runa instalada"
+        - "&7para devolverla a tu inventario."
+    menu:
+      locked-name: "&cMejora bloqueada"
+      locked-lore:
+        - "&cRequiere Condensador nivel &e%required_level%&c."
+        - "&7Ranuras al mejorar: &e%slots_current% &7→ &e%slots_next%"
+      unlocked-name: "&aRanura desbloqueada"
+      unlocked-lore:
+        - "&7Ranuras desbloqueadas: &e%slots_current%"
+      max-name: "&aRanuras de runa al máximo"
+      max-lore:
+        - "&7El Condensador ya tiene sus tres ranuras."
     slot-required-level:
       '2': 3
       '3': 6
-    slot-costs:
-      '2': 1000.0
-      '3': 4000.0

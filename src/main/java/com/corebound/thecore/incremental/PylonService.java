@@ -23,6 +23,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
+import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -72,6 +73,13 @@ public final class PylonService {
     private double purchaseCost;
     private double purchaseCostMultiplier;
     private double forgeRefreshCost;
+    private int forgeRouletteDurationTicks;
+    private Sound forgeRouletteRollSound;
+    private Sound forgeRouletteStopSound;
+    private float forgeRouletteRollVolume;
+    private float forgeRouletteRollPitch;
+    private float forgeRouletteStopVolume;
+    private float forgeRouletteStopPitch;
     private final Map<CellType, Double> cellForgeCosts = new java.util.EnumMap<>(CellType.class);
     private final Map<Integer, Integer> tierCoreLevelRequirements = Map.of(2, 5, 3, 10);
     private final Map<Long, CellType[]> cellForgeOffers = new ConcurrentHashMap<>();
@@ -103,7 +111,7 @@ public final class PylonService {
         pylonIslandKey = new NamespacedKey(plugin, "pylon_island_index");
         pylonEntityKey = new NamespacedKey(plugin, "pylon_entity");
         pylonIdKey = new NamespacedKey(plugin, "pylon_id");
-        pylonMenu = new PylonMenu(messages, this);
+        pylonMenu = new PylonMenu(plugin, messages, this);
     }
 
     public void reloadConfiguration() {
@@ -155,8 +163,22 @@ public final class PylonService {
         double loadedPurchaseCost = loaded.getDouble("pylon.purchase-cost", 500.0);
         double loadedPurchaseCostMultiplier = loaded.getDouble("pylon.purchase-cost-multiplier", 3.5);
         double loadedForgeRefreshCost = loaded.getDouble("pylon.cells.refresh-cost", 75.0);
+        int loadedRouletteDuration = loaded.getInt("pylon.cells.roulette.duration-ticks", 40);
+        Sound loadedRouletteRollSound = configuredSound(
+                loaded, "pylon.cells.roulette.roll-sound", "UI_BUTTON_CLICK");
+        Sound loadedRouletteStopSound = configuredSound(
+                loaded, "pylon.cells.roulette.stop-sound", "BLOCK_NOTE_BLOCK_CHIME");
+        double loadedRouletteRollVolume = loaded.getDouble("pylon.cells.roulette.roll-volume", 0.35);
+        double loadedRouletteRollPitch = loaded.getDouble("pylon.cells.roulette.roll-pitch", 1.4);
+        double loadedRouletteStopVolume = loaded.getDouble("pylon.cells.roulette.stop-volume", 0.8);
+        double loadedRouletteStopPitch = loaded.getDouble("pylon.cells.roulette.stop-pitch", 1.7);
         if (!Double.isFinite(loadedForgeRefreshCost) || loadedForgeRefreshCost < 0) {
             throw new IllegalArgumentException("pylons.yml pylon.cells.refresh-cost must be a non-negative finite number.");
+        }
+        if (loadedRouletteDuration < 20 || loadedRouletteDuration > 200
+                || !validSoundSetting(loadedRouletteRollVolume) || !validSoundSetting(loadedRouletteRollPitch)
+                || !validSoundSetting(loadedRouletteStopVolume) || !validSoundSetting(loadedRouletteStopPitch)) {
+            throw new IllegalArgumentException("pylons.yml pylon.cells.roulette contains invalid duration or sound values.");
         }
         Map<CellType, Double> loadedCellForgeCosts = new java.util.EnumMap<>(CellType.class);
         for (CellType type : CellType.values()) {
@@ -197,8 +219,40 @@ public final class PylonService {
         purchaseCost = loadedPurchaseCost;
         purchaseCostMultiplier = loadedPurchaseCostMultiplier;
         forgeRefreshCost = loadedForgeRefreshCost;
+        forgeRouletteDurationTicks = loadedRouletteDuration;
+        forgeRouletteRollSound = loadedRouletteRollSound;
+        forgeRouletteStopSound = loadedRouletteStopSound;
+        forgeRouletteRollVolume = (float) loadedRouletteRollVolume;
+        forgeRouletteRollPitch = (float) loadedRouletteRollPitch;
+        forgeRouletteStopVolume = (float) loadedRouletteStopVolume;
+        forgeRouletteStopPitch = (float) loadedRouletteStopPitch;
         cellForgeCosts.clear();
         cellForgeCosts.putAll(loadedCellForgeCosts);
+    }
+
+    private Sound configuredSound(YamlConfiguration loaded, String path, String fallback) {
+        String value = loaded.getString(path, fallback);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("pylons.yml " + path + " must not be empty.");
+        }
+        String normalized = value.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.startsWith("minecraft:")) {
+            normalized = normalized.substring("minecraft:".length());
+        }
+        try {
+            Sound sound = Registry.SOUNDS.get(NamespacedKey.minecraft(normalized));
+            if (sound != null) {
+                return sound;
+            }
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "pylons.yml " + path + " must be a valid Minecraft sound key.", exception);
+        }
+        throw new IllegalArgumentException("pylons.yml " + path + " must be a valid sound constant or key.");
+    }
+
+    private boolean validSoundSetting(double value) {
+        return Double.isFinite(value) && value >= 0.0 && value <= 2.0;
     }
 
     public double purchaseCost() {
@@ -251,6 +305,21 @@ public final class PylonService {
 
     public int baseIntervalTicks() {
         return intervalTicks;
+    }
+
+    public int forgeRouletteDurationTicks() {
+        return forgeRouletteDurationTicks;
+    }
+
+    public void playForgeRouletteRoll(Player player) {
+        player.playSound(player.getLocation(), forgeRouletteRollSound,
+                forgeRouletteRollVolume, forgeRouletteRollPitch);
+    }
+
+    public void playForgeRouletteStop(Player player, int slotIndex) {
+        float pitch = forgeRouletteStopPitch + slotIndex * 0.08f;
+        player.playSound(player.getLocation(), forgeRouletteStopSound,
+                forgeRouletteStopVolume, Math.min(2.0f, pitch));
     }
 
     public double minimumDistance() {

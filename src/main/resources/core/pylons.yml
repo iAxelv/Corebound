@@ -25,6 +25,14 @@ pylon:
     '3': 10
   cells:
     refresh-cost: 75.0
+    roulette:
+      duration-ticks: 40
+      roll-sound: ui.button.click
+      roll-volume: 0.35
+      roll-pitch: 1.4
+      stop-sound: block.note_block.chime
+      stop-volume: 0.8
+      stop-pitch: 1.7
     costs:
       FIRE: 100.0
       LIGHTNING: 100.0

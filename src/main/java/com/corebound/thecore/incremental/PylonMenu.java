@@ -1,10 +1,13 @@
 package com.corebound.thecore.incremental;
 
+import com.corebound.thecore.TheCorePlugin;
 import com.corebound.thecore.message.Messages;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.text.Component;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -29,6 +32,7 @@ public final class PylonMenu implements Listener {
         private final boolean forge;
         private CellType[] offers;
         private final boolean[] available;
+        private boolean rolling;
         private Inventory inventory;
 
         private Holder(UUID pylonId, long islandIndex, boolean forge, CellType[] offers, boolean[] available) {
@@ -47,8 +51,10 @@ public final class PylonMenu implements Listener {
 
     private final Messages messages;
     private final PylonService pylons;
+    private final TheCorePlugin plugin;
 
-    public PylonMenu(Messages messages, PylonService pylons) {
+    public PylonMenu(TheCorePlugin plugin, Messages messages, PylonService pylons) {
+        this.plugin = plugin;
         this.messages = messages;
         this.pylons = pylons;
     }
@@ -105,6 +111,10 @@ public final class PylonMenu implements Listener {
         }
         int rawSlot = event.getRawSlot();
         if (holder.forge) {
+            if (holder.rolling) {
+                event.setCancelled(true);
+                return;
+            }
             if (event.getClickedInventory() != event.getView().getTopInventory()) {
                 if (event.isShiftClick()) {
                     event.setCancelled(true);
@@ -124,7 +134,7 @@ public final class PylonMenu implements Listener {
                             holder.available,
                             0,
                             holder.available.length);
-                    renderForge(holder);
+                    startForgeRoulette(player, holder, refreshed);
                 }
                 return;
             }
@@ -169,6 +179,70 @@ public final class PylonMenu implements Listener {
         if (cellIndex >= 0) {
             withdrawCell(player, holder.inventory, pylon, cellIndex);
         }
+    }
+
+    private void startForgeRoulette(Player player, Holder holder, CellType[] finalOffers) {
+        holder.rolling = true;
+        int baseDuration = pylons.forgeRouletteDurationTicks();
+        int[] stopTicks = new int[FORGE_SLOTS.length];
+        boolean[] stopped = new boolean[FORGE_SLOTS.length];
+        for (int index = 0; index < stopTicks.length; index++) {
+            int stagger = Math.max(1, baseDuration / 4);
+            stopTicks[index] = baseDuration
+                    + ThreadLocalRandom.current().nextInt(-stagger, stagger + 1);
+        }
+        int[] elapsed = {0};
+        int[] lastRollSound = {-3};
+        ScheduledTask task = player.getScheduler().runAtFixedRate(plugin, scheduled -> {
+            if (!player.isOnline() || player.getOpenInventory().getTopInventory() != holder.inventory) {
+                scheduled.cancel();
+                holder.rolling = false;
+                return;
+            }
+            elapsed[0]++;
+            CellType[] interimOffers = pylons.randomCellOffers();
+            boolean playedRollSound = false;
+            for (int index = 0; index < FORGE_SLOTS.length; index++) {
+                if (stopped[index]) {
+                    continue;
+                }
+                if (elapsed[0] >= stopTicks[index]) {
+                    stopped[index] = true;
+                    holder.inventory.setItem(FORGE_SLOTS[index], forgeItem(finalOffers[index]));
+                    pylons.playForgeRouletteStop(player, index);
+                    continue;
+                }
+                int updateInterval = 1 + elapsed[0] / 8;
+                if (elapsed[0] % updateInterval == 0) {
+                    holder.inventory.setItem(FORGE_SLOTS[index], forgeItem(interimOffers[index]));
+                    playedRollSound = true;
+                }
+            }
+            if (playedRollSound && elapsed[0] - lastRollSound[0] >= 3) {
+                pylons.playForgeRouletteRoll(player);
+                lastRollSound[0] = elapsed[0];
+            }
+            if (allSlotsStopped(stopped)) {
+                scheduled.cancel();
+                holder.rolling = false;
+            }
+        }, () -> {
+            holder.rolling = false;
+        }, 1L, 1L);
+        if (task == null) {
+            holder.rolling = false;
+            renderForge(holder);
+            return;
+        }
+    }
+
+    private boolean allSlotsStopped(boolean[] stopped) {
+        for (boolean slotStopped : stopped) {
+            if (!slotStopped) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @EventHandler

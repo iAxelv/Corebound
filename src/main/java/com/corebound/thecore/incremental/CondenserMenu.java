@@ -140,7 +140,7 @@ public final class CondenserMenu implements Listener {
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.parseComponent("&cRunas de Materia"));
         meta.lore(List.of(
-                messages.parseComponent("&7Ranuras: &e" + condenser.runes().size()
+                messages.parseComponent("&7Ranuras: &e" + condenser.activeRunes().size()
                         + "&7/&e" + condenser.runeSlots()),
                 messages.parseComponent("&7Equipa runas y desbloquea más ranuras."),
                 Component.empty(),
@@ -162,7 +162,9 @@ public final class CondenserMenu implements Listener {
                         messages.parseComponent("&7Costo: &6"
                                 + format(condensers.upgradeCost(condenser.level())) + "⚡"),
                         messages.parseComponent("&7Consumo siguiente: &e"
-                                + format(condensers.energyCost(condenser.withLevel(condenser.level() + 1)))
+                                + format(condensers.energyCost(condenser.withLevel(
+                                        condenser.level() + 1,
+                                        condensers.maximumRuneSlotsForLevel(condenser.level() + 1))))
                                 + "⚡/generación"),
                         Component.empty(),
                         messages.parseComponent("&eHaz clic para mejorar."));

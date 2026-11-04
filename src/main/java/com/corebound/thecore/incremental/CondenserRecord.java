@@ -22,10 +22,9 @@ public record CondenserRecord(
         level = Math.max(0, Math.min(9, level));
         runeSlots = Math.max(1, Math.min(3, runeSlots));
         runes = Map.copyOf(runes);
-        int unlockedRuneSlots = runeSlots;
         runes.forEach((slot, rune) -> {
-            if (slot < 0 || slot >= unlockedRuneSlots || !rune.type().isCondenserRune()) {
-                throw new IllegalArgumentException("Condenser runes must occupy an unlocked valid slot.");
+            if (slot < 0 || slot >= 3 || !rune.type().isCondenserRune()) {
+                throw new IllegalArgumentException("Condenser runes must occupy a valid condenser slot.");
             }
         });
         if (state == null) {
@@ -34,9 +33,13 @@ public record CondenserRecord(
     }
 
     public CondenserRecord withLevel(int updatedLevel) {
+        return withLevel(updatedLevel, runeSlots);
+    }
+
+    public CondenserRecord withLevel(int updatedLevel, int updatedRuneSlots) {
         return new CondenserRecord(
                 islandIndex, condenserId, worldId, x, y, z, itemDisplayId,
-                interactionId, textDisplayId, updatedLevel, state, runeSlots, runes);
+                interactionId, textDisplayId, updatedLevel, state, updatedRuneSlots, runes);
     }
 
     public CondenserRecord withState(CondenserState updatedState) {
@@ -46,6 +49,9 @@ public record CondenserRecord(
     }
 
     public CondenserRecord withRune(int slot, CellRecord rune) {
+        if (slot < 0 || slot >= runeSlots) {
+            throw new IllegalArgumentException("Rune slot is not unlocked for this condenser.");
+        }
         java.util.HashMap<Integer, CellRecord> updated = new java.util.HashMap<>(runes);
         if (rune == null) {
             updated.remove(slot);
@@ -61,5 +67,11 @@ public record CondenserRecord(
         return new CondenserRecord(
                 islandIndex, condenserId, worldId, x, y, z, itemDisplayId,
                 interactionId, textDisplayId, level, state, updatedSlots, runes);
+    }
+
+    public Map<Integer, CellRecord> activeRunes() {
+        return runes.entrySet().stream()
+                .filter(entry -> entry.getKey() < runeSlots)
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 }
