@@ -259,7 +259,7 @@ public final class PylonMenu implements Listener {
         if (cell == null || item.getAmount() != 1) {
             return;
         }
-        if (cell.type().isCondenserRune()) {
+        if (!cell.type().isPylonCell()) {
             messages.send(player, "cell-wrong-device");
             return;
         }
@@ -345,7 +345,7 @@ public final class PylonMenu implements Listener {
         if (cursorCell == null || targetCell == null) {
             return;
         }
-        if (cursorCell.type().isCondenserRune() || targetCell.type().isCondenserRune()) {
+        if (!cursorCell.type().isPylonCell() || !targetCell.type().isPylonCell()) {
             return;
         }
         if (cursor.getAmount() != 1 || target.getAmount() != 1
@@ -430,7 +430,7 @@ public final class PylonMenu implements Listener {
     private ItemStack forgeItem(CellType type) {
         ItemStack item = new ItemStack(type.itemMaterial());
         ItemMeta meta = item.getItemMeta();
-        String itemName = type.isCondenserRune() ? "Forjar Runa " : "Forjar Célula ";
+        String itemName = type.isRune() ? "Forjar Runa " : "Forjar Célula ";
         meta.displayName(messages.parseComponent(type.color() + itemName + type.displayName()));
         List<Component> lore = CellItem.cellLore(new CellRecord(type, 1), pylons.baseIntervalTicks()).stream()
                 .map(messages::parseComponent)

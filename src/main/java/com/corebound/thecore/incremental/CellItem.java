@@ -18,7 +18,7 @@ public final class CellItem {
         ItemStack item = new ItemStack(cell.type().itemMaterial());
         ItemMeta meta = item.getItemMeta();
         LegacyComponentSerializer legacy = LegacyComponentSerializer.legacyAmpersand();
-        String itemName = cell.type().isCondenserRune() ? "Runa de Materia " : "Célula ";
+        String itemName = cell.type().isRune() ? "Runa " : "Célula ";
         meta.displayName(legacy.deserialize(
                 cell.type().color() + itemName + cell.type().displayName() + " T" + cell.tier()));
         meta.lore(cellLore(cell, baseIntervalTicks).stream().map(legacy::deserialize).toList());
@@ -42,12 +42,18 @@ public final class CellItem {
                     + formatNumber(cell.condenserEnergyReduction() * 100) + "% de consumo del condensador.";
             case CONDENSER_YIELD -> "&6Mejora: &e+"
                     + formatNumber(cell.condenserOreChanceBonus() * 100) + "% de probabilidad de mineral.";
+            case CROP_EFFICIENCY -> "&6Mejora: &e+"
+                    + formatNumber(cell.cropHarvestBonus() * 100) + "% de objetos al cosechar.";
+            case CROP_ENERGY_EFFICIENCY -> "&6Mejora: &e-"
+                    + formatNumber(cell.cropEnergyReduction() * 100) + "% de consumo del generador.";
         };
         return List.of(
-                cell.type().isCondenserRune()
-                        ? "&7Instalación: &fMayús+clic en la GUI de runas del Condensador"
-                        : "&7Instalación: &fMayús+clic en la GUI del Pilón",
-                cell.type().isCondenserRune() ? "&7Ranura: &fRuna de materia" : "&7Ranura: &fCélula elemental",
+                cell.type().isCropGeneratorRune()
+                        ? "&7Instalación: &fMayús+clic en la GUI de runas del Generador"
+                        : cell.type().isCondenserRune()
+                                ? "&7Instalación: &fMayús+clic en la GUI de runas del Condensador"
+                                : "&7Instalación: &fMayús+clic en la GUI del Pilón",
+                cell.type().isRune() ? "&7Ranura: &fRuna" : "&7Ranura: &fCélula elemental",
                 improvement,
                 "&8Fusiona dos iguales para subir de tier.");
     }

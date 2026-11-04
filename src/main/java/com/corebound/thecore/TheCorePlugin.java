@@ -7,6 +7,8 @@ import com.corebound.thecore.incremental.CoreRepository;
 import com.corebound.thecore.incremental.CoreService;
 import com.corebound.thecore.incremental.CondenserRepository;
 import com.corebound.thecore.incremental.CondenserService;
+import com.corebound.thecore.incremental.CropGeneratorRepository;
+import com.corebound.thecore.incremental.CropGeneratorService;
 import com.corebound.thecore.incremental.PylonRepository;
 import com.corebound.thecore.incremental.PylonService;
 import com.corebound.thecore.island.IslandRepository;
@@ -28,6 +30,7 @@ public final class TheCorePlugin extends JavaPlugin {
     private CoreService coreService;
     private PylonService pylonService;
     private CondenserService condenserService;
+    private CropGeneratorService cropGeneratorService;
     private Messages messages;
     private IslandSounds sounds;
     private IslandMenuManager menus;
@@ -45,6 +48,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("core/astral_tree.yml");
         saveResourceIfMissing("core/pylons.yml");
         saveResourceIfMissing("core/condenser.yml");
+        saveResourceIfMissing("core/crop_generator.yml");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");
@@ -102,6 +106,17 @@ public final class TheCorePlugin extends JavaPlugin {
                     messages,
                     new File(getDataFolder(), "core/condenser.yml"));
             coreService.attachCondenserService(condenserService);
+            cropGeneratorService = new CropGeneratorService(
+                    this,
+                    islandService,
+                    coreService,
+                    coreRepository,
+                    new CropGeneratorRepository(new File(getDataFolder(), "data/crop_generators.yml"), this),
+                    pylonService,
+                    condenserService,
+                    messages,
+                    new File(getDataFolder(), "core/crop_generator.yml"));
+            coreService.attachCropGeneratorService(cropGeneratorService);
         } catch (IllegalArgumentException exception) {
             getLogger().severe("Could not initialize the core modules: " + exception.getMessage());
             getServer().getPluginManager().disablePlugin(this);
@@ -126,11 +141,14 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new IslandListener(this, islandService, messages), this);
         getServer().getPluginManager().registerEvents(
-                new CorePlaceListener(this, coreService, pylonService, condenserService), this);
+                new CorePlaceListener(this, coreService, pylonService, condenserService, cropGeneratorService), this);
         getServer().getPluginManager().registerEvents(pylonService.menuListener(), this);
         getServer().getPluginManager().registerEvents(condenserService, this);
         getServer().getPluginManager().registerEvents(condenserService.menuListener(), this);
         getServer().getPluginManager().registerEvents(condenserService.runeMenuListener(), this);
+        getServer().getPluginManager().registerEvents(cropGeneratorService, this);
+        getServer().getPluginManager().registerEvents(cropGeneratorService.menuListener(), this);
+        getServer().getPluginManager().registerEvents(cropGeneratorService.runeMenuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.menuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.upgradesMenuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.astralTreeMenuListener(), this);
@@ -138,6 +156,7 @@ public final class TheCorePlugin extends JavaPlugin {
         coreService.initializeLoadedEntities();
         pylonService.initializeLoadedEntities();
         condenserService.initializeLoadedEntities();
+        cropGeneratorService.initializeLoadedEntities();
         pylonService.initializeRangeGuides();
         getLogger().info("Corebound island foundation enabled.");
     }
@@ -171,6 +190,13 @@ public final class TheCorePlugin extends JavaPlugin {
                     getLogger().severe("Could not save condenser data: " + exception.getMessage());
                 }
             }
+            if (cropGeneratorService != null) {
+                try {
+                    cropGeneratorService.flush();
+                } catch (IOException exception) {
+                    getLogger().severe("Could not save crop generator data: " + exception.getMessage());
+                }
+            }
         }
     }
 
@@ -200,6 +226,7 @@ public final class TheCorePlugin extends JavaPlugin {
         coreService.reloadConfiguration();
         pylonService.reloadConfiguration();
         condenserService.reloadConfiguration();
+        cropGeneratorService.reloadConfiguration();
     }
 
     private void validateIslandSpacing(org.bukkit.configuration.ConfigurationSection config) throws IOException {

@@ -56,6 +56,27 @@ class CellRecordTest {
     }
 
     @Test
+    void cropGeneratorRuneTiersAndEffectsScaleWithGeneratorLevel() {
+        assertEquals(1, CellRecord.maximumTierForCropGeneratorLevel(0));
+        assertEquals(1, CellRecord.maximumTierForCropGeneratorLevel(1));
+        assertEquals(2, CellRecord.maximumTierForCropGeneratorLevel(2));
+        assertEquals(5, CellRecord.maximumTierForCropGeneratorLevel(8));
+        assertEquals(0.25, new CellRecord(CellType.CROP_ENERGY_EFFICIENCY, 5).cropEnergyReduction(), 0.0001);
+        assertEquals(0.50, new CellRecord(CellType.CROP_EFFICIENCY, 5).cropHarvestBonus(), 0.0001);
+    }
+
+    @Test
+    void cropGeneratorMathAppliesFractionalGrowthAndYieldBonuses() {
+        assertEquals(1, CropGeneratorMath.additionalGrowthStages(0, 0.1, 0.2, 0.05));
+        assertEquals(0, CropGeneratorMath.additionalGrowthStages(0, 0.1, 0.2, 0.1));
+        assertEquals(1, CropGeneratorMath.additionalGrowthStages(3, 0.1, 0.2, 0.69));
+        assertEquals(0, CropGeneratorMath.additionalGrowthStages(3, 0.1, 0.2, 0.71));
+        assertEquals(1, CropGeneratorMath.additionalHarvestItems(5, 0.1, 0.49));
+        assertEquals(0, CropGeneratorMath.additionalHarvestItems(5, 0.1, 0.5));
+        assertEquals(3, CropGeneratorMath.additionalHarvestItems(5, 0.5, 0.4));
+    }
+
+    @Test
     void condenserOutputChanceIsDistributedAcrossUnlockedOres() {
         CondenserRecord levelZero = createCondenser(0, Map.of());
         CondenserRecord levelOne = createCondenser(1, Map.of());

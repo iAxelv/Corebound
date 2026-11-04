@@ -67,7 +67,7 @@ items:
     slot: 11
     display-name: "&5Forja Elemental"
     lore:
-      - "&7Sintetiza células de Fuego, Sobrecarga y Vacío."
+      - "&7Sintetiza células elementales y runas."
       - ""
       - "&eHaz clic para abrir la forja."
     locked-material: BARRIER
@@ -95,6 +95,26 @@ items:
     level-locked-name: "&cCondensador bloqueado"
     level-locked-lore:
       - "&7Requiere Núcleo nivel &e%required_level%&7."
+  crop-generator:
+    material: COMPOSTER
+    slot: 17
+    display-name: "&aCatalizador de Cultivos"
+    lore:
+      - "&7Acelera el crecimiento de los cultivos de la isla."
+      - "&7Consume energía periódicamente mientras está activo."
+      - "&7Solo se puede colocar uno por isla."
+      - "&7Requiere Núcleo nivel &e%required_level%&7."
+      - "&7Costo: &6%cost%⚡"
+      - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
+      - ""
+      - "&eHaz clic para comprar."
+    locked-material: BARRIER
+    locked-name: "&cCatalizador bloqueado"
+    locked-lore:
+      - "&7Requiere Núcleo nivel &e%required_level%&7."
+    placed-name: "&cCatalizador ya colocado"
+    placed-lore:
+      - "&7Solo se permite un Catalizador colocado por isla."
   upgrade:
     material: NETHER_STAR
     slot: 47

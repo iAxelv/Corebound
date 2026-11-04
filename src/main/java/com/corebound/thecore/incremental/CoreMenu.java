@@ -33,6 +33,7 @@ public final class CoreMenu implements Listener {
     private YamlConfiguration config;
     private PylonService pylonService;
     private CondenserService condenserService;
+    private CropGeneratorService cropGeneratorService;
 
     private static final class MenuHolder implements InventoryHolder {
         private final long islandIndex;
@@ -98,6 +99,7 @@ public final class CoreMenu implements Listener {
         validateItem(loaded, "items.astral-tree");
         validateItem(loaded, "items.pylon");
         validateItem(loaded, "items.condenser");
+        validateItem(loaded, "items.crop-generator");
         validateItem(loaded, "items.cell-forge");
         validateItem(loaded, "items.upgrade");
         validateItem(loaded, "items.close");
@@ -116,6 +118,9 @@ public final class CoreMenu implements Listener {
         if (Material.matchMaterial(loaded.getString("items.condenser.level-locked-material", "BARRIER")) == null) {
             throw new IllegalArgumentException("core_menu.yml items.condenser.level-locked-material must be valid.");
         }
+        if (Material.matchMaterial(loaded.getString("items.crop-generator.locked-material", "BARRIER")) == null) {
+            throw new IllegalArgumentException("core_menu.yml items.crop-generator.locked-material must be valid.");
+        }
         config = loaded;
     }
 
@@ -125,6 +130,10 @@ public final class CoreMenu implements Listener {
 
     public void attachCondenserService(CondenserService condenserService) {
         this.condenserService = condenserService;
+    }
+
+    public void attachCropGeneratorService(CropGeneratorService cropGeneratorService) {
+        this.cropGeneratorService = cropGeneratorService;
     }
 
     public void open(Player player, CoreRecord core) {
@@ -140,6 +149,7 @@ public final class CoreMenu implements Listener {
         holder.inventory.setItem(slot("fracture"), createFractureItem(core));
         holder.inventory.setItem(slot("pylon"), createPylonItem(core));
         holder.inventory.setItem(slot("condenser"), createCondenserItem(core));
+        holder.inventory.setItem(slot("crop-generator"), createCropGeneratorItem(core));
         holder.inventory.setItem(slot("upgrade"), createItem(
                 config.getConfigurationSection("items.upgrade"), core, core.energy() >= core.upgradeCost()));
         holder.inventory.setItem(slot("close"), createSimpleItem("items.close"));
@@ -165,6 +175,10 @@ public final class CoreMenu implements Listener {
             pylonService.openCellForge(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("condenser") && condenserService != null) {
             if (condenserService.buy(player, holder.islandIndex)) {
+                coreService.openCoreMenu(player, holder.islandIndex);
+            }
+        } else if (event.getRawSlot() == holder.slot("crop-generator") && cropGeneratorService != null) {
+            if (cropGeneratorService.buy(player, holder.islandIndex)) {
                 coreService.openCoreMenu(player, holder.islandIndex);
             }
         } else if (event.getRawSlot() == holder.slot("astral-tree")) {
@@ -335,6 +349,35 @@ public final class CoreMenu implements Listener {
         return item;
     }
 
+    private ItemStack createCropGeneratorItem(CoreRecord core) {
+        ConfigurationSection itemConfig = config.getConfigurationSection("items.crop-generator");
+        int requiredLevel = cropGeneratorService == null ? 5 : cropGeneratorService.minimumCoreLevel();
+        boolean levelUnlocked = core.level() >= requiredLevel;
+        boolean alreadyPlaced = levelUnlocked && cropGeneratorService != null
+                && cropGeneratorService.hasGenerator(core.islandIndex());
+        boolean unlocked = levelUnlocked && !alreadyPlaced;
+        String material = itemConfig.getString(
+                unlocked ? "material" : "locked-material",
+                unlocked ? "COMPOSTER" : "BARRIER");
+        String displayName = itemConfig.getString(
+                unlocked ? "display-name" : alreadyPlaced ? "placed-name" : "locked-name",
+                unlocked ? "&aCatalizador de Cultivos"
+                        : alreadyPlaced ? "&cCatalizador ya colocado" : "&cCatalizador bloqueado");
+        List<String> lore = itemConfig.getStringList(
+                unlocked ? "lore" : alreadyPlaced ? "placed-lore" : "locked-lore");
+        Map<String, String> placeholders = Map.of(
+                "%required_level%", Integer.toString(requiredLevel),
+                "%cost%", formatEnergy(cropGeneratorService == null ? 750.0 : cropGeneratorService.purchaseCost()),
+                "%min_distance%", formatEnergy(pylonService == null ? 3.0 : pylonService.minimumDistance()),
+                "%max_distance%", formatEnergy(pylonService == null ? 12.0 : pylonService.maximumDistance()));
+        ItemStack item = new ItemStack(Material.matchMaterial(material));
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(color(replace(displayName, placeholders)));
+        meta.lore(lore.stream().map(line -> color(replace(line, placeholders))).toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+
     private void validateItem(YamlConfiguration loaded, String path) {
         ConfigurationSection section = loaded.getConfigurationSection(path);
         int slot = section == null ? -1 : section.getInt("slot", -1);
@@ -346,7 +389,7 @@ public final class CoreMenu implements Listener {
         }
         for (String otherPath : List.of(
                 "items.upgrades", "items.statistics", "items.fracture", "items.astral-tree", "items.pylon",
-                "items.condenser", "items.cell-forge", "items.upgrade", "items.close")) {
+                "items.condenser", "items.crop-generator", "items.cell-forge", "items.upgrade", "items.close")) {
             if (!otherPath.equals(path)
                     && loaded.getInt(otherPath + ".slot", -1) == slot) {
                 throw new IllegalArgumentException("core_menu.yml item slots must be unique.");
@@ -366,6 +409,7 @@ public final class CoreMenu implements Listener {
                 "astral-tree", slot("astral-tree"),
                 "pylon", slot("pylon"),
                 "condenser", slot("condenser"),
+                "crop-generator", slot("crop-generator"),
                 "cell-forge", slot("cell-forge"),
                 "upgrade", slot("upgrade"),
                 "close", slot("close"));

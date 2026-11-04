@@ -429,7 +429,10 @@ public final class PylonService {
             return false;
         }
         coreService.refreshCore(charged, System.currentTimeMillis());
-        messages.send(player, type.isCondenserRune() ? "condenser-rune-forged" : "cell-forged", Map.of(
+        String forgedMessage = type.isCropGeneratorRune()
+                ? "crop-generator-rune-forged"
+                : type.isCondenserRune() ? "condenser-rune-forged" : "cell-forged";
+        messages.send(player, forgedMessage, Map.of(
                 "cell", type.displayName(),
                 "cost", formatEnergy(cost)));
         return true;
@@ -1296,6 +1299,12 @@ public final class PylonService {
             case CONDENSER_YIELD -> "&e+"
                     + String.format(java.util.Locale.ROOT, "%.0f", cell.condenserOreChanceBonus() * 100.0)
                     + "% de probabilidad de mineral";
+            case CROP_EFFICIENCY -> "&e+"
+                    + String.format(java.util.Locale.ROOT, "%.0f", cell.cropHarvestBonus() * 100.0)
+                    + "% de objetos al cosechar";
+            case CROP_ENERGY_EFFICIENCY -> "&e-"
+                    + String.format(java.util.Locale.ROOT, "%.0f", cell.cropEnergyReduction() * 100.0)
+                    + "% de consumo del generador";
         };
     }
 

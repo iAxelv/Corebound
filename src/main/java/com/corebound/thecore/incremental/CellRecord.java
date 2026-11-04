@@ -29,6 +29,10 @@ public record CellRecord(CellType type, int tier) {
         return Math.max(1, Math.min(MAX_TIER, 1 + condenserLevel / 2));
     }
 
+    public static int maximumTierForCropGeneratorLevel(int generatorLevel) {
+        return Math.max(1, Math.min(MAX_TIER, 1 + generatorLevel / 2));
+    }
+
     public int fireIntervalReductionTicks() {
         return type == CellType.FIRE ? 20 * tier : 0;
     }
@@ -47,5 +51,13 @@ public record CellRecord(CellType type, int tier) {
 
     public double condenserOreChanceBonus() {
         return type == CellType.CONDENSER_YIELD ? 0.05 * tier : 0.0;
+    }
+
+    public double cropEnergyReduction() {
+        return type == CellType.CROP_ENERGY_EFFICIENCY ? 0.05 * tier : 0.0;
+    }
+
+    public double cropHarvestBonus() {
+        return type == CellType.CROP_EFFICIENCY ? 0.10 * tier : 0.0;
     }
 }

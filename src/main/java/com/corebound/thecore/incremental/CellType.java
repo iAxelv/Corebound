@@ -10,10 +10,16 @@ public enum CellType {
     CONDENSER_EFFICIENCY(
             "Eficiencia material", Material.QUARTZ, "&b", Material.BLAST_FURNACE, Particle.CRIT),
     CONDENSER_YIELD(
-            "Prospección material", Material.PRISMARINE_CRYSTALS, "&a", Material.BLAST_FURNACE, Particle.HAPPY_VILLAGER);
+            "Prospección material", Material.PRISMARINE_CRYSTALS, "&a", Material.BLAST_FURNACE, Particle.HAPPY_VILLAGER),
+    CROP_EFFICIENCY(
+            "Cosecha fértil", Material.GOLDEN_CARROT, "&a", Material.COMPOSTER, Particle.HAPPY_VILLAGER),
+    CROP_ENERGY_EFFICIENCY(
+            "Eficiencia de cultivo", Material.WHEAT_SEEDS, "&2", Material.COMPOSTER, Particle.COMPOSTER);
 
     private static final java.util.Set<CellType> CONDENSER_TYPES =
             java.util.Set.of(CONDENSER_EFFICIENCY, CONDENSER_YIELD);
+    private static final java.util.Set<CellType> CROP_GENERATOR_TYPES =
+            java.util.Set.of(CROP_EFFICIENCY, CROP_ENERGY_EFFICIENCY);
 
     private final String displayName;
     private final Material itemMaterial;
@@ -51,5 +57,17 @@ public enum CellType {
 
     public boolean isCondenserRune() {
         return CONDENSER_TYPES.contains(this);
+    }
+
+    public boolean isCropGeneratorRune() {
+        return CROP_GENERATOR_TYPES.contains(this);
+    }
+
+    public boolean isRune() {
+        return isCondenserRune() || isCropGeneratorRune();
+    }
+
+    public boolean isPylonCell() {
+        return !isRune();
     }
 }

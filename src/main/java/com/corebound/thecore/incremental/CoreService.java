@@ -70,6 +70,7 @@ public final class CoreService {
     private final AstralTreeMenu astralTreeMenu;
     private PylonService pylonService;
     private CondenserService condenserService;
+    private CropGeneratorService cropGeneratorService;
 
     private static final class DisplayAnimation {
         private float yaw;
@@ -269,6 +270,11 @@ public final class CoreService {
         coreMenu.attachCondenserService(condenserService);
     }
 
+    public void attachCropGeneratorService(CropGeneratorService cropGeneratorService) {
+        this.cropGeneratorService = cropGeneratorService;
+        coreMenu.attachCropGeneratorService(cropGeneratorService);
+    }
+
     public void openCoreMenu(Player player, org.bukkit.entity.Entity entity) {
         Long islandIndex = entity.getPersistentDataContainer().get(islandIndexKey, PersistentDataType.LONG);
         if (islandIndex == null) {
@@ -393,6 +399,9 @@ public final class CoreService {
             return false;
         }
         if (condenserService != null && !condenserService.destroyForFracture(player, islandIndex)) {
+            return false;
+        }
+        if (cropGeneratorService != null && !cropGeneratorService.destroyForFracture(player, islandIndex)) {
             return false;
         }
         CoreRecord fractured = repository.fractureCore(islandIndex);
