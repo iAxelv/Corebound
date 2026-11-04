@@ -73,6 +73,22 @@ items:
     cost-multiplier: 2.0
     max-level: 5
     required-core-levels: [1, 2, 4, 6, 8]
+  pylon-yield:
+    material: END_CRYSTAL
+    locked-material: BARRIER
+    slot: 24
+    display-name: "&dResonancia de Pilones &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Aumenta la energía que generan los disparos de todos tus pilones."
+      - "&7Bonus actual: &d+%pylon_yield%% por disparo"
+      - "&7Bonus por rango: &d+15% por disparo"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 500.0
+    cost-multiplier: 2.0
+    max-level: 5
+    required-core-levels: [3, 6, 9, 12, 15]
   back:
     material: ARROW
     slot: 40

@@ -187,6 +187,18 @@ class CoreRecordTest {
     }
 
     @Test
+    void pylonYieldUpgradeImprovesEveryPylonPulseAndRequiresCoreProgression() {
+        CoreRecord core = createCore(3, 500.0);
+
+        assertNull(core.upgradeEnhancement(CoreEnhancement.PYLON_YIELD, 500.0, 5, 6));
+        CoreRecord upgraded = core.upgradeEnhancement(CoreEnhancement.PYLON_YIELD, 500.0, 5, 3);
+
+        assertEquals(1, upgraded.upgradePylonYield());
+        assertEquals(1.15, upgraded.pylonYieldMultiplier(), 0.0001);
+        assertEquals(1.15, upgraded.withPassiveEnergy(1.0).pylonYieldMultiplier(), 0.0001);
+    }
+
+    @Test
     void fractureResetsEnergyAndLevelAndIncreasesPermanentProduction() {
         CoreRecord core = createCore(CoreRecord.MAX_LEVEL, 500.0);
 
@@ -243,16 +255,17 @@ class CoreRecordTest {
     }
 
     @Test
-    void pylonCapacityGrowsToFiveAsTheCoreLevels() {
+    void pylonCapacityGrowsByTwoEveryThreeLevelsFromLevelThreeToTwentyFour() {
         assertEquals(0, createCore(1).pylonCapacity());
-        assertEquals(1, createCore(3).pylonCapacity());
-        assertEquals(1, createCore(6).pylonCapacity());
-        assertEquals(2, createCore(7).pylonCapacity());
-        assertEquals(2, createCore(9).pylonCapacity());
-        assertEquals(3, createCore(10).pylonCapacity());
-        assertEquals(4, createCore(15).pylonCapacity());
-        assertEquals(5, createCore(20).pylonCapacity());
-        assertEquals(5, createCore(CoreRecord.MAX_LEVEL).pylonCapacity());
+        assertEquals(3, createCore(3).pylonCapacity());
+        assertEquals(5, createCore(6).pylonCapacity());
+        assertEquals(7, createCore(9).pylonCapacity());
+        assertEquals(9, createCore(12).pylonCapacity());
+        assertEquals(11, createCore(15).pylonCapacity());
+        assertEquals(13, createCore(18).pylonCapacity());
+        assertEquals(15, createCore(21).pylonCapacity());
+        assertEquals(17, createCore(24).pylonCapacity());
+        assertEquals(17, createCore(CoreRecord.MAX_LEVEL).pylonCapacity());
     }
 
     @Test

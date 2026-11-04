@@ -4,5 +4,6 @@ public enum CoreEnhancement {
     OVERCHARGE,
     CRITICAL,
     CAPACITY,
-    HIT_YIELD
+    HIT_YIELD,
+    PYLON_YIELD
 }

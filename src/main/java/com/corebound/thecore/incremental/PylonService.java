@@ -1068,6 +1068,7 @@ public final class PylonService {
         drawLightningLinks(pylon, world);
         double yieldRatio = baseYieldRatio * lightningMultiplier(pylon)
                 * pylonEnergyMultiplier(pylon.equippedCells())
+                * core.pylonYieldMultiplier()
                 * coreService.energyMultiplier(pylon.islandIndex(), System.currentTimeMillis());
         if (criticalHit(pylon)) {
             yieldRatio *= 3.5;
@@ -1161,6 +1162,7 @@ public final class PylonService {
                 * baseYieldRatio
                 * lightningMultiplier
                 * pylonEnergyMultiplier(cells)
+                * core.pylonYieldMultiplier()
                 * core.astralPylonMultiplier()
                 * core.prestigeMultiplier()
                 * expectedCriticalMultiplier;

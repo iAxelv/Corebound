@@ -32,7 +32,8 @@ public final class CoreUpgradesMenu implements Listener {
             CoreEnhancement.OVERCHARGE, 20,
             CoreEnhancement.CRITICAL, 21,
             CoreEnhancement.CAPACITY, 22,
-            CoreEnhancement.HIT_YIELD, 23);
+            CoreEnhancement.HIT_YIELD, 23,
+            CoreEnhancement.PYLON_YIELD, 24);
 
     private static final class Holder implements InventoryHolder {
         private final long islandIndex;
@@ -74,7 +75,7 @@ public final class CoreUpgradesMenu implements Listener {
         }
         try (InputStreamReader reader = new InputStreamReader(defaultsStream, StandardCharsets.UTF_8)) {
             loaded.setDefaults(YamlConfiguration.loadConfiguration(reader));
-            if (saveDefaults) {
+            if (saveDefaults || loaded.getConfigurationSection("items.pylon-yield") == null) {
                 loaded.options().copyDefaults(true);
                 loaded.save(configFile);
             }
@@ -191,6 +192,7 @@ public final class CoreUpgradesMenu implements Listener {
                         Map.entry("%capacity%", Integer.toString(core.upgradeCapacity() * 12)),
                         Map.entry("%combo%", String.format(java.util.Locale.ROOT, "%.2f", core.maxCombo())),
                         Map.entry("%yield%", Integer.toString(core.upgradeHitYield() * 8)),
+                        Map.entry("%pylon_yield%", Integer.toString(core.upgradePylonYield() * 15)),
                         Map.entry("%required_level%", Integer.toString(requiredCoreLevel)),
                         Map.entry("%status%", status))))
                 .map(messages::parseComponent)
@@ -252,6 +254,7 @@ public final class CoreUpgradesMenu implements Listener {
                 || !Double.isFinite(item.getDouble("cost-multiplier", Double.NaN))
                 || item.getDouble("cost-multiplier", 0) < 1
                 || item.getInt("max-level", 0) > 5
+                || requiredLevels.stream().anyMatch(level -> level > CoreRecord.MAX_LEVEL)
                 || item.getStringList("lore").isEmpty()
                 || !validRequirements) {
             throw new IllegalArgumentException("core_upgrades.yml " + path + " contains invalid upgrade settings.");
@@ -264,6 +267,7 @@ public final class CoreUpgradesMenu implements Listener {
             case CRITICAL -> "critical";
             case CAPACITY -> "capacity";
             case HIT_YIELD -> "hit-yield";
+            case PYLON_YIELD -> "pylon-yield";
         };
     }
 

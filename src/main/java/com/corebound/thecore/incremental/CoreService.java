@@ -511,7 +511,8 @@ public final class CoreService {
                 removed.astralResonance(),
                 removed.astralPylonAttunement(),
                 removed.upgradeCapacity(),
-                removed.upgradeHitYield());
+                removed.upgradeHitYield(),
+                removed.upgradePylonYield());
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
@@ -632,7 +633,8 @@ public final class CoreService {
                     progress.astralResonance(),
                     progress.astralPylonAttunement(),
                     progress.upgradeCapacity(),
-                    progress.upgradeHitYield()));
+                    progress.upgradeHitYield(),
+                    progress.upgradePylonYield()));
         } catch (RuntimeException exception) {
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);
