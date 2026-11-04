@@ -46,6 +46,7 @@ public final class PylonService {
     private static final int TIER_ONE = 1;
     private static final int RANGE_GUIDE_POINTS = 72;
     private static final long RANGE_GUIDE_PERIOD_TICKS = 12L;
+    private static final long PULSE_DISPLAY_UPDATE_TICKS = 5L;
 
     private final TheCorePlugin plugin;
     private final IslandService islandService;
@@ -85,6 +86,7 @@ public final class PylonService {
     private final Map<Long, CellType[]> cellForgeOffers = new ConcurrentHashMap<>();
     private final Map<Long, boolean[]> availableCellForgeOffers = new ConcurrentHashMap<>();
     private final Map<UUID, ScheduledTask> activePylons = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> pulseCountdownTicks = new ConcurrentHashMap<>();
     private final Set<UUID> rangeGuidePlayers = ConcurrentHashMap.newKeySet();
     private final PylonMenu pylonMenu;
 
@@ -417,7 +419,7 @@ public final class PylonService {
         }
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(
-                    CellItem.create(new CellRecord(type, 1), intervalTicks));
+                    CellItem.create(new CellRecord(type, 1), intervalTicks, messages));
             for (ItemStack leftover : overflow.values()) {
                 Item dropped = player.getWorld().dropItemNaturally(player.getLocation(), leftover);
                 dropped.setPersistent(true);
@@ -433,7 +435,7 @@ public final class PylonService {
                 ? "crop-generator-rune-forged"
                 : type.isCondenserRune() ? "condenser-rune-forged" : "cell-forged";
         messages.send(player, forgedMessage, Map.of(
-                "cell", type.displayName(),
+                "cell", type.displayName(messages),
                 "cost", formatEnergy(cost)));
         return true;
     }
@@ -965,19 +967,46 @@ public final class PylonService {
         if (pylon == null || activePylons.containsKey(pylonId)) {
             return;
         }
+        long[] remainingTicks = {effectiveIntervalTicks(pylon)};
+        long[] ticksSinceDisplayUpdate = {0L};
+        pulseCountdownTicks.put(pylonId, remainingTicks[0]);
+        updatePylonCountdownDisplay(pylon, remainingTicks[0]);
         ScheduledTask[] taskReference = new ScheduledTask[1];
-        long period = effectiveIntervalTicks(pylon);
         ScheduledTask scheduled = interaction.getScheduler().runAtFixedRate(plugin, task -> {
             if (!interaction.isValid()) {
                 task.cancel();
                 activePylons.remove(pylonId, taskReference[0]);
+                pulseCountdownTicks.remove(pylonId);
                 return;
             }
-            firePulse(interaction, pylonId);
-        }, () -> activePylons.remove(pylonId, taskReference[0]), period, period);
+            PylonRecord current = repository.get(pylonId);
+            if (current == null) {
+                task.cancel();
+                activePylons.remove(pylonId, taskReference[0]);
+                pulseCountdownTicks.remove(pylonId);
+                return;
+            }
+            remainingTicks[0] = Math.max(0L, remainingTicks[0] - 1L);
+            boolean pulseDue = remainingTicks[0] == 0L;
+            if (pulseDue) {
+                remainingTicks[0] = effectiveIntervalTicks(current);
+                firePulse(interaction, pylonId);
+            }
+            pulseCountdownTicks.put(pylonId, remainingTicks[0]);
+            ticksSinceDisplayUpdate[0]++;
+            if (pulseDue || ticksSinceDisplayUpdate[0] >= PULSE_DISPLAY_UPDATE_TICKS) {
+                ticksSinceDisplayUpdate[0] = 0L;
+                updatePylonCountdownDisplay(current, remainingTicks[0]);
+            }
+        }, () -> {
+            activePylons.remove(pylonId, taskReference[0]);
+            pulseCountdownTicks.remove(pylonId);
+        }, 1L, 1L);
         if (scheduled != null) {
             taskReference[0] = scheduled;
             activePylons.put(pylonId, scheduled);
+        } else {
+            pulseCountdownTicks.remove(pylonId);
         }
     }
 
@@ -986,6 +1015,7 @@ public final class PylonService {
         if (task != null) {
             task.cancel();
         }
+        pulseCountdownTicks.remove(pylonId);
     }
 
     private void restartPulse(PylonRecord pylon) {
@@ -1197,22 +1227,56 @@ public final class PylonService {
     }
 
     private Component pylonHologram(CoreRecord core, PylonRecord pylon) {
-        return pylonHologram(core, pylon.tier(), pylon.equippedCells(), lightningMultiplier(pylon));
+        long remainingTicks = pulseCountdownTicks.getOrDefault(
+                pylon.pylonId(), (long) effectiveIntervalTicks(pylon));
+        return pylonHologram(core, pylon, remainingTicks);
+    }
+
+    private Component pylonHologram(CoreRecord core, PylonRecord pylon, long remainingTicks) {
+        return pylonHologram(
+                core,
+                pylon.tier(),
+                pylon.equippedCells(),
+                lightningMultiplier(pylon),
+                remainingTicks);
     }
 
     private Component pylonHologram(
             CoreRecord core, int tier, Map<Integer, CellRecord> cells, double lightningMultiplier) {
-        Component text = messages.parseComponent("&bPilón de Resonancia &7[T" + tier + "]");
+        return pylonHologram(
+                core, tier, cells, lightningMultiplier, (long) effectiveIntervalTicks(cells));
+    }
+
+    private Component pylonHologram(
+            CoreRecord core,
+            int tier,
+            Map<Integer, CellRecord> cells,
+            double lightningMultiplier,
+            long remainingTicks) {
+        Component text = messages.parseComponent(messages.formatText("pylon-ui.hologram-name", Map.of(
+                "tier", Integer.toString(tier))));
         if (!cells.isEmpty()) {
             text = text.append(Component.newline()).append(messages.parseComponent(
-                    "&7Células equipadas: &f" + cells.size()));
+                    messages.formatText("pylon-ui.equipped-cells", Map.of("count", Integer.toString(cells.size())))));
         }
         double yield = estimatedPulseYield(core, cells, lightningMultiplier);
-        double intervalSeconds = effectiveIntervalTicks(cells) / 20.0;
+        double remainingSeconds = Math.max(0L, remainingTicks) / 20.0;
         return text.append(Component.newline())
-                .append(messages.parseComponent("&7Intervalo: &f" + formatEnergy(intervalSeconds) + "s"))
-                .append(Component.newline())
-                .append(messages.parseComponent("&e+" + formatEnergy(yield) + "⚡ / pulso promedio"));
+                .append(messages.parseComponent(messages.formatText("pylon-ui.next-shot", Map.of(
+                        "seconds", formatEnergy(remainingSeconds),
+                        "yield", formatEnergy(yield)))));
+    }
+
+    private void updatePylonCountdownDisplay(PylonRecord pylon, long remainingTicks) {
+        CoreRecord core = coreRepository.core(pylon.islandIndex());
+        World world = plugin.getServer().getWorld(pylon.worldId());
+        if (core == null || world == null || pylon.textDisplayId() == null) {
+            return;
+        }
+        Entity textEntity = world.getEntity(pylon.textDisplayId());
+        if (textEntity instanceof TextDisplay display) {
+            display.text(pylonHologram(core, pylon, remainingTicks));
+        }
     }
 
     private void updatePylonVisuals(PylonRecord pylon, CoreRecord core, World world) {
@@ -1251,24 +1315,29 @@ public final class PylonService {
     private ItemStack createPylonItem(int tier, Map<Integer, CellRecord> cells, long islandIndex) {
         ItemStack item = new ItemStack(itemMaterial);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent(config.getString(
-                "pylon.item.display-name", "&bPilón de Resonancia") + " &7[T" + tier + "]"));
+        meta.displayName(messages.parseComponent(config.getString("pylon.item.display-name")
+                + messages.formatText("pylon-ui.item-suffix", Map.of("tier", Integer.toString(tier)))));
         List<Component> lore = new ArrayList<>(config.getStringList("pylon.item.lore").stream()
                 .map(messages::parseComponent)
                 .toList());
         lore.add(messages.parseComponent(""));
         if (cells.isEmpty()) {
-            lore.add(messages.parseComponent("&8• Ranuras: &7Vacías (" + Math.min(tier, 3) + ")"));
+            lore.add(messages.parseComponent(messages.formatText("pylon-ui.pylon-item-slot-empty", Map.of(
+                    "slots", Integer.toString(Math.min(tier, 3))))));
         } else {
-            lore.add(messages.parseComponent("&7Células instaladas:"));
+            lore.add(messages.component("pylon-ui.pylon-item-cells"));
             for (int slot = 0; slot < Math.min(tier, 3); slot++) {
                 CellRecord cell = cells.get(slot);
                 if (cell == null) {
-                    lore.add(messages.parseComponent("&8Ranura " + (slot + 1) + ": &7Vacía"));
+                    lore.add(messages.parseComponent(messages.formatText("pylon-ui.pylon-item-empty-slot", Map.of(
+                            "slot", Integer.toString(slot + 1)))));
                 } else {
-                    lore.add(messages.parseComponent("&7Ranura " + (slot + 1) + ": "
-                            + cell.type().color() + "Célula " + cell.type().displayName()
-                            + " T" + cell.tier() + " &8- " + cellEffectLore(cell)));
+                    lore.add(messages.parseComponent(messages.formatText("pylon-ui.pylon-item-cell", Map.of(
+                            "slot", Integer.toString(slot + 1),
+                            "color", cell.type().color(),
+                            "name", cell.type().displayName(messages),
+                            "tier", Integer.toString(cell.tier()),
+                            "effect", cellEffectLore(cell)))));
                 }
             }
         }
@@ -1285,27 +1354,19 @@ public final class PylonService {
     }
 
     private String cellEffectLore(CellRecord cell) {
-        return switch (cell.type()) {
-            case FIRE -> "&e-" + String.format(java.util.Locale.ROOT, "%.1f", cell.fireIntervalReductionTicks() / 20.0)
-                    + "s entre pulsos";
-            case LIGHTNING -> "&e+" + String.format(
-                    java.util.Locale.ROOT, "%.0f", cell.lightningBonusPerLink() * 100.0)
-                    + "% producción por enlace";
-            case VOID -> "&e" + String.format(java.util.Locale.ROOT, "%.0f", cell.voidCriticalChance() * 100.0)
-                    + "% de crítico x3.5";
-            case CONDENSER_EFFICIENCY -> "&e-"
-                    + String.format(java.util.Locale.ROOT, "%.0f", cell.condenserEnergyReduction() * 100.0)
-                    + "% de consumo del condensador";
-            case CONDENSER_YIELD -> "&e+"
-                    + String.format(java.util.Locale.ROOT, "%.0f", cell.condenserOreChanceBonus() * 100.0)
-                    + "% de probabilidad de mineral";
-            case CROP_EFFICIENCY -> "&e+"
-                    + String.format(java.util.Locale.ROOT, "%.0f", cell.cropHarvestBonus() * 100.0)
-                    + "% de objetos al cosechar";
-            case CROP_ENERGY_EFFICIENCY -> "&e-"
-                    + String.format(java.util.Locale.ROOT, "%.0f", cell.cropEnergyReduction() * 100.0)
-                    + "% de consumo del generador";
+        double value = switch (cell.type()) {
+            case FIRE -> cell.fireIntervalReductionTicks() / 20.0;
+            case LIGHTNING -> cell.lightningBonusPerLink() * 100.0;
+            case VOID -> cell.voidCriticalChance() * 100.0;
+            case CONDENSER_EFFICIENCY -> cell.condenserEnergyReduction() * 100.0;
+            case CONDENSER_YIELD -> cell.condenserOreChanceBonus() * 100.0;
+            case CROP_EFFICIENCY -> cell.cropHarvestBonus() * 100.0;
+            case CROP_ENERGY_EFFICIENCY -> cell.cropEnergyReduction() * 100.0;
         };
+        String formattedValue = String.format(java.util.Locale.ROOT,
+                cell.type() == CellType.FIRE ? "%.1f" : "%.0f", value);
+        return messages.formatText("pylon-ui.cell-effect." + cell.type().configKey(),
+                Map.of("value", formattedValue));
     }
 
     private int pylonTier(ItemStack item) {

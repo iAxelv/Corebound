@@ -3,6 +3,7 @@ package com.corebound.thecore.incremental;
 import com.corebound.thecore.message.Messages;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -49,7 +50,7 @@ public final class CondenserMenu implements Listener {
     public void open(Player player, CondenserRecord condenser) {
         Holder holder = new Holder(condenser.condenserId());
         holder.inventory = Bukkit.createInventory(
-                holder, 45, messages.parseComponent("&5Condensador de Materia"));
+                holder, 45, messages.component("condenser-ui.title"));
         fill(holder.inventory);
         holder.inventory.setItem(INFO_SLOT, infoItem(condenser));
         holder.inventory.setItem(STATE_SLOT, stateItem(condenser));
@@ -100,16 +101,20 @@ public final class CondenserMenu implements Listener {
     private ItemStack infoItem(CondenserRecord condenser) {
         ItemStack item = new ItemStack(Material.BOOK);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&dCondensador &7[Nivel "
-                + condenser.level() + "/" + condensers.maximumLevel() + "]"));
+        meta.displayName(messages.parseComponent(messages.formatText("condenser-ui.info-name", Map.of(
+                "level", Integer.toString(condenser.level()),
+                "max_level", Integer.toString(condensers.maximumLevel())))));
         List<Component> lore = new ArrayList<>();
-        lore.add(messages.parseComponent("&7Consumo por generación: &6"
-                + format(condensers.energyCost(condenser)) + "⚡"));
+        String generationCost = messages.formatText("condenser-ui.generation-cost", Map.of(
+                "cost", format(condensers.energyCost(condenser))));
+        lore.add(messages.parseComponent(generationCost));
         lore.add(Component.empty());
-        lore.add(messages.parseComponent("&eGeneración posible:"));
+        lore.add(messages.component("condenser-ui.possible-yields"));
         for (Material material : condensers.unlockedMaterials(condenser.level())) {
-            lore.add(messages.parseComponent("&7" + messages.text(condensers.oreMessageKey(material))
-                    + ": &a" + format(condensers.materialChance(condenser, material)) + "%"));
+            String yieldLine = messages.formatText("condenser-ui.yield-line", Map.of(
+                    "material", messages.text(condensers.oreMessageKey(material)),
+                    "chance", format(condensers.materialChance(condenser, material))));
+            lore.add(messages.parseComponent(yieldLine));
         }
         meta.lore(lore);
         item.setItemMeta(meta);
@@ -124,13 +129,16 @@ public final class CondenserMenu implements Listener {
             case IDLE -> "&e";
             case DISABLED -> "&c";
         };
-        meta.displayName(messages.parseComponent("&aSwitch del Condensador"));
+        meta.displayName(messages.component("condenser-ui.state-name"));
         meta.lore(List.of(
-                messages.parseComponent("&7Estado: " + stateColor + condenser.state().name()),
+                messages.parseComponent(messages.formatText("condenser-ui.state-line", Map.of(
+                        "color", stateColor,
+                        "state", messages.text("condenser-ui.state-" + condenser.state().name().toLowerCase(
+                                java.util.Locale.ROOT))))),
                 Component.empty(),
-                messages.parseComponent(condenser.state() == CondenserState.DISABLED
-                        ? "&eHaz clic para activar."
-                        : "&eHaz clic para desactivar.")));
+                messages.component(condenser.state() == CondenserState.DISABLED
+                        ? "condenser-ui.enable"
+                        : "condenser-ui.disable")));
         item.setItemMeta(meta);
         return item;
     }
@@ -138,13 +146,14 @@ public final class CondenserMenu implements Listener {
     private ItemStack runesItem(CondenserRecord condenser) {
         ItemStack item = new ItemStack(Material.RED_STAINED_GLASS_PANE);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&cRunas de Materia"));
+        meta.displayName(messages.component("condenser-ui.runes-name"));
         meta.lore(List.of(
-                messages.parseComponent("&7Ranuras: &e" + condenser.activeRunes().size()
-                        + "&7/&e" + condenser.runeSlots()),
-                messages.parseComponent("&7Equipa runas y desbloquea más ranuras."),
+                messages.parseComponent(messages.formatText("condenser-ui.rune-slots", Map.of(
+                        "active", Integer.toString(condenser.activeRunes().size()),
+                        "slots", Integer.toString(condenser.runeSlots())))),
+                messages.component("condenser-ui.runes-description"),
                 Component.empty(),
-                messages.parseComponent("&eHaz clic para administrar las runas.")));
+                messages.component("condenser-ui.manage-runes")));
         item.setItemMeta(meta);
         return item;
     }
@@ -153,21 +162,22 @@ public final class CondenserMenu implements Listener {
         boolean maxed = condenser.level() >= condensers.maximumLevel();
         ItemStack item = new ItemStack(maxed ? Material.NETHER_STAR : Material.ANVIL);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent(maxed
-                ? "&aNivel máximo alcanzado"
-                : "&eMejorar al nivel " + (condenser.level() + 1)));
+        String title = maxed
+                ? messages.legacy("condenser-ui.max-level")
+                : messages.formatText("condenser-ui.upgrade-level", Map.of(
+                        "level", Integer.toString(condenser.level() + 1)));
+        meta.displayName(messages.parseComponent(title));
         List<Component> lore = maxed
-                ? List.of(messages.parseComponent("&7El Condensador ya alcanzó su nivel máximo."))
+                ? List.of(messages.component("condenser-ui.max-level-lore"))
                 : List.of(
-                        messages.parseComponent("&7Costo: &6"
-                                + format(condensers.upgradeCost(condenser.level())) + "⚡"),
-                        messages.parseComponent("&7Consumo siguiente: &e"
-                                + format(condensers.energyCost(condenser.withLevel(
+                        messages.parseComponent(messages.formatText("condenser-ui.upgrade-cost", Map.of(
+                                "cost", format(condensers.upgradeCost(condenser.level()))))),
+                        messages.parseComponent(messages.formatText("condenser-ui.next-generation-cost", Map.of(
+                                "cost", format(condensers.energyCost(condenser.withLevel(
                                         condenser.level() + 1,
-                                        condensers.maximumRuneSlotsForLevel(condenser.level() + 1))))
-                                + "⚡/generación"),
+                                        condensers.maximumRuneSlotsForLevel(condenser.level() + 1))))))),
                         Component.empty(),
-                        messages.parseComponent("&eHaz clic para mejorar."));
+                        messages.component("condenser-ui.click-upgrade"));
         meta.lore(lore);
         item.setItemMeta(meta);
         return item;
@@ -176,7 +186,7 @@ public final class CondenserMenu implements Listener {
     private ItemStack closeItem() {
         ItemStack item = new ItemStack(Material.ARROW);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&cCerrar"));
+        meta.displayName(messages.component("condenser-ui.close"));
         item.setItemMeta(meta);
         return item;
     }

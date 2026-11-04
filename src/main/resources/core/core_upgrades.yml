@@ -1,61 +1,79 @@
 title: "&5Mejoras del Núcleo"
-rows: 3
+rows: 5
+panels:
+  material: GRAY_STAINED_GLASS_PANE
+status:
+  can-upgrade: "&eHaz clic para mejorar."
+  insufficient-energy: "&cEnergía insuficiente."
+  level-locked: "&cRequiere Núcleo nivel &e%required_level%&c."
+  max-level: "&aNivel máximo alcanzado."
 items:
   overcharge:
     material: LIGHTNING_ROD
-    slot: 11
+    locked-material: BARRIER
+    slot: 20
     display-name: "&eSobrevoltaje &7[Nvl. %level%/%max%]"
     lore:
-      - "&7Aumenta el límite de combo manual."
-      - "&7Multiplicador máximo: &b+0.5x"
-      - ""
-      - "&7Costo: &6%cost%⚡"
-      - "%status%"
-    base-cost: 250.0
-    cost-multiplier: 2.0
-    max-level: 5
-  window:
-    material: CLOCK
-    slot: 13
-    display-name: "&bVentana Resonante &7[Nvl. %level%/%max%]"
-    lore:
-      - "&7Extiende la duración del combo activo."
-      - "&7Tiempo adicional: &e+0.5s"
-      - ""
-      - "&7Costo: &6%cost%⚡"
-      - "%status%"
-    base-cost: 200.0
-    cost-multiplier: 1.8
-    max-level: 5
-  critical:
-    material: NETHER_STAR
-    slot: 15
-    display-name: "&cGolpe Crítico &7[Nvl. %level%/%max%]"
-    lore:
-      - "&7Probabilidad de impacto crítico manual."
-      - "&7Multiplica el golpe actual por &cx3.0⚡"
-      - "&7Probabilidad actual: &e+%chance%%"
+      - "&7Aumenta el multiplicador máximo del combo."
+      - "&7Multiplicador máximo: &b%combo%x"
+      - "&7Aumento por rango: &b+0.35x"
       - ""
       - "&7Costo: &6%cost%⚡"
       - "%status%"
     base-cost: 300.0
-    cost-multiplier: 2.2
+    cost-multiplier: 2.0
     max-level: 5
+    required-core-levels: [1, 3, 5, 7, 9]
+  critical:
+    material: NETHER_STAR
+    locked-material: BARRIER
+    slot: 21
+    display-name: "&cGolpe Crítico &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Probabilidad de impacto crítico manual."
+      - "&7Multiplica el golpe actual por &cx3.0⚡"
+      - "&7Probabilidad actual: &e%chance%%"
+      - "&7Probabilidad por rango: &e+3%"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 400.0
+    cost-multiplier: 2.0
+    max-level: 5
+    required-core-levels: [1, 3, 5, 7, 9]
   capacity:
     material: AMETHYST_SHARD
-    slot: 17
+    locked-material: BARRIER
+    slot: 22
     display-name: "&bCapacidad del Núcleo &7[Nvl. %level%/%max%]"
     lore:
       - "&7Aumenta la energía máxima del Núcleo."
       - "&7Capacidad adicional actual: &b+%capacity%%"
-      - "&7Bonus por rango: &b+10% de capacidad base"
+      - "&7Bonus por rango: &b+12% de capacidad base"
       - ""
       - "&7Costo: &6%cost%⚡"
       - "%status%"
-    base-cost: 500.0
+    base-cost: 450.0
+    cost-multiplier: 1.9
+    max-level: 5
+    required-core-levels: [1, 3, 5, 7, 9]
+  hit-yield:
+    material: GOLD_INGOT
+    locked-material: BARRIER
+    slot: 23
+    display-name: "&aPulso de Energía &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Aumenta la energía obtenida por cada golpe."
+      - "&7Ganancia adicional actual: &a+%yield%%"
+      - "&7Bonus por rango: &a+8% por golpe"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 350.0
     cost-multiplier: 2.0
     max-level: 5
+    required-core-levels: [1, 2, 4, 6, 8]
   back:
     material: ARROW
-    slot: 22
+    slot: 40
     display-name: "&cVolver al Menú Principal"

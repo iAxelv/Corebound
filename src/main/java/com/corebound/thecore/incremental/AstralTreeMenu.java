@@ -97,7 +97,7 @@ public final class AstralTreeMenu implements Listener {
     public void open(Player player, CoreRecord core) {
         Holder holder = new Holder(core.islandIndex());
         holder.inventory = Bukkit.createInventory(
-                holder, 54, messages.parseComponent(config.getString("title", "&5Árbol de Fracturas")));
+                holder, 54, messages.parseComponent(config.getString("title")));
         holder.inventory.setItem(slot("info"), infoItem(core));
         holder.inventory.setItem(slot("back"), simpleItem("items.back", Map.of()));
         holder.inventory.setItem(slot("resonance"), skillItem(core, AstralSkill.RESONANCE));
@@ -156,12 +156,12 @@ public final class AstralTreeMenu implements Listener {
         int requiredFracture = maxed ? 0 : skill.fractureRequirement(nextLevel);
         int cost = maxed ? 0 : skill.fragmentCost(nextLevel);
         String status = maxed
-                ? item.getString("maxed-status", "&aNivel máximo alcanzado.")
+                ? item.getString("maxed-status")
                 : core.prestigeCount() < requiredFracture
-                        ? item.getString("locked-status", "&cRequiere Fractura %required_fracture%.")
+                        ? item.getString("locked-status")
                         : core.coreFragments() < cost
-                                ? item.getString("fragments-status", "&cNecesitas %cost% fragmentos.")
-                                : item.getString("available-status", "&eHaz clic para mejorar.");
+                                ? item.getString("fragments-status")
+                                : item.getString("available-status");
         status = replace(status, Map.of(
                 "%required_fracture%", Integer.toString(requiredFracture),
                 "%cost%", Integer.toString(cost)));

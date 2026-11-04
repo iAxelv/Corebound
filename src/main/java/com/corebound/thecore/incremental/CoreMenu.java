@@ -139,7 +139,7 @@ public final class CoreMenu implements Listener {
     public void open(Player player, CoreRecord core) {
         MenuHolder holder = new MenuHolder(core.islandIndex(), menuSlots());
         holder.inventory = Bukkit.createInventory(
-                holder, 54, color(config.getString("title", "&5Gestión del Núcleo")));
+                holder, 54, color(config.getString("title")));
         holder.inventory.setItem(slot("upgrades"),
                 createItem(config.getConfigurationSection("items.upgrades"), core, false));
         holder.inventory.setItem(slot("statistics"),
@@ -225,7 +225,7 @@ public final class CoreMenu implements Listener {
                 Map.entry("%next_level%", Integer.toString(core.level() + 1)),
                 Map.entry("%cost%", formatEnergy(core.upgradeCost())),
                 Map.entry("%next_base%", formatEnergy(Math.pow(1.25, core.level()))),
-                Map.entry("%capacity_bonus%", Integer.toString(core.upgradeCapacity() * 10)));
+                Map.entry("%capacity_bonus%", Integer.toString(core.upgradeCapacity() * 12)));
 
         ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "PAPER")));
         ItemMeta meta = item.getItemMeta();
@@ -244,8 +244,7 @@ public final class CoreMenu implements Listener {
                 unlocked ? "NETHER_STAR" : "BARRIER");
         ItemStack item = new ItemStack(Material.matchMaterial(material));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(color(itemConfig.getString(unlocked ? "display-name" : "locked-name",
-                unlocked ? "&d&lFRACTURA DIMENSIONAL" : "&cFractura bloqueada")));
+        meta.displayName(color(itemConfig.getString(unlocked ? "display-name" : "locked-name")));
         meta.lore(itemConfig.getStringList(unlocked ? "lore" : "locked-lore").stream()
                 .map(line -> color(replace(line, Map.of(
                         "%level%", Integer.toString(core.level()),
@@ -277,10 +276,10 @@ public final class CoreMenu implements Listener {
                 ? itemConfig.getString("material", "SEA_LANTERN")
                 : itemConfig.getString("locked-material", "BARRIER");
         String displayName = unlocked
-                ? itemConfig.getString("display-name", "&bForjar Pilón I")
+                ? itemConfig.getString("display-name")
                 : atLimit
-                        ? itemConfig.getString("limit-name", "&cLímite de Pilones alcanzado")
-                        : itemConfig.getString("locked-name", "&cPilón bloqueado");
+                        ? itemConfig.getString("limit-name")
+                        : itemConfig.getString("locked-name");
         List<String> lore = itemConfig.getStringList(unlocked
                 ? "lore"
                 : atLimit ? "limit-lore" : "locked-lore");
@@ -309,8 +308,8 @@ public final class CoreMenu implements Listener {
                 ? itemConfig.getString("material", "ENCHANTING_TABLE")
                 : itemConfig.getString("locked-material", "BARRIER");
         String displayName = unlocked
-                ? itemConfig.getString("display-name", "&5Forja Elemental")
-                : itemConfig.getString("locked-name", "&cForja bloqueada");
+                ? itemConfig.getString("display-name")
+                : itemConfig.getString("locked-name");
         List<String> lore = itemConfig.getStringList(unlocked ? "lore" : "locked-lore");
         ItemStack item = new ItemStack(Material.matchMaterial(material));
         ItemMeta meta = item.getItemMeta();
@@ -329,8 +328,8 @@ public final class CoreMenu implements Listener {
                 ? itemConfig.getString("material", "BLAST_FURNACE")
                 : itemConfig.getString("level-locked-material", "BARRIER");
         String displayName = available
-                ? itemConfig.getString("display-name", "&bCondensador de Materia")
-                : itemConfig.getString("level-locked-name", "&cCondensador bloqueado");
+                ? itemConfig.getString("display-name")
+                : itemConfig.getString("level-locked-name");
         List<String> lore = itemConfig.getStringList(
                 available ? "lore" : "level-locked-lore");
         lore = lore.stream()
@@ -355,8 +354,7 @@ public final class CoreMenu implements Listener {
         boolean unlocked = cropGeneratorService != null && core.level() >= requiredLevel;
         String material = itemConfig.getString(unlocked ? "material" : "locked-material",
                 unlocked ? "COMPOSTER" : "BARRIER");
-        String displayName = itemConfig.getString(unlocked ? "display-name" : "locked-name",
-                unlocked ? "&aCatalizador de Cultivos" : "&cCatalizador bloqueado");
+        String displayName = itemConfig.getString(unlocked ? "display-name" : "locked-name");
         List<String> lore = itemConfig.getStringList(unlocked ? "lore" : "locked-lore");
         Map<String, String> placeholders = Map.of(
                 "%required_level%", Integer.toString(requiredLevel),

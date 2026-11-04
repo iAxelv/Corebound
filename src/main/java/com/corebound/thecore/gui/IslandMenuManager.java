@@ -106,11 +106,14 @@ public final class IslandMenuManager implements Listener {
 
     public void reload() {
         settingsConfig = ConfigFiles.load(
-                plugin.getDataFolder().toPath().resolve("is/is_settings.yml").toFile());
+                plugin.getDataFolder().toPath().resolve("is/is_settings.yml").toFile(),
+                plugin.getResource("is/is_settings.yml"));
         membersConfig = ConfigFiles.load(
-                plugin.getDataFolder().toPath().resolve("is/is_members.yml").toFile());
+                plugin.getDataFolder().toPath().resolve("is/is_members.yml").toFile(),
+                plugin.getResource("is/is_members.yml"));
         permissionsConfig = ConfigFiles.load(
-                plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile());
+                plugin.getDataFolder().toPath().resolve("is/is_perms.yml").toFile(),
+                plugin.getResource("is/is_perms.yml"));
     }
 
     public void openSettings(Player player, IslandData island) {
@@ -118,7 +121,7 @@ public final class IslandMenuManager implements Listener {
         MenuHolder holder = new MenuHolder(MenuType.SETTINGS, island.owner(), 0);
         holder.inventory = Bukkit.createInventory(
                 holder, rows * 9, LegacyComponentSerializer.legacyAmpersand()
-                        .deserialize(settingsConfig.getString("title", "&8Island Settings")));
+                        .deserialize(settingsConfig.getString("title")));
         ConfigurationSection items = settingsConfig.getConfigurationSection("items");
         if (items != null) {
             for (String key : items.getKeys(false)) {
@@ -127,12 +130,11 @@ public final class IslandMenuManager implements Listener {
                     continue;
                 }
                 boolean enabled = island.settings().values().get(key);
-                String state = settingsConfig.getString(enabled ? "enabled-text" : "disabled-text",
-                        enabled ? "&aEnabled" : "&cDisabled");
+                String state = settingsConfig.getString(enabled ? "enabled-text" : "disabled-text");
                 List<String> lore = itemConfig.getStringList(enabled ? "lore-enabled" : "lore-disabled");
                 ItemStack item = item(itemConfig.getString("material", "PAPER"),
                         itemConfig.getInt("slot", -1),
-                        itemConfig.getString("display-name", key),
+                        itemConfig.getString("display-name"),
                         lore.stream().map(line -> line.replace("%status%", state)).toList());
                 if (item != null && itemConfig.getInt("slot", -1) >= 0
                         && itemConfig.getInt("slot", -1) < holder.inventory.getSize()) {
@@ -154,8 +156,8 @@ public final class IslandMenuManager implements Listener {
         }
         MenuHolder holder = new MenuHolder(MenuType.PERMISSIONS, island.owner(), 0, target);
         String title = target == null
-                ? permissionsConfig.getString("title", "&8Island Permissions")
-                : permissionsConfig.getString("user-title", "&8Permissions: %user%")
+                ? permissionsConfig.getString("title")
+                : permissionsConfig.getString("user-title")
                         .replace("%user%", playerName(target));
         int rows = menuRows(permissionsConfig, "is_perms.yml");
         holder.inventory = Bukkit.createInventory(
@@ -177,8 +179,7 @@ public final class IslandMenuManager implements Listener {
                         for (IslandRank rank : List.of(
                                 IslandRank.ADMINISTRATOR, IslandRank.MODERATOR, IslandRank.MEMBER)) {
                             String style = permissionsConfig.getString(
-                                    rank == minimum ? "rank-enabled-text" : "rank-disabled-text",
-                                    rank == minimum ? "&a%rank%" : "&7%rank%");
+                                    rank == minimum ? "rank-enabled-text" : "rank-disabled-text");
                             lore.add(style.replace("%rank%", messages.text(rank.messageKey())));
                         }
                     } else {
@@ -186,7 +187,7 @@ public final class IslandMenuManager implements Listener {
                     }
                 }
                 setConfiguredItem(holder.inventory, itemConfig, itemConfig.getInt("slot", -1),
-                        itemConfig.getString("display-name", permission.configKey()), lore);
+                        itemConfig.getString("display-name"), lore);
             }
             sounds.play(player, permissionsConfig, "sounds.open");
         } else {
@@ -202,26 +203,24 @@ public final class IslandMenuManager implements Listener {
                 boolean enabled = island.hasPermission(target, permission);
                 List<String> lore = itemConfig.getStringList(enabled ? "lore-enabled" : "lore-disabled")
                         .stream()
-                        .map(line -> line.replace("%status%", permissionsConfig.getString(
-                                enabled ? "enabled-text" : "disabled-text",
-                                enabled ? "&aEnabled" : "&cDisabled")))
+                        .map(line -> line.replace("%status%",
+                                permissionsConfig.getString(enabled ? "enabled-text" : "disabled-text")))
                         .toList();
                 setConfiguredItem(holder.inventory, itemConfig,
                         permissionUserSlot(permission.configKey()),
-                        itemConfig.getString("display-name", permission.configKey()), lore);
+                        itemConfig.getString("display-name"), lore);
             }
             ConfigurationSection allItem = items.getConfigurationSection("all-permissions");
             boolean allEnabled = island.hasAllPermissions(target);
             if (allItem != null) {
                 List<String> lore = allItem.getStringList(allEnabled ? "lore-enabled" : "lore-disabled")
                         .stream()
-                        .map(line -> line.replace("%status%", permissionsConfig.getString(
-                                allEnabled ? "enabled-text" : "disabled-text",
-                                allEnabled ? "&aEnabled" : "&cDisabled")))
+                        .map(line -> line.replace("%status%",
+                                permissionsConfig.getString(allEnabled ? "enabled-text" : "disabled-text")))
                         .toList();
                 setConfiguredItem(holder.inventory, allItem,
                         permissionUserSlot("all-permissions"),
-                        allItem.getString("display-name", "All permissions"), lore);
+                        allItem.getString("display-name"), lore);
             }
             sounds.play(player, permissionsConfig, "sounds.user-open");
         }
@@ -265,7 +264,7 @@ public final class IslandMenuManager implements Listener {
         MenuHolder holder = new MenuHolder(MenuType.MEMBERS, island.owner(), Math.min(Math.max(page, 0), lastPage));
         holder.inventory = Bukkit.createInventory(
                 holder, rows * 9, LegacyComponentSerializer.legacyAmpersand()
-                        .deserialize(membersConfig.getString("title", "&8Island Members")));
+                        .deserialize(membersConfig.getString("title")));
         int start = holder.page * pageSize;
         for (int i = 0; i < pageSize && start + i < entries.size(); i++) {
             int slot = slots.get(i);
@@ -277,10 +276,10 @@ public final class IslandMenuManager implements Listener {
             String name = offlinePlayer.getName() == null ? member.playerId().toString() : offlinePlayer.getName();
             String rank = messages.text(member.rank().messageKey());
             String joinedDate = member.joinedAt() <= 0
-                    ? membersConfig.getString("unknown-time", "Unknown")
+                    ? membersConfig.getString("unknown-time")
                     : JOIN_DATE.format(Instant.ofEpochMilli(member.joinedAt()));
             String joinedTime = member.joinedAt() <= 0
-                    ? membersConfig.getString("unknown-time", "Unknown")
+                    ? membersConfig.getString("unknown-time")
                     : JOIN_TIME.format(Instant.ofEpochMilli(member.joinedAt()));
             ItemStack head = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) head.getItemMeta();
@@ -288,7 +287,7 @@ public final class IslandMenuManager implements Listener {
             if (onlinePlayer != null) {
                 meta.setPlayerProfile(onlinePlayer.getPlayerProfile());
             }
-            meta.displayName(text(membersConfig.getString("display-name", "&f%player%")
+            meta.displayName(text(membersConfig.getString("display-name")
                     .replace("%player%", name)));
             meta.lore(membersConfig.getStringList("lore").stream()
                     .map(line -> text(line.replace("%rank%", rank)
@@ -519,7 +518,7 @@ public final class IslandMenuManager implements Listener {
             Inventory inventory, YamlConfiguration config, String path, String slotPath, int fallbackSlot) {
         ConfigurationSection section = config.getConfigurationSection(path);
         setConfiguredItem(inventory, section, config.getInt(slotPath, fallbackSlot),
-                section == null ? path : section.getString("display-name", path),
+                section == null ? "" : section.getString("display-name"),
                 section == null ? List.of() : section.getStringList("lore"));
     }
 

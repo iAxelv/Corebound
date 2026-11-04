@@ -43,8 +43,7 @@ public final class CropGeneratorMenu implements Listener {
     public void open(Player player, CropGeneratorRecord generator) {
         Holder holder = new Holder(generator.generatorId());
         holder.inventory = Bukkit.createInventory(
-                holder, 45, messages.parseComponent(generators.menuText(
-                        "main.title", "&2Catalizador de Cultivos")));
+                holder, 45, messages.parseComponent(generators.menuText("main.title")));
         fill(holder.inventory);
         holder.inventory.setItem(slot("info", 4), infoItem(generator));
         holder.inventory.setItem(slot("state", 20), stateItem(generator));
@@ -96,13 +95,10 @@ public final class CropGeneratorMenu implements Listener {
     private ItemStack infoItem(CropGeneratorRecord generator) {
         ItemStack item = new ItemStack(material("main.info.material", "BOOK"));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(text("main.info.name", "&aCatalizador &7[Nivel %level%/%max_level%]", Map.of(
+        meta.displayName(configuredText("main.info.name", Map.of(
                 "%level%", Integer.toString(generator.level()),
                 "%max_level%", Integer.toString(generators.maximumLevel()))));
-        List<Component> lore = generators.menuLore("main.info.lore", List.of(
-                        "&7Cooldown: &e%shot_delay%s",
-                        "&7Costo por disparo: &6%energy_cost%⚡",
-                        "&7Bonificación de cosecha: &e+%harvest%%")).stream()
+        List<Component> lore = generators.menuLore("main.info.lore").stream()
                 .map(line -> text(line, values(generator, generator.level())))
                 .toList();
         meta.lore(lore);
@@ -113,26 +109,19 @@ public final class CropGeneratorMenu implements Listener {
     private ItemStack stateItem(CropGeneratorRecord generator) {
         ItemStack item = new ItemStack(material("main.state.material", "LEVER"));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(text("main.state.name", "&aEstado del generador", Map.of()));
+        meta.displayName(configuredText("main.state.name", Map.of()));
         String stateKey = switch (generator.state()) {
             case ACTIVE -> "main.state.active";
             case IDLE -> "main.state.idle";
             case DISABLED -> "main.state.disabled";
         };
-        String stateFallback = switch (generator.state()) {
-            case ACTIVE -> "&aACTIVE";
-            case IDLE -> "&eIDLE";
-            case DISABLED -> "&cDISABLE";
-        };
-        String state = generators.menuText(stateKey, stateFallback);
+        String state = generators.menuText(stateKey);
         String actionKey = generator.state() == CondenserState.DISABLED
                 ? "main.state.enable-lore"
                 : "main.state.disable-lore";
-        String actionFallback = generator.state() == CondenserState.DISABLED
-                ? "&eHaz clic para activar."
-                : "&eHaz clic para desactivar.";
-        meta.lore(List.of(messages.parseComponent("&7Estado: " + state), Component.empty(),
-                messages.parseComponent(generators.menuText(actionKey, actionFallback))));
+        meta.lore(List.of(messages.parseComponent(messages.formatText("crop-generator-ui.menu-state", Map.of(
+                        "state", state))), Component.empty(),
+                messages.parseComponent(generators.menuText(actionKey))));
         item.setItemMeta(meta);
         return item;
     }
@@ -140,12 +129,8 @@ public final class CropGeneratorMenu implements Listener {
     private ItemStack runesItem(CropGeneratorRecord generator) {
         ItemStack item = new ItemStack(material("main.runes.material", "GREEN_STAINED_GLASS_PANE"));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(text("main.runes.name", "&aRunas de Cultivo", Map.of()));
-        meta.lore(generators.menuLore("main.runes.lore", List.of(
-                        "&7Ranuras: &e%runes%/%slots%",
-                        "&7Mejoran la cosecha y reducen el consumo.",
-                        "",
-                        "&eHaz clic para administrar las runas.")).stream()
+        meta.displayName(configuredText("main.runes.name", Map.of()));
+        meta.lore(generators.menuLore("main.runes.lore").stream()
                 .map(line -> text(line, Map.of(
                         "%runes%", Integer.toString(generator.activeRunes().size()),
                         "%slots%", Integer.toString(generator.runeSlots()))))
@@ -160,15 +145,10 @@ public final class CropGeneratorMenu implements Listener {
                 maxed ? "main.upgrade.max-material" : "main.upgrade.material",
                 maxed ? "NETHER_STAR" : "ANVIL"));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(text(maxed ? "main.upgrade.max-name" : "main.upgrade.name",
-                maxed ? "&aNivel máximo alcanzado" : "&eMejorar al nivel %next_level%",
+        meta.displayName(configuredText(maxed ? "main.upgrade.max-name" : "main.upgrade.name",
                 Map.of("%next_level%", Integer.toString(generator.level() + 1))));
         List<String> lore = generators.menuLore(
-                maxed ? "main.upgrade.max-lore" : "main.upgrade.lore",
-                maxed
-                        ? List.of("&7El Catalizador ya alcanzó su nivel máximo.")
-                        : List.of("&7Costo: &6%cost%⚡", "&7Cooldown tras mejorar: &e%shot_delay%s", "",
-                                "&eHaz clic para mejorar."));
+                maxed ? "main.upgrade.max-lore" : "main.upgrade.lore");
         int displayedGrowthLevel = maxed ? generator.level() : generator.level() + 1;
         meta.lore(lore.stream().map(line -> text(line, values(generator, displayedGrowthLevel))).toList());
         item.setItemMeta(meta);
@@ -178,7 +158,7 @@ public final class CropGeneratorMenu implements Listener {
     private ItemStack closeItem() {
         ItemStack item = new ItemStack(material("main.close.material", "ARROW"));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(text("main.close.name", "&cCerrar", Map.of()));
+        meta.displayName(configuredText("main.close.name", Map.of()));
         item.setItemMeta(meta);
         return item;
     }
@@ -202,8 +182,8 @@ public final class CropGeneratorMenu implements Listener {
         return generators.menuMaterial(path, fallback);
     }
 
-    private Component text(String path, String fallback, Map<String, String> placeholders) {
-        return replace(generators.menuText(path, fallback), placeholders);
+    private Component configuredText(String path, Map<String, String> placeholders) {
+        return replace(generators.menuText(path), placeholders);
     }
 
     private Component text(String raw, Map<String, String> placeholders) {

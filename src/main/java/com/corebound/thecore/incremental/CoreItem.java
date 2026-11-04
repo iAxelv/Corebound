@@ -101,6 +101,28 @@ public final class CoreItem {
             int astralResonance,
             int astralPylonAttunement,
             int upgradeCapacity) {
+        return create(config, messages, itemKey, level, energy, hits, lastHitAt,
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments,
+                astralResonance, astralPylonAttunement, upgradeCapacity, 0);
+    }
+
+    public static ItemStack create(
+            YamlConfiguration config,
+            Messages messages,
+            NamespacedKey itemKey,
+            int level,
+            double energy,
+            int hits,
+            long lastHitAt,
+            int upgradeOvercharge,
+            int upgradeWindow,
+            int upgradeCritical,
+            int prestigeCount,
+            int coreFragments,
+            int astralResonance,
+            int astralPylonAttunement,
+            int upgradeCapacity,
+            int upgradeHitYield) {
         Material material = Material.matchMaterial(config.getString("item.material", "NETHERITE_BLOCK"));
         if (material == null || !material.isItem() || !material.isBlock()) {
             throw new IllegalArgumentException("core.yml item.material must be a valid block item.");
@@ -109,7 +131,7 @@ public final class CoreItem {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.parseComponent(replaceStats(
-                config.getString("item.display-name", "&5Corebound Core"),
+                config.getString("item.display-name"),
                 level,
                 Math.pow(1.25, level - 1))));
         List<String> lore = config.getStringList("item.lore").stream()
@@ -132,6 +154,8 @@ public final class CoreItem {
                 astralPylonAttunementKey(itemKey), PersistentDataType.INTEGER, astralPylonAttunement);
         meta.getPersistentDataContainer().set(
                 capacityUpgradeKey(itemKey), PersistentDataType.INTEGER, upgradeCapacity);
+        meta.getPersistentDataContainer().set(
+                hitYieldUpgradeKey(itemKey), PersistentDataType.INTEGER, upgradeHitYield);
         item.setItemMeta(meta);
         return item;
     }
@@ -178,7 +202,9 @@ public final class CoreItem {
                 meta.getPersistentDataContainer().getOrDefault(
                         astralPylonAttunementKey(itemKey), PersistentDataType.INTEGER, 0),
                 meta.getPersistentDataContainer().getOrDefault(
-                        capacityUpgradeKey(itemKey), PersistentDataType.INTEGER, 0));
+                        capacityUpgradeKey(itemKey), PersistentDataType.INTEGER, 0),
+                meta.getPersistentDataContainer().getOrDefault(
+                        hitYieldUpgradeKey(itemKey), PersistentDataType.INTEGER, 0));
     }
 
     private static NamespacedKey levelKey(NamespacedKey itemKey) {
@@ -229,6 +255,10 @@ public final class CoreItem {
         return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_upgrade_capacity");
     }
 
+    private static NamespacedKey hitYieldUpgradeKey(NamespacedKey itemKey) {
+        return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_upgrade_hit_yield");
+    }
+
     private static String replaceStats(String text, int level, double baseEnergy) {
         return text
                 .replace("%level%", Integer.toString(level))
@@ -256,6 +286,7 @@ public final class CoreItem {
             int coreFragments,
             int astralResonance,
             int astralPylonAttunement,
-            int upgradeCapacity) {
+            int upgradeCapacity,
+            int upgradeHitYield) {
     }
 }

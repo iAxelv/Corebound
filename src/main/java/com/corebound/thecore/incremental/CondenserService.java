@@ -337,14 +337,18 @@ public final class CondenserService implements Listener {
             Map<Integer, CellRecord> runes) {
         ItemStack item = new ItemStack(itemMaterial);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&bCondensador de Materia"));
+        meta.displayName(messages.component("condenser-ui.placed-name"));
         meta.lore(List.of(
-                messages.parseComponent("&7Nivel: &e" + level + "/" + maximumLevel),
-                messages.parseComponent("&7Estado: &a" + state.name()),
-                messages.parseComponent("&7Colocación: entre &e"
-                        + formatEnergy(pylons.minimumDistance()) + " y &e"
-                        + formatEnergy(pylons.maximumDistance()) + " bloques del Núcleo."),
-                messages.parseComponent("&8Mayús+clic derecho para recogerlo.")));
+                messages.parseComponent(messages.formatText("condenser-ui.placed-level", Map.of(
+                        "level", Integer.toString(level),
+                        "max_level", Integer.toString(maximumLevel)))),
+                messages.parseComponent(messages.formatText("condenser-ui.state", Map.of(
+                        "state", messages.text("condenser-ui.state-"
+                                + state.name().toLowerCase(java.util.Locale.ROOT))))),
+                messages.parseComponent(messages.formatText("condenser-ui.placement", Map.of(
+                        "min", formatEnergy(pylons.minimumDistance()),
+                        "max", formatEnergy(pylons.maximumDistance())))),
+                messages.component("condenser-ui.pickup")));
         meta.getPersistentDataContainer().set(itemKey, PersistentDataType.BYTE, (byte) 1);
         meta.getPersistentDataContainer().set(itemIslandKey, PersistentDataType.LONG, islandIndex);
         meta.getPersistentDataContainer().set(itemIdKey, PersistentDataType.STRING, itemId.toString());
@@ -1024,29 +1028,34 @@ public final class CondenserService implements Listener {
     }
 
     public String runeSlotDisplayName() {
-        return config.getString(
-                "condenser.runes.empty-slot.display-name", "&bRanura de runa");
+        String displayName = config.getString("condenser.runes.empty-slot.display-name");
+        if (displayName == null) {
+            throw new IllegalArgumentException("Missing condenser rune slot display name.");
+        }
+        return displayName;
     }
 
     public List<String> runeSlotLore() {
+        if (!config.isList("condenser.runes.empty-slot.lore")) {
+            throw new IllegalArgumentException("Missing condenser rune slot lore.");
+        }
         List<String> lore = config.getStringList("condenser.runes.empty-slot.lore");
-        return lore.isEmpty()
-                ? List.of(
-                        "&7Mayús+clic en una runa de tu inventario",
-                        "&7para instalarla.",
-                        "",
-                        "&7Haz clic en una runa instalada",
-                        "&7para devolverla a tu inventario.")
-                : lore;
+        return lore;
     }
 
-    public String runeMenuText(String path, String fallback) {
-        return config.getString("condenser.runes.menu." + path, fallback);
+    public String runeMenuText(String path) {
+        String text = config.getString("condenser.runes.menu." + path);
+        if (text == null) {
+            throw new IllegalArgumentException("Missing condenser rune menu text: " + path);
+        }
+        return text;
     }
 
-    public List<String> runeMenuLore(String path, List<String> fallback) {
-        List<String> configured = config.getStringList("condenser.runes.menu." + path);
-        return configured.isEmpty() ? fallback : configured;
+    public List<String> runeMenuLore(String path) {
+        if (!config.isList("condenser.runes.menu." + path)) {
+            throw new IllegalArgumentException("Missing condenser rune menu lore: " + path);
+        }
+        return config.getStringList("condenser.runes.menu." + path);
     }
 
     public String oreMessageKey(Material material) {
@@ -1161,12 +1170,17 @@ public final class CondenserService implements Listener {
             case IDLE -> "&e";
             case DISABLED -> "&c";
         };
-        return messages.parseComponent("&bCondensador de Materia &7[Nvl. " + condenser.level() + "]")
+        String state = messages.text("condenser-ui.state-" + condenser.state().name().toLowerCase(
+                java.util.Locale.ROOT));
+        return messages.parseComponent(messages.formatText("condenser-ui.hologram-name", Map.of(
+                        "level", Integer.toString(condenser.level()))))
                 .append(Component.newline())
-                .append(messages.parseComponent("&7Estado: " + color + condenser.state().name()))
+                .append(messages.parseComponent(messages.formatText("condenser-ui.hologram-state", Map.of(
+                        "color", color,
+                        "state", state))))
                 .append(Component.newline())
-                .append(messages.parseComponent("&7Consumo: &e"
-                        + formatEnergy(energyCost(condenser)) + "⚡/generación"));
+                .append(messages.parseComponent(messages.formatText("condenser-ui.hologram-cost", Map.of(
+                        "cost", formatEnergy(energyCost(condenser))))));
     }
 
     private void removeIfPresent(Entity entity) {

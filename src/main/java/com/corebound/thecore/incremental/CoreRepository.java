@@ -87,12 +87,12 @@ public final class CoreRepository {
     }
 
     public synchronized CoreRecord upgradeEnhancement(
-            long islandIndex, CoreEnhancement enhancement, double cost, int maxLevel) {
+            long islandIndex, CoreEnhancement enhancement, double cost, int maxLevel, int requiredCoreLevel) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null) {
             return null;
         }
-        CoreRecord updated = current.upgradeEnhancement(enhancement, cost, maxLevel);
+        CoreRecord updated = current.upgradeEnhancement(enhancement, cost, maxLevel, requiredCoreLevel);
         if (updated != null) {
             cores.put(islandIndex, updated);
             save();
@@ -151,7 +151,8 @@ public final class CoreRepository {
                 current.coreFragments(),
                 current.astralResonance(),
                 current.astralPylonAttunement(),
-                current.upgradeCapacity()));
+                current.upgradeCapacity(),
+                current.upgradeHitYield()));
         save();
     }
 
@@ -263,6 +264,7 @@ public final class CoreRepository {
                 yaml.set(path + ".astral-resonance", core.astralResonance());
                 yaml.set(path + ".astral-pylon-attunement", core.astralPylonAttunement());
                 yaml.set(path + ".upgrade-capacity", core.upgradeCapacity());
+                yaml.set(path + ".upgrade-hit-yield", core.upgradeHitYield());
             }
             yaml.set("pending-items", snapshot.pendingItems().stream().map(id -> id.toString()).toList());
             Path target = file.toPath();
@@ -315,7 +317,8 @@ public final class CoreRepository {
                         core.getInt("core-fragments", core.getInt("prestige-count", 0)),
                         core.getInt("astral-resonance", 0),
                         core.getInt("astral-pylon-attunement", 0),
-                        core.getInt("upgrade-capacity", 0)));
+                        core.getInt("upgrade-capacity", 0),
+                        core.getInt("upgrade-hit-yield", 0)));
             }
         }
         for (String playerId : yaml.getStringList("pending-items")) {

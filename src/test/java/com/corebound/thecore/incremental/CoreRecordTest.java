@@ -115,14 +115,14 @@ class CoreRecordTest {
         assertEquals(500.0, base.maxEnergy(), 0.0001);
         assertEquals(605.0, createCore(2).maxEnergy(), 0.0001);
         assertEquals(500.0, critical.maxEnergy(), 0.0001);
-        assertEquals(0.05, critical.criticalChance(), 0.0001);
+        assertEquals(0.03, critical.criticalChance(), 0.0001);
         assertEquals(500.0, base.withHit(1000, COMBO_WINDOW_MILLIS).energy(), 0.0001);
         assertEquals(500.0, base.withPassiveEnergy(10).energy(), 0.0001);
         assertEquals(500.0, createCore(1, 700).energy(), 0.0001);
     }
 
     @Test
-    void enhancementLevelsIncreaseComboWindowAndCapacity() {
+    void enhancementLevelsIncreaseComboAndKeepTheBaseComboWindow() {
         CoreRecord enhanced = new CoreRecord(
                 1,
                 UUID.randomUUID(),
@@ -140,11 +140,11 @@ class CoreRecordTest {
                 3,
                 1);
 
-        assertEquals(4.0, enhanced.maxCombo(), 0.0001);
-        assertEquals(75, enhanced.maxComboHits());
-        assertEquals(4500, enhanced.comboWindowMillis(3000));
+        assertEquals(3.7, enhanced.maxCombo(), 0.0001);
+        assertEquals(68, enhanced.maxComboHits());
+        assertEquals(3000, enhanced.comboWindowMillis(3000));
         assertEquals(500, enhanced.maxEnergy(), 0.0001);
-        assertEquals(0.05, enhanced.criticalChance(), 0.0001);
+        assertEquals(0.03, enhanced.criticalChance(), 0.0001);
         assertEquals(250.0, createCore(1).upgradeCost(), 0.0001);
     }
 
@@ -156,7 +156,7 @@ class CoreRecordTest {
 
         assertEquals(200.0, enhanced.energy(), 0.0001);
         assertEquals(1, enhanced.upgradeCritical());
-        assertEquals(0.05, enhanced.criticalChance(), 0.0001);
+        assertEquals(0.03, enhanced.criticalChance(), 0.0001);
         assertEquals(500.0, enhanced.maxEnergy(), 0.0001);
         assertEquals(100.0, spent.energy(), 0.0001);
         assertEquals(1, spent.upgradeCritical());
@@ -164,14 +164,26 @@ class CoreRecordTest {
     }
 
     @Test
-    void capacityUpgradeAddsTenPercentAndSurvivesCoreProgression() {
+    void capacityUpgradeAddsTwelvePercentAndSurvivesCoreProgression() {
         CoreRecord core = createCore(5, 6442.04);
         CoreRecord enhanced = core.upgradeEnhancement(CoreEnhancement.CAPACITY, 500.0, 5);
 
         assertEquals(1, enhanced.upgradeCapacity());
-        assertEquals(7086.244, enhanced.maxEnergy(), 0.0001);
+        assertEquals(7215.0848, enhanced.maxEnergy(), 0.0001);
         assertEquals(5942.04, enhanced.energy(), 0.0001);
         assertEquals(1, enhanced.upgrade(1000).upgradeCapacity());
+    }
+
+    @Test
+    void hitYieldUpgradeImprovesManualEnergyAndRequiresCoreProgression() {
+        CoreRecord core = createCore(1, 500.0);
+
+        assertNull(core.upgradeEnhancement(CoreEnhancement.HIT_YIELD, 350.0, 5, 2));
+        CoreRecord enhanced = core.upgradeEnhancement(CoreEnhancement.HIT_YIELD, 350.0, 5, 1);
+
+        assertEquals(1, enhanced.upgradeHitYield());
+        assertEquals(1.08, enhanced.hitYieldMultiplier(), 0.0001);
+        assertEquals(151.1232, enhanced.withHit(1000, COMBO_WINDOW_MILLIS).energy(), 0.0001);
     }
 
     @Test

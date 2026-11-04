@@ -82,6 +82,14 @@ public final class Messages {
         return message;
     }
 
+    public String formatText(String key, Map<String, String> replacements) {
+        String message = legacy(key);
+        for (Map.Entry<String, String> replacement : replacements.entrySet()) {
+            message = message.replace("%" + replacement.getKey() + "%", replacement.getValue());
+        }
+        return message;
+    }
+
     public String colored(String key) {
         String message = messages.getString(key);
         if (message == null) {

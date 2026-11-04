@@ -26,12 +26,13 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class CoreUpgradesMenu implements Listener {
-    private static final int BACK_SLOT = 22;
+    private static final int BACK_SLOT = 40;
+    private static final int INVENTORY_SIZE = 45;
     private static final Map<CoreEnhancement, Integer> SLOTS = Map.of(
-            CoreEnhancement.OVERCHARGE, 11,
-            CoreEnhancement.WINDOW, 13,
-            CoreEnhancement.CRITICAL, 15,
-            CoreEnhancement.CAPACITY, 17);
+            CoreEnhancement.OVERCHARGE, 20,
+            CoreEnhancement.CRITICAL, 21,
+            CoreEnhancement.CAPACITY, 22,
+            CoreEnhancement.HIT_YIELD, 23);
 
     private static final class Holder implements InventoryHolder {
         private final long islandIndex;
@@ -80,17 +81,16 @@ public final class CoreUpgradesMenu implements Listener {
         } catch (IOException exception) {
             throw new IllegalArgumentException("Could not load core/core_upgrades.yml defaults.", exception);
         }
-        if (loaded.getInt("rows", 3) != 3) {
-            throw new IllegalArgumentException("core_upgrades.yml rows must be 3.");
+        if (Material.matchMaterial(loaded.getString("panels.material", "")) == null) {
+            throw new IllegalArgumentException("core_upgrades.yml panels.material must be valid.");
         }
         for (CoreEnhancement enhancement : CoreEnhancement.values()) {
             validateUpgrade(loaded, enhancement);
         }
         ConfigurationSection back = loaded.getConfigurationSection("items.back");
         if (back == null
-                || back.getInt("slot", -1) != BACK_SLOT
                 || Material.matchMaterial(back.getString("material", "")) == null) {
-            throw new IllegalArgumentException("core_upgrades.yml items.back must define a valid material and slot 22.");
+            throw new IllegalArgumentException("core_upgrades.yml items.back must define a valid material.");
         }
         config = loaded;
     }
@@ -102,7 +102,8 @@ public final class CoreUpgradesMenu implements Listener {
         }
         Holder holder = new Holder(islandIndex);
         holder.inventory = Bukkit.createInventory(
-                holder, 27, messages.parseComponent(config.getString("title", "&5Mejoras del Núcleo")));
+                holder, INVENTORY_SIZE, messages.parseComponent(config.getString("title")));
+        fill(holder.inventory);
         for (CoreEnhancement enhancement : CoreEnhancement.values()) {
             holder.inventory.setItem(SLOTS.get(enhancement), upgradeItem(core, enhancement));
         }
@@ -134,9 +135,17 @@ public final class CoreUpgradesMenu implements Listener {
                     return;
                 }
                 int currentLevel = core.enhancementLevel(enhancement);
-                double cost = item.getDouble("base-cost") * Math.pow(item.getDouble("cost-multiplier"), currentLevel);
+                int maxLevel = item.getInt("max-level");
+                if (currentLevel >= maxLevel) {
+                    cores.upgradeEnhancement(player, holder.islandIndex, enhancement, 0, maxLevel, 1);
+                    open(player, holder.islandIndex);
+                    return;
+                }
+                int requiredCoreLevel = item.getIntegerList("required-core-levels").get(currentLevel);
+                double cost = item.getDouble("base-cost")
+                        * Math.pow(item.getDouble("cost-multiplier"), currentLevel);
                 cores.upgradeEnhancement(
-                        player, holder.islandIndex, enhancement, cost, item.getInt("max-level"));
+                        player, holder.islandIndex, enhancement, cost, maxLevel, requiredCoreLevel);
                 open(player, holder.islandIndex);
                 return;
             }
@@ -154,24 +163,42 @@ public final class CoreUpgradesMenu implements Listener {
         ConfigurationSection item = config.getConfigurationSection("items." + path(enhancement));
         int level = core.enhancementLevel(enhancement);
         int maxLevel = item.getInt("max-level");
+        boolean maxed = level >= maxLevel;
+        int requiredCoreLevel = maxed
+                ? core.level()
+                : item.getIntegerList("required-core-levels").get(level);
         double cost = item.getDouble("base-cost") * Math.pow(item.getDouble("cost-multiplier"), level);
-        String status = level >= maxLevel
-                ? "&aNivel máximo alcanzado."
-                : core.energy() >= cost ? "&eHaz clic para mejorar." : "&cEnergía insuficiente.";
+        boolean coreLevelLocked = !maxed && core.level() < requiredCoreLevel;
+        String statusPath = maxed
+                ? "status.max-level"
+                : coreLevelLocked
+                        ? "status.level-locked"
+                        : core.energy() < cost
+                                ? "status.insufficient-energy"
+                                : "status.can-upgrade";
+        String status = replace(config.getString(statusPath, ""), Map.of(
+                "%required_level%", Integer.toString(requiredCoreLevel),
+                "%cost%", formatEnergy(cost)));
         String title = replace(item.getString("display-name", ""), Map.of(
                 "%level%", Integer.toString(level),
                 "%max%", Integer.toString(maxLevel)));
         List<Component> lore = item.getStringList("lore").stream()
-                .map(line -> replace(line, Map.of(
-                        "%level%", Integer.toString(level),
-                        "%max%", Integer.toString(maxLevel),
-                        "%cost%", formatEnergy(cost),
-                        "%chance%", Integer.toString(level * 5),
-                        "%capacity%", Integer.toString(level * 10),
-                        "%status%", status)))
+                .map(line -> replace(line, Map.ofEntries(
+                        Map.entry("%level%", Integer.toString(level)),
+                        Map.entry("%max%", Integer.toString(maxLevel)),
+                        Map.entry("%cost%", formatEnergy(cost)),
+                        Map.entry("%chance%", Integer.toString((int) Math.round(core.criticalChance() * 100))),
+                        Map.entry("%capacity%", Integer.toString(core.upgradeCapacity() * 12)),
+                        Map.entry("%combo%", String.format(java.util.Locale.ROOT, "%.2f", core.maxCombo())),
+                        Map.entry("%yield%", Integer.toString(core.upgradeHitYield() * 8)),
+                        Map.entry("%required_level%", Integer.toString(requiredCoreLevel)),
+                        Map.entry("%status%", status))))
                 .map(messages::parseComponent)
                 .toList();
-        ItemStack stack = new ItemStack(Material.matchMaterial(item.getString("material")));
+        Material material = Material.matchMaterial(coreLevelLocked
+                ? item.getString("locked-material", "BARRIER")
+                : item.getString("material", ""));
+        ItemStack stack = new ItemStack(material);
         ItemMeta meta = stack.getItemMeta();
         meta.displayName(messages.parseComponent(title));
         meta.lore(lore);
@@ -183,31 +210,61 @@ public final class CoreUpgradesMenu implements Listener {
         ConfigurationSection item = config.getConfigurationSection("items.back");
         ItemStack stack = new ItemStack(Material.matchMaterial(item.getString("material")));
         ItemMeta meta = stack.getItemMeta();
-        meta.displayName(messages.parseComponent(item.getString("display-name", "&cVolver al Menú Principal")));
+        meta.displayName(messages.parseComponent(item.getString("display-name")));
         stack.setItemMeta(meta);
         return stack;
+    }
+
+    private ItemStack panelItem() {
+        ItemStack pane = new ItemStack(Material.matchMaterial(config.getString("panels.material")));
+        ItemMeta meta = pane.getItemMeta();
+        meta.displayName(Component.empty());
+        pane.setItemMeta(meta);
+        return pane;
+    }
+
+    private void fill(Inventory inventory) {
+        ItemStack pane = panelItem();
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            if (slot < 9 || slot >= 36 || slot % 9 == 0 || slot % 9 == 8) {
+                inventory.setItem(slot, pane);
+            }
+        }
     }
 
     private void validateUpgrade(YamlConfiguration loaded, CoreEnhancement enhancement) {
         String path = "items." + path(enhancement);
         ConfigurationSection item = loaded.getConfigurationSection(path);
-        int expectedSlot = SLOTS.get(enhancement);
+        List<Integer> requiredLevels = item == null ? List.of() : item.getIntegerList("required-core-levels");
+        int previousRequiredLevel = 0;
+        boolean validRequirements = item != null
+                && requiredLevels.size() == item.getInt("max-level", 0);
+        for (int requiredLevel : requiredLevels) {
+            validRequirements &= requiredLevel >= previousRequiredLevel && requiredLevel >= 1;
+            previousRequiredLevel = requiredLevel;
+        }
         if (item == null
-                || item.getInt("slot", -1) != expectedSlot
                 || Material.matchMaterial(item.getString("material", "")) == null
+                || Material.matchMaterial(item.getString("locked-material", "BARRIER")) == null
                 || item.getInt("max-level", 0) <= 0
                 || !Double.isFinite(item.getDouble("base-cost", Double.NaN))
                 || item.getDouble("base-cost", 0) <= 0
                 || !Double.isFinite(item.getDouble("cost-multiplier", Double.NaN))
                 || item.getDouble("cost-multiplier", 0) < 1
                 || item.getInt("max-level", 0) > 5
-                || item.getStringList("lore").isEmpty()) {
+                || item.getStringList("lore").isEmpty()
+                || !validRequirements) {
             throw new IllegalArgumentException("core_upgrades.yml " + path + " contains invalid upgrade settings.");
         }
     }
 
     private String path(CoreEnhancement enhancement) {
-        return enhancement.name().toLowerCase(java.util.Locale.ROOT);
+        return switch (enhancement) {
+            case OVERCHARGE -> "overcharge";
+            case CRITICAL -> "critical";
+            case CAPACITY -> "capacity";
+            case HIT_YIELD -> "hit-yield";
+        };
     }
 
     private String replace(String text, Map<String, String> placeholders) {

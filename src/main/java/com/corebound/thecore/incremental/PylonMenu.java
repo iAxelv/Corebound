@@ -62,13 +62,13 @@ public final class PylonMenu implements Listener {
     public void openPylon(Player player, PylonRecord pylon) {
         Holder holder = new Holder(pylon.pylonId(), pylon.islandIndex(), false, null, null);
         holder.inventory = Bukkit.createInventory(
-                holder, 27, messages.parseComponent("&5Gestión del Pilón"));
+                holder, 27, messages.component("pylon-ui.title"));
         fillFrame(holder.inventory, pylonCellSlots(pylon.maxSlots()));
         int[] slots = pylonCellSlots(pylon.maxSlots());
         for (int index = 0; index < slots.length; index++) {
             CellRecord cell = pylon.equippedCells().get(index);
             if (cell != null) {
-                holder.inventory.setItem(slots[index], CellItem.create(cell, pylons.baseIntervalTicks()));
+                holder.inventory.setItem(slots[index], CellItem.create(cell, pylons.baseIntervalTicks(), messages));
             } else {
                 holder.inventory.setItem(slots[index], emptyCellSlotItem());
             }
@@ -86,7 +86,7 @@ public final class PylonMenu implements Listener {
                 pylons.cellForgeOffers(islandIndex),
                 pylons.availableCellForgeOffers(islandIndex));
         holder.inventory = Bukkit.createInventory(
-                holder, 27, messages.parseComponent("&5Forja Elemental"));
+                holder, 27, messages.component("pylon-ui.cell-forge-title"));
         renderForge(holder);
         player.openInventory(holder.inventory);
     }
@@ -275,7 +275,7 @@ public final class PylonMenu implements Listener {
         pylons.setEquippedCell(pylon.pylonId(), cellIndex, cell);
         PylonRecord updated = pylons.getPylon(pylon.pylonId());
         event.getClickedInventory().setItem(event.getSlot(), null);
-        menu.setItem(menuSlot, CellItem.create(cell, pylons.baseIntervalTicks()));
+        menu.setItem(menuSlot, CellItem.create(cell, pylons.baseIntervalTicks(), messages));
         if (updated != null) {
             menu.setItem(4, statisticsItem(updated));
         }
@@ -295,7 +295,7 @@ public final class PylonMenu implements Listener {
             return;
         }
         pylons.setEquippedCell(pylon.pylonId(), cellIndex, null);
-        ItemStack cellItem = CellItem.create(cell, pylons.baseIntervalTicks());
+        ItemStack cellItem = CellItem.create(cell, pylons.baseIntervalTicks(), messages);
         if (!player.getInventory().addItem(cellItem).isEmpty()) {
             pylons.setEquippedCell(pylon.pylonId(), cellIndex, cell);
             messages.send(player, "pylon-cell-inventory-full");
@@ -321,13 +321,13 @@ public final class PylonMenu implements Listener {
     private ItemStack emptyCellSlotItem() {
         ItemStack item = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&bRanura de célula"));
+        meta.displayName(messages.component("pylon-ui.empty-cell-name"));
         meta.lore(List.of(
-                messages.parseComponent("&7Mayús+clic en una célula de tu inventario"),
-                messages.parseComponent("&7para instalarla."),
+                messages.component("pylon-ui.install-cell"),
+                messages.component("pylon-ui.install-cell-next-line"),
                 Component.empty(),
-                messages.parseComponent("&7Haz clic en una célula instalada"),
-                messages.parseComponent("&7para devolverla a tu inventario.")));
+                messages.component("pylon-ui.remove-cell"),
+                messages.component("pylon-ui.remove-cell-next-line")));
         item.setItemMeta(meta);
         return item;
     }
@@ -360,32 +360,35 @@ public final class PylonMenu implements Listener {
             return;
         }
         event.setCancelled(true);
-        player.setItemOnCursor(CellItem.create(fusedCell, pylons.baseIntervalTicks()));
+        player.setItemOnCursor(CellItem.create(fusedCell, pylons.baseIntervalTicks(), messages));
         event.getClickedInventory().setItem(event.getSlot(), null);
         player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.8f);
         messages.send(player, "cell-fused", Map.of(
-                "cell", cursorCell.type().displayName(),
+                "cell", cursorCell.type().displayName(messages),
                 "tier", Integer.toString(fusedCell.tier())));
     }
 
     private ItemStack statisticsItem(PylonRecord pylon) {
         ItemStack item = new ItemStack(Material.CLOCK);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&bEstadísticas del Pilón"));
+        meta.displayName(messages.component("pylon-ui.stats-name"));
         CoreRecord core = pylons.coreRecord(pylon.islandIndex());
         List<Component> lore;
         if (core == null) {
-            lore = List.of(messages.parseComponent("&cNo se encontró el Núcleo de esta isla."));
+            lore = List.of(messages.component("pylon-ui.missing-core"));
         } else {
             double interval = pylons.effectiveIntervalTicks(pylon) / 20.0;
             double yield = pylons.estimatedPulseYield(core, pylon);
             double perMinute = yield * 60.0 / interval;
             lore = List.of(
-                    messages.parseComponent("&7Intervalo: &f" + formatEnergy(interval) + "s"),
-                    messages.parseComponent("&7Energía promedio por pulso: &e+" + formatEnergy(yield) + "⚡"),
-                    messages.parseComponent("&7Producción promedio: &a+" + formatEnergy(perMinute) + "⚡/min"),
-                    messages.parseComponent("&7Tier de runa permitido: &bT"
-                            + CellRecord.maximumTierForCoreLevel(core.level())));
+                    messages.parseComponent(messages.formatText("pylon-ui.interval", Map.of(
+                            "seconds", formatEnergy(interval)))),
+                    messages.parseComponent(messages.formatText("pylon-ui.average-yield", Map.of(
+                            "yield", formatEnergy(yield)))),
+                    messages.parseComponent(messages.formatText("pylon-ui.average-production", Map.of(
+                            "production", formatEnergy(perMinute)))),
+                    messages.parseComponent(messages.formatText("pylon-ui.rune-tier", Map.of(
+                            "tier", Integer.toString(CellRecord.maximumTierForCoreLevel(core.level()))))));
         }
         meta.lore(lore);
         item.setItemMeta(meta);
@@ -398,26 +401,34 @@ public final class PylonMenu implements Listener {
         List<String> lore;
         if (pylon.tier() >= 3) {
             item = new ItemStack(Material.NETHER_STAR);
-            title = "&aPilón al máximo";
-            lore = List.of("&7Tier máximo alcanzado.", "&7Ranuras: &e" + pylon.maxSlots());
+            title = messages.legacy("pylon-ui.max-upgrade");
+            lore = List.of(
+                    messages.legacy("pylon-ui.max-tier"),
+                    messages.formatText("pylon-ui.slots", Map.of("slots", Integer.toString(pylon.maxSlots()))));
         } else {
             int nextTier = pylon.tier() + 1;
             int requiredCoreLevel = pylons.pylonUpgradeRequiredCoreLevel(nextTier);
             double cost = pylons.pylonUpgradeCost(nextTier);
             if (pylons.coreLevel(pylon.islandIndex()) < requiredCoreLevel) {
                 item = new ItemStack(Material.BARRIER);
-                title = "&cMejora bloqueada &7(T" + nextTier + ")";
+                title = messages.formatText("pylon-ui.locked-upgrade", Map.of(
+                        "tier", Integer.toString(nextTier)));
                 lore = List.of(
-                        "&cRequiere Núcleo nivel &e" + requiredCoreLevel + "&c.",
-                        "&7Ranuras al mejorar: &e" + pylon.maxSlots() + " &7→ &e" + nextTier);
+                        messages.formatText("pylon-ui.required-core", Map.of(
+                                "level", Integer.toString(requiredCoreLevel))),
+                        messages.formatText("pylon-ui.slots-upgrade", Map.of(
+                                "current", Integer.toString(pylon.maxSlots()),
+                                "next", Integer.toString(nextTier))));
             } else {
                 item = new ItemStack(Material.ANVIL);
-                title = "&aMejorar Pilón &7(T" + nextTier + ")";
+                title = messages.formatText("pylon-ui.upgrade", Map.of("tier", Integer.toString(nextTier)));
                 lore = List.of(
-                        "&7Costo: &6" + formatEnergy(cost) + "⚡",
-                        "&7Ranuras: &e" + pylon.maxSlots() + " &7→ &e" + nextTier,
+                        messages.formatText("pylon-ui.cost", Map.of("cost", formatEnergy(cost))),
+                        messages.formatText("pylon-ui.slots-upgrade", Map.of(
+                                "current", Integer.toString(pylon.maxSlots()),
+                                "next", Integer.toString(nextTier))),
                         "",
-                        "&eHaz clic para mejorar.");
+                        messages.legacy("pylon-ui.click-upgrade"));
             }
         }
         ItemMeta meta = item.getItemMeta();
@@ -430,14 +441,15 @@ public final class PylonMenu implements Listener {
     private ItemStack forgeItem(CellType type) {
         ItemStack item = new ItemStack(type.itemMaterial());
         ItemMeta meta = item.getItemMeta();
-        String itemName = type.isRune() ? "Forjar Runa " : "Forjar Célula ";
-        meta.displayName(messages.parseComponent(type.color() + itemName + type.displayName()));
-        List<Component> lore = CellItem.cellLore(new CellRecord(type, 1), pylons.baseIntervalTicks()).stream()
+        String itemName = messages.legacy(type.isRune() ? "pylon-ui.forge-rune" : "pylon-ui.forge-cell");
+        meta.displayName(messages.parseComponent(type.color() + itemName + type.displayName(messages)));
+        List<Component> lore = CellItem.cellLore(new CellRecord(type, 1), pylons.baseIntervalTicks(), messages).stream()
                 .map(messages::parseComponent)
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         lore.add(Component.empty());
-        lore.add(messages.parseComponent("&7Costo: &6" + formatEnergy(pylons.cellForgeCost(type)) + "⚡"));
-        lore.add(messages.parseComponent("&eHaz clic para comprar esta oferta."));
+        lore.add(messages.parseComponent(messages.formatText("pylon-ui.cost", Map.of(
+                "cost", formatEnergy(pylons.cellForgeCost(type))))));
+        lore.add(messages.component("pylon-ui.click-buy-cell"));
         meta.lore(lore);
         item.setItemMeta(meta);
         return item;
@@ -446,13 +458,14 @@ public final class PylonMenu implements Listener {
     private ItemStack refreshItem() {
         ItemStack item = new ItemStack(Material.SPYGLASS);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&dActualizar ofertas"));
+        meta.displayName(messages.component("pylon-ui.refresh"));
         meta.lore(List.of(
-                messages.parseComponent("&7Vuelve a sortear las tres ofertas."),
-                messages.parseComponent("&7Pueden salir células repetidas."),
+                messages.component("pylon-ui.refresh-description"),
+                messages.component("pylon-ui.duplicate-cells"),
                 Component.empty(),
-                messages.parseComponent("&7Costo: &6" + formatEnergy(pylons.forgeRefreshCost()) + "⚡"),
-                messages.parseComponent("&eHaz clic para actualizar.")));
+                messages.parseComponent(messages.formatText("pylon-ui.cost", Map.of(
+                        "cost", formatEnergy(pylons.forgeRefreshCost())))),
+                messages.component("pylon-ui.click-refresh")));
         item.setItemMeta(meta);
         return item;
     }

@@ -506,13 +506,16 @@ public final class CropGeneratorService implements Listener {
             Map<Integer, CellRecord> runes) {
         ItemStack item = new ItemStack(itemMaterial);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&aCatalizador de Cultivos"));
+        meta.displayName(messages.component("crop-generator-ui.placed-name"));
         meta.lore(List.of(
-                messages.parseComponent("&7Nivel: &e" + level + "/" + MAX_LEVEL),
-                messages.parseComponent("&7Estado: &a" + stateLabel(state)),
-                messages.parseComponent("&7Acelera los cultivos de la isla."),
-                messages.parseComponent("&7Solo se puede colocar uno por isla."),
-                messages.parseComponent("&8Mayús+clic derecho para recogerlo.")));
+                messages.parseComponent(messages.formatText("crop-generator-ui.level", Map.of(
+                        "level", Integer.toString(level),
+                        "max_level", Integer.toString(MAX_LEVEL)))),
+                messages.parseComponent(messages.formatText("crop-generator-ui.state", Map.of(
+                        "state", stateLabel(state)))),
+                messages.component("crop-generator-ui.description"),
+                messages.component("crop-generator-ui.island-limit"),
+                messages.component("crop-generator-ui.pickup")));
         meta.getPersistentDataContainer().set(itemKey, PersistentDataType.BYTE, (byte) 1);
         meta.getPersistentDataContainer().set(itemIslandKey, PersistentDataType.LONG, islandIndex);
         meta.getPersistentDataContainer().set(itemIdKey, PersistentDataType.STRING, itemId.toString());
@@ -1445,13 +1448,19 @@ public final class CropGeneratorService implements Listener {
         return 1;
     }
 
-    public String menuText(String path, String fallback) {
-        return config.getString("crop-generator.menus." + path, fallback);
+    public String menuText(String path) {
+        String text = config.getString("crop-generator.menus." + path);
+        if (text == null) {
+            throw new IllegalArgumentException("Missing crop generator menu text: " + path);
+        }
+        return text;
     }
 
-    public List<String> menuLore(String path, List<String> fallback) {
-        List<String> configured = config.getStringList("crop-generator.menus." + path);
-        return configured.isEmpty() ? fallback : configured;
+    public List<String> menuLore(String path) {
+        if (!config.isList("crop-generator.menus." + path)) {
+            throw new IllegalArgumentException("Missing crop generator menu lore: " + path);
+        }
+        return config.getStringList("crop-generator.menus." + path);
     }
 
     public Material menuMaterial(String path, String fallback) {
@@ -1737,24 +1746,21 @@ public final class CropGeneratorService implements Listener {
     }
 
     private Component hologram(CropGeneratorRecord generator) {
-        String color = switch (generator.state()) {
-            case ACTIVE -> "&a";
-            case IDLE -> "&e";
-            case DISABLED -> "&c";
-        };
-        return messages.parseComponent("&aCatalizador de Cultivos &7[Nvl. " + generator.level() + "]")
+        return messages.parseComponent(messages.formatText("crop-generator-ui.hologram-name", Map.of(
+                        "level", Integer.toString(generator.level()))))
                 .append(Component.newline())
-                .append(messages.parseComponent("&7Estado: " + color + stateLabel(generator.state())))
+                .append(messages.parseComponent(messages.formatText("crop-generator-ui.hologram-state", Map.of(
+                        "state", stateLabel(generator.state())))))
                 .append(Component.newline())
-                .append(messages.parseComponent("&7Disparo: &e"
-                        + CropGeneratorMath.formatSeconds(remainingShotTicks(generator) / 20.0) + "s"))
+                .append(messages.parseComponent(messages.formatText("crop-generator-ui.hologram-shot", Map.of(
+                        "seconds", CropGeneratorMath.formatSeconds(remainingShotTicks(generator) / 20.0)))))
                 .append(Component.newline())
-                .append(messages.parseComponent("&7Costo: &6" + formatEnergy(energyCost(generator))
-                        + "⚡ por disparo"));
+                .append(messages.parseComponent(messages.formatText("crop-generator-ui.hologram-cost", Map.of(
+                        "cost", formatEnergy(energyCost(generator))))));
     }
 
     private String stateLabel(CondenserState state) {
-        return state == CondenserState.DISABLED ? "DISABLE" : state.name();
+        return menuText("main.state." + state.name().toLowerCase(java.util.Locale.ROOT));
     }
 
     private void removeIfPresent(Entity entity) {

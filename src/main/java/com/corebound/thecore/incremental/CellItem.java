@@ -1,6 +1,8 @@
 package com.corebound.thecore.incremental;
 
+import com.corebound.thecore.message.Messages;
 import java.util.List;
+import java.util.Map;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -14,14 +16,16 @@ public final class CellItem {
     private CellItem() {
     }
 
-    public static ItemStack create(CellRecord cell, int baseIntervalTicks) {
+    public static ItemStack create(CellRecord cell, int baseIntervalTicks, Messages messages) {
         ItemStack item = new ItemStack(cell.type().itemMaterial());
         ItemMeta meta = item.getItemMeta();
         LegacyComponentSerializer legacy = LegacyComponentSerializer.legacyAmpersand();
-        String itemName = cell.type().isRune() ? "Runa " : "Célula ";
+        String itemName = messages.legacy(cell.type().isRune()
+                ? "cell-item.name-rune"
+                : "cell-item.name-cell");
         meta.displayName(legacy.deserialize(
-                cell.type().color() + itemName + cell.type().displayName() + " T" + cell.tier()));
-        meta.lore(cellLore(cell, baseIntervalTicks).stream().map(legacy::deserialize).toList());
+                cell.type().color() + itemName + cell.type().displayName(messages) + " T" + cell.tier()));
+        meta.lore(cellLore(cell, baseIntervalTicks, messages).stream().map(legacy::deserialize).toList());
         meta.setMaxStackSize(1);
         meta.getPersistentDataContainer().set(CELL_TYPE_KEY, PersistentDataType.STRING, cell.type().name());
         meta.getPersistentDataContainer().set(CELL_TIER_KEY, PersistentDataType.INTEGER, cell.tier());
@@ -29,33 +33,34 @@ public final class CellItem {
         return item;
     }
 
-    public static List<String> cellLore(CellRecord cell, int baseIntervalTicks) {
+    public static List<String> cellLore(CellRecord cell, int baseIntervalTicks, Messages messages) {
         String improvement = switch (cell.type()) {
-            case FIRE -> "&6Mejora: &e-" + formatSeconds(cell.fireIntervalReductionTicks() / 20.0)
-                    + "s entre pulsos"
-                    + " &7(mínimo 1s; base " + formatSeconds(baseIntervalTicks / 20.0) + "s).";
-            case LIGHTNING -> "&6Mejora: &e+" + formatNumber(cell.lightningBonusPerLink() * 100)
-                    + "% de producción por enlace.";
-            case VOID -> "&6Mejora: &e" + formatNumber(cell.voidCriticalChance() * 100)
-                    + "% de crítico &7(x3.5 energía).";
-            case CONDENSER_EFFICIENCY -> "&6Mejora: &e-"
-                    + formatNumber(cell.condenserEnergyReduction() * 100) + "% de consumo del condensador.";
-            case CONDENSER_YIELD -> "&6Mejora: &e+"
-                    + formatNumber(cell.condenserOreChanceBonus() * 100) + "% de probabilidad de mineral.";
-            case CROP_EFFICIENCY -> "&6Mejora: &e+"
-                    + formatNumber(cell.cropHarvestBonus() * 100) + "% de objetos al cosechar.";
-            case CROP_ENERGY_EFFICIENCY -> "&6Mejora: &e-"
-                    + formatNumber(cell.cropEnergyReduction() * 100) + "% de consumo del generador.";
+            case FIRE -> messages.formatText("cell-item.improvement.fire", Map.of(
+                    "reduction", formatSeconds(cell.fireIntervalReductionTicks() / 20.0),
+                    "base", formatSeconds(baseIntervalTicks / 20.0)));
+            case LIGHTNING -> messages.formatText("cell-item.improvement.lightning", Map.of(
+                    "bonus", formatNumber(cell.lightningBonusPerLink() * 100)));
+            case VOID -> messages.formatText("cell-item.improvement.void", Map.of(
+                    "chance", formatNumber(cell.voidCriticalChance() * 100)));
+            case CONDENSER_EFFICIENCY -> messages.formatText("cell-item.improvement.condenser-efficiency", Map.of(
+                    "bonus", formatNumber(cell.condenserEnergyReduction() * 100)));
+            case CONDENSER_YIELD -> messages.formatText("cell-item.improvement.condenser-yield", Map.of(
+                    "bonus", formatNumber(cell.condenserOreChanceBonus() * 100)));
+            case CROP_EFFICIENCY -> messages.formatText("cell-item.improvement.crop-efficiency", Map.of(
+                    "bonus", formatNumber(cell.cropHarvestBonus() * 100)));
+            case CROP_ENERGY_EFFICIENCY -> messages.formatText("cell-item.improvement.crop-energy-efficiency", Map.of(
+                    "bonus", formatNumber(cell.cropEnergyReduction() * 100)));
         };
+        String installKey = cell.type().isCropGeneratorRune()
+                ? "cell-item.install-crop-generator"
+                : cell.type().isCondenserRune()
+                        ? "cell-item.install-condenser"
+                        : "cell-item.install-pylon";
         return List.of(
-                cell.type().isCropGeneratorRune()
-                        ? "&7Instalación: &fMayús+clic en la GUI de runas del Generador"
-                        : cell.type().isCondenserRune()
-                                ? "&7Instalación: &fMayús+clic en la GUI de runas del Condensador"
-                                : "&7Instalación: &fMayús+clic en la GUI del Pilón",
-                cell.type().isRune() ? "&7Ranura: &fRuna" : "&7Ranura: &fCélula elemental",
+                messages.legacy(installKey),
+                messages.legacy(cell.type().isRune() ? "cell-item.slot-rune" : "cell-item.slot-cell"),
                 improvement,
-                "&8Fusiona dos iguales para subir de tier.");
+                messages.legacy("cell-item.fusion-lore"));
     }
 
     private static String formatSeconds(double seconds) {

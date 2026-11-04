@@ -49,14 +49,14 @@ public final class CropGeneratorRuneMenu implements Listener {
     public void open(Player player, CropGeneratorRecord generator) {
         Holder holder = new Holder(generator.generatorId());
         holder.inventory = Bukkit.createInventory(
-                holder, 27, messages.parseComponent(generators.menuText(
-                        "runes.title", "&2Runas del Catalizador")));
+                holder, 27, messages.parseComponent(generators.menuText("runes.title")));
         fill(holder.inventory);
         int[] slots = generators.runeMenuSlots(generator.runeSlots());
         for (int index = 0; index < slots.length; index++) {
             CellRecord rune = generator.runes().get(index);
             holder.inventory.setItem(
-                    slots[index], rune == null ? emptyRuneSlot() : CellItem.create(rune, pylons.baseIntervalTicks()));
+                    slots[index], rune == null ? emptyRuneSlot()
+                            : CellItem.create(rune, pylons.baseIntervalTicks(), messages));
         }
         holder.inventory.setItem(4, statisticsItem(generator));
         holder.inventory.setItem(
@@ -97,7 +97,7 @@ public final class CropGeneratorRuneMenu implements Listener {
                 return;
             }
             ItemStack rune = CellItem.create(
-                    generator.runes().get(runeIndex), pylons.baseIntervalTicks());
+                    generator.runes().get(runeIndex), pylons.baseIntervalTicks(), messages);
             if (!giveItem(player, rune)) {
                 return;
             }
@@ -155,11 +155,11 @@ public final class CropGeneratorRuneMenu implements Listener {
             return;
         }
         event.setCancelled(true);
-        player.setItemOnCursor(CellItem.create(fused, pylons.baseIntervalTicks()));
+        player.setItemOnCursor(CellItem.create(fused, pylons.baseIntervalTicks(), messages));
         event.getClickedInventory().setItem(event.getSlot(), null);
         player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.8f);
         messages.send(player, "crop-generator-rune-fused", Map.of(
-                "cell", first.type().displayName(),
+                "cell", first.type().displayName(messages),
                 "tier", Integer.toString(fused.tier())));
     }
 
@@ -201,14 +201,8 @@ public final class CropGeneratorRuneMenu implements Listener {
     private ItemStack emptyRuneSlot() {
         ItemStack item = new ItemStack(generators.menuMaterial("runes.empty-slot.material", "GREEN_STAINED_GLASS_PANE"));
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent(generators.menuText(
-                "runes.empty-slot.name", "&aRanura de runa")));
-        meta.lore(generators.menuLore("runes.empty-slot.lore", List.of(
-                        "&7Mayús+clic en una runa de tu inventario",
-                        "&7para instalarla.",
-                        "",
-                        "&7Haz clic en una runa instalada",
-                        "&7para devolverla a tu inventario.")).stream()
+        meta.displayName(messages.parseComponent(generators.menuText("runes.empty-slot.name")));
+        meta.lore(generators.menuLore("runes.empty-slot.lore").stream()
                 .map(messages::parseComponent)
                 .toList());
         item.setItemMeta(meta);
@@ -218,11 +212,13 @@ public final class CropGeneratorRuneMenu implements Listener {
     private ItemStack statisticsItem(CropGeneratorRecord generator) {
         ItemStack item = new ItemStack(Material.CLOCK);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(messages.parseComponent("&bRunas del Catalizador"));
+        meta.displayName(messages.component("crop-generator-ui.runes-title"));
         meta.lore(List.of(
-                messages.parseComponent("&7Runas equipadas: &e"
-                        + generator.activeRunes().size() + "&7/&e" + generator.runeSlots()),
-                messages.parseComponent("&7Nivel del Catalizador: &e" + generator.level())));
+                messages.parseComponent(messages.formatText("crop-generator-ui.runes-equipped", Map.of(
+                        "active", Integer.toString(generator.activeRunes().size()),
+                        "slots", Integer.toString(generator.runeSlots())))),
+                messages.parseComponent(messages.formatText("crop-generator-ui.runes-level", Map.of(
+                        "level", Integer.toString(generator.level()))))));
         item.setItemMeta(meta);
         return item;
     }
@@ -241,25 +237,16 @@ public final class CropGeneratorRuneMenu implements Listener {
         String namePath = maxed
                 ? "runes.progression.max-name"
                 : unlocked ? "runes.progression.unlocked-name" : "runes.progression.locked-name";
-        String nameDefault = maxed
-                ? "&aRanuras de runa al máximo"
-                : unlocked ? "&aRanura desbloqueada" : "&cMejora bloqueada";
-        meta.displayName(messages.parseComponent(generators.menuText(namePath, nameDefault)));
+        meta.displayName(messages.parseComponent(generators.menuText(namePath)));
         String lorePath = maxed
                 ? "runes.progression.max-lore"
                 : unlocked ? "runes.progression.unlocked-lore" : "runes.progression.locked-lore";
-        List<String> loreDefault = maxed
-                ? List.of("&7El Catalizador ya tiene sus tres ranuras.")
-                : unlocked
-                        ? List.of("&7Ranuras desbloqueadas: &e%slots_current%")
-                        : List.of("&cRequiere Catalizador nivel &e%required_level%&c.",
-                                "&7Ranuras al mejorar: &e%slots_current% &7→ &e%slots_next%");
         int required = generator.runeSlots() == 1 ? requiredTwo : requiredThree;
         Map<String, String> placeholders = Map.of(
                 "%required_level%", Integer.toString(required),
                 "%slots_current%", Integer.toString(generator.runeSlots()),
                 "%slots_next%", Integer.toString(Math.min(3, generator.runeSlots() + 1)));
-        meta.lore(generators.menuLore(lorePath, loreDefault).stream()
+        meta.lore(generators.menuLore(lorePath).stream()
                 .map(line -> replace(line, placeholders))
                 .toList());
         item.setItemMeta(meta);
@@ -270,7 +257,7 @@ public final class CropGeneratorRuneMenu implements Listener {
         ItemStack item = new ItemStack(generators.menuMaterial("runes.back.material", "ARROW"));
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.parseComponent(
-                generators.menuText("runes.back.name", "&cVolver al Catalizador")));
+                generators.menuText("runes.back.name")));
         item.setItemMeta(meta);
         return item;
     }

@@ -47,7 +47,7 @@ import net.kyori.adventure.text.Component;
 
 public final class IslandService {
     private static final String SCHEMATIC_ERROR =
-            "No se encontró el archivo de estructura base en plugins/Corebound/schematics/. Abortando creación.";
+            "Base schematic file not found in plugins/Corebound/schematics/. Aborting island creation.";
 
     private final TheCorePlugin plugin;
     private final World world;

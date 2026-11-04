@@ -19,7 +19,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
+import java.time.Duration;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -352,7 +354,8 @@ public final class CoreService {
             long islandIndex,
             CoreEnhancement enhancement,
             double cost,
-            int maxLevel) {
+            int maxLevel,
+            int requiredCoreLevel) {
         CoreRecord current = coreForPlayer(player, islandIndex);
         if (current == null) {
             return false;
@@ -361,7 +364,13 @@ public final class CoreService {
             messages.send(player, "core-enhancement-max-level");
             return false;
         }
-        CoreRecord upgraded = repository.upgradeEnhancement(islandIndex, enhancement, cost, maxLevel);
+        if (current.level() < requiredCoreLevel) {
+            messages.send(player, "core-enhancement-level-required", Map.of(
+                    "required_level", Integer.toString(requiredCoreLevel)));
+            return false;
+        }
+        CoreRecord upgraded = repository.upgradeEnhancement(
+                islandIndex, enhancement, cost, maxLevel, requiredCoreLevel);
         if (upgraded == null) {
             messages.send(player, "core-enhancement-insufficient-energy");
             return false;
@@ -494,7 +503,8 @@ public final class CoreService {
                 removed.coreFragments(),
                 removed.astralResonance(),
                 removed.astralPylonAttunement(),
-                removed.upgradeCapacity());
+                removed.upgradeCapacity(),
+                removed.upgradeHitYield());
         try {
             Map<Integer, ItemStack> overflow = player.getInventory().addItem(coreItem);
             for (ItemStack leftover : overflow.values()) {
@@ -614,7 +624,8 @@ public final class CoreService {
                     progress.coreFragments(),
                     progress.astralResonance(),
                     progress.astralPylonAttunement(),
-                    progress.upgradeCapacity()));
+                    progress.upgradeCapacity(),
+                    progress.upgradeHitYield()));
         } catch (RuntimeException exception) {
             removeIfPresent(textDisplay);
             removeIfPresent(interaction);
@@ -673,6 +684,15 @@ public final class CoreService {
         }
         String anomalyFeedback = recordAnomalyHit(islandIndex, now);
         sendHitActionBar(player, updated, gainedEnergy, now, hitResult.critical(), anomalyFeedback);
+        if (hitResult.critical()) {
+            player.showTitle(Title.title(
+                    messages.component("core-feedback.critical-title"),
+                    messages.component("core-feedback.critical-subtitle"),
+                    Title.Times.times(Duration.ZERO, Duration.ofMillis(900), Duration.ofMillis(200))));
+            entity.getWorld().playSound(entity.getLocation(), Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.6f, 1.8f);
+            entity.getWorld().spawnParticle(
+                    Particle.CRIT, entity.getLocation().add(0, 0.7, 0), 30, 0.4, 0.4, 0.4, 0.2);
+        }
         updateCoreVisuals(updated, now);
         scheduleComboExpiration(entity, updated);
     }
@@ -792,7 +812,8 @@ public final class CoreService {
     }
 
     private void notifyQuantumAnomaly(long islandIndex, int targetHits) {
-        String message = "&b&l¡ANOMALÍA DETECTADA! &7Golpea " + targetHits + " veces rápido (0/" + targetHits + ")";
+        String message = messages.formatText("core-feedback.anomaly-start", Map.of(
+                "target", Integer.toString(targetHits)));
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             player.getScheduler().run(plugin, task -> {
                 IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
@@ -820,12 +841,14 @@ public final class CoreService {
                     Location location = new Location(world, core.x(), core.y(), core.z());
                     world.playSound(location, Sound.ENTITY_WITHER_SPAWN, 1.0f, 2.0f);
                 }
-                return "&d&lHIPERIMPULSO ACTIVADO &7x3.0 por 30s";
+                return messages.legacy("core-feedback.hyperdrive-active");
             }
-            return "&b&l¡ANOMALÍA DETECTADA! &7Golpea rápido (" + state.hits + "/" + state.targetHits + ")";
+            return messages.formatText("core-feedback.anomaly-progress", Map.of(
+                    "hits", Integer.toString(state.hits),
+                    "target", Integer.toString(state.targetHits)));
         }
         if (state.hyperdriveUntil > now) {
-            return "&d&lHIPERIMPULSO &7x3.0";
+            return messages.legacy("core-feedback.hyperdrive");
         }
         return "";
     }
@@ -854,15 +877,18 @@ public final class CoreService {
         String bar = "&a" + "|".repeat(filledSegments)
                 + "&8" + ".".repeat(10 - filledSegments);
         String energyFeedback = core.energy() >= core.maxEnergy()
-                ? "&cTanque lleno &7(" + formatEnergy(core.energy()) + "/" +
-                        formatEnergy(core.maxEnergy()) + "⚡)"
-                : "&6+" + formatEnergy(gainedEnergy) + "⚡";
-        String actionBar = (critical ? "&c¡CRÍTICO x3! &r" : "")
+                ? messages.formatText("core-feedback.tank-full", Map.of(
+                        "current", formatEnergy(core.energy()),
+                        "max", formatEnergy(core.maxEnergy())))
+                : messages.formatText("core-feedback.gained-energy", Map.of(
+                        "energy", formatEnergy(gainedEnergy)));
+        String actionBar = (critical ? messages.legacy("core-feedback.critical-hit") : "")
                 + (anomalyFeedback.isEmpty() ? "" : anomalyFeedback + " &8| ")
                 + energyFeedback
-                + " &8| &bCombo x" + String.format(
-                        Locale.ROOT, "%.2f", core.combo(now, core.comboWindowMillis(comboWindowMillis)))
-                + " &7[" + bar + "&7]";
+                + messages.formatText("core-feedback.combo", Map.of(
+                        "combo", String.format(
+                                Locale.ROOT, "%.2f", core.combo(now, core.comboWindowMillis(comboWindowMillis))),
+                        "bar", bar));
         player.sendActionBar(messages.parseComponent(actionBar));
     }
 
