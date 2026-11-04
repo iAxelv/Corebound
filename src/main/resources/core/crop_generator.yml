@@ -18,7 +18,11 @@ crop-generator:
     shot-delay:
       base-seconds: 6.0
       reduction-per-level-seconds: 0.5
-      minimum-seconds: 1.0
+      minimum-seconds: 2.5
+    feedback:
+      sound: item.bone_meal.use
+      volume: 0.8
+      pitch: 1.1
   runes:
     maximum-harvest-bonus: 1.0
     slot-required-level:

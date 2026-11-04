@@ -25,6 +25,8 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
+import org.bukkit.Registry;
+import org.bukkit.Sound;
 import org.bukkit.TreeType;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -48,6 +50,8 @@ import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockFertilizeEvent;
 import org.bukkit.event.block.BlockGrowEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerHarvestBlockEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -57,7 +61,7 @@ import org.joml.Vector3f;
 
 public final class CropGeneratorService implements Listener {
     private static final long RANGE_GUIDE_PERIOD_TICKS = 12L;
-    private static final long VISUAL_UPDATE_PERIOD_TICKS = 20L;
+    private static final long VISUAL_UPDATE_PERIOD_TICKS = 10L;
     private static final int MAX_LEVEL = 10;
     private static final Set<Material> CROPS = Set.of(
             Material.WHEAT,
@@ -77,10 +81,14 @@ public final class CropGeneratorService implements Listener {
             Material.CACTUS,
             Material.SUGAR_CANE,
             Material.BAMBOO,
+            Material.BAMBOO_SAPLING,
             Material.KELP,
             Material.KELP_PLANT);
 
     private record CropPosition(UUID worldId, int x, int y, int z) {
+    }
+
+    private record CropChunk(UUID worldId, int x, int z) {
     }
 
     private static final class CropCandidates {
@@ -107,10 +115,30 @@ public final class CropGeneratorService implements Listener {
             }
         }
 
-        private synchronized CropPosition random() {
-            return positions.isEmpty()
-                    ? null
-                    : positions.get(ThreadLocalRandom.current().nextInt(positions.size()));
+        private synchronized CropPosition randomDifferentColumn(CropPosition previous) {
+            if (positions.isEmpty()) {
+                return null;
+            }
+            CropPosition selected = positions.get(ThreadLocalRandom.current().nextInt(positions.size()));
+            if (previous == null || !sameColumn(selected, previous)) {
+                return selected;
+            }
+
+            CropPosition alternative = null;
+            int alternativeCount = 0;
+            for (CropPosition position : positions) {
+                if (!sameColumn(position, previous)
+                        && ThreadLocalRandom.current().nextInt(++alternativeCount) == 0) {
+                    alternative = position;
+                }
+            }
+            return alternative == null ? selected : alternative;
+        }
+
+        private boolean sameColumn(CropPosition first, CropPosition second) {
+            return first.worldId().equals(second.worldId())
+                    && first.x() == second.x()
+                    && first.z() == second.z();
         }
     }
 
@@ -136,7 +164,10 @@ public final class CropGeneratorService implements Listener {
     private final Map<UUID, ScheduledTask> visualTasks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastGrowthFeedback = new ConcurrentHashMap<>();
     private final Map<UUID, Long> shotCountdownTicks = new ConcurrentHashMap<>();
+    private final Map<UUID, CropPosition> lastShotPositions = new ConcurrentHashMap<>();
     private final Map<Long, CropCandidates> cropCandidates = new ConcurrentHashMap<>();
+    private final Set<CropChunk> cropScansInProgress = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> initialCropScans = ConcurrentHashMap.newKeySet();
     private final Set<UUID> growthShotsInProgress = ConcurrentHashMap.newKeySet();
     private final Set<UUID> rangeGuidePlayers = ConcurrentHashMap.newKeySet();
     private final CropGeneratorMenu menu;
@@ -156,6 +187,9 @@ public final class CropGeneratorService implements Listener {
     private double minimumShotDelaySeconds;
     private double maximumHarvestBonus;
     private int pickupLockCoreLevel;
+    private Sound growthSound;
+    private float growthSoundVolume;
+    private float growthSoundPitch;
 
     public CropGeneratorService(
             TheCorePlugin plugin,
@@ -243,7 +277,13 @@ public final class CropGeneratorService implements Listener {
         double loadedShotDelayReductionPerLevelSeconds =
                 loaded.getDouble("crop-generator.growth.shot-delay.reduction-per-level-seconds", 0.5);
         double loadedMinimumShotDelaySeconds =
-                loaded.getDouble("crop-generator.growth.shot-delay.minimum-seconds", 1.0);
+                loaded.getDouble("crop-generator.growth.shot-delay.minimum-seconds", 2.5);
+        Sound loadedGrowthSound = configuredSound(
+                loaded, "crop-generator.growth.feedback.sound", "item.bone_meal.use");
+        double loadedGrowthSoundVolume =
+                loaded.getDouble("crop-generator.growth.feedback.volume", 0.8);
+        double loadedGrowthSoundPitch =
+                loaded.getDouble("crop-generator.growth.feedback.pitch", 1.1);
         double loadedMaximumHarvestBonus = loaded.getDouble("crop-generator.runes.maximum-harvest-bonus", 1.0);
         int loadedPickupLockCoreLevel = loaded.getInt("crop-generator.pickup-lock-core-level", 10);
         if (loadedItemMaterial == null || !loadedItemMaterial.isItem()
@@ -260,6 +300,8 @@ public final class CropGeneratorService implements Listener {
                 || loadedShotDelayReductionPerLevelSeconds < 0
                 || !positiveFinite(loadedMinimumShotDelaySeconds)
                 || loadedMinimumShotDelaySeconds > loadedBaseShotDelaySeconds
+                || !validSoundSetting(loadedGrowthSoundVolume)
+                || !validSoundSetting(loadedGrowthSoundPitch)
                 || !Double.isFinite(loadedMaximumHarvestBonus) || loadedMaximumHarvestBonus < 0
                 || loadedPickupLockCoreLevel < minimumCoreLevel()) {
             throw new IllegalArgumentException("crop_generator.yml contains invalid material, progression, or costs.");
@@ -284,6 +326,9 @@ public final class CropGeneratorService implements Listener {
         baseShotDelaySeconds = loadedBaseShotDelaySeconds;
         shotDelayReductionPerLevelSeconds = loadedShotDelayReductionPerLevelSeconds;
         minimumShotDelaySeconds = loadedMinimumShotDelaySeconds;
+        growthSound = loadedGrowthSound;
+        growthSoundVolume = (float) loadedGrowthSoundVolume;
+        growthSoundPitch = (float) loadedGrowthSoundPitch;
         maximumHarvestBonus = loadedMaximumHarvestBonus;
         pickupLockCoreLevel = loadedPickupLockCoreLevel;
         for (CropGeneratorRecord generator : repository.all()) {
@@ -301,6 +346,26 @@ public final class CropGeneratorService implements Listener {
 
     private boolean positiveFinite(double value) {
         return Double.isFinite(value) && value > 0;
+    }
+
+    private Sound configuredSound(YamlConfiguration loaded, String path, String fallback) {
+        String value = loaded.getString(path, fallback);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("crop_generator.yml " + path + " must not be empty.");
+        }
+        String normalized = value.toLowerCase(java.util.Locale.ROOT);
+        NamespacedKey key = NamespacedKey.fromString(normalized.contains(":")
+                ? normalized
+                : "minecraft:" + normalized);
+        Sound sound = key == null ? null : Registry.SOUNDS.get(key);
+        if (sound == null) {
+            throw new IllegalArgumentException("crop_generator.yml " + path + " must be a valid sound key.");
+        }
+        return sound;
+    }
+
+    private boolean validSoundSetting(double value) {
+        return Double.isFinite(value) && value >= 0.0 && value <= 2.0;
     }
 
     private void validateMenuConfiguration(YamlConfiguration loaded) {
@@ -602,6 +667,7 @@ public final class CropGeneratorService implements Listener {
                     runeSlots,
                     runes);
             repository.add(generator, itemId);
+            scanLoadedIslandCrops(generator);
             refreshVisuals(generator);
             consumeHeldItem(player, heldItem);
             startVisualAnimationFor(generatorId);
@@ -671,8 +737,9 @@ public final class CropGeneratorService implements Listener {
             }
             Location location = new Location(world, generator.x(), generator.y(), generator.z());
             plugin.getServer().getRegionScheduler().run(plugin, location, task -> {
+                scanLoadedIslandCrops(generator);
                 Entity entity = world.getEntity(generator.interactionId());
-                if (entity instanceof Interaction interaction) {
+                if (entity instanceof Interaction) {
                     refreshVisuals(generator);
                     startVisualAnimationFor(generator.generatorId());
                 }
@@ -694,10 +761,11 @@ public final class CropGeneratorService implements Listener {
             removeIfPresent(entity);
             return;
         }
+        scanLoadedIslandCrops(generator);
         if (entity instanceof ItemDisplay display) {
             configureDisplay(display);
             startVisualAnimation(display, generator.generatorId());
-        } else if (entity instanceof Interaction interaction) {
+        } else if (entity instanceof Interaction) {
             refreshVisuals(generator);
             startVisualAnimationFor(generator.generatorId());
         }
@@ -744,11 +812,15 @@ public final class CropGeneratorService implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onCropBreak(BlockBreakEvent event) {
         untrackCrop(event.getBlock());
+        refreshCropCandidatesAround(event.getBlock());
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onCropHarvest(BlockDropItemEvent event) {
         Block block = event.getBlock();
+        if (isTrackedPlant(block.getType())) {
+            refreshCropCandidatesAround(block);
+        }
         if (!CROPS.contains(block.getType())
                 || !(event.getBlockState().getBlockData() instanceof Ageable crop)
                 || crop.getAge() < crop.getMaximumAge()) {
@@ -773,6 +845,42 @@ public final class CropGeneratorService implements Listener {
         }
     }
 
+    @EventHandler(ignoreCancelled = true)
+    public void onCropHarvestInPlace(PlayerHarvestBlockEvent event) {
+        Block block = event.getHarvestedBlock();
+        if (isTrackedPlant(block.getType())) {
+            refreshCropCandidatesAround(block);
+        }
+    }
+
+    @EventHandler
+    public void onCropChunkLoad(ChunkLoadEvent event) {
+        org.bukkit.Chunk chunk = event.getChunk();
+        int baseX = chunk.getX() << 4;
+        int baseZ = chunk.getZ() << 4;
+        IslandData island = null;
+        for (int offsetX : new int[] {0, 15}) {
+            for (int offsetZ : new int[] {0, 15}) {
+                island = islandService.islandAt(new Location(
+                        chunk.getWorld(), baseX + offsetX, chunk.getWorld().getMinHeight(), baseZ + offsetZ))
+                        .orElse(null);
+                if (island != null) {
+                    break;
+                }
+            }
+            if (island != null) {
+                break;
+            }
+        }
+        if (island == null) {
+            return;
+        }
+        CropGeneratorRecord generator = repository.get(island.index());
+        if (generator != null && generator.state() != CondenserState.DISABLED) {
+            scheduleChunkCropScan(generator, island, chunk.getWorld(), chunk.getX(), chunk.getZ());
+        }
+    }
+
     private CropGeneratorRecord activeGeneratorAt(Location location) {
         IslandData island = islandService.islandAt(location).orElse(null);
         if (island == null) {
@@ -783,36 +891,57 @@ public final class CropGeneratorService implements Listener {
     }
 
     private void trackCrop(Block block) {
-        trackCrop(block.getState());
+        if (!isCropCandidate(block.getType(), block.getBlockData(), block)) {
+            return;
+        }
+        IslandData island = islandService.islandAt(block.getLocation()).orElse(null);
+        if (island != null) {
+            trackCrop(block, island.index());
+        }
     }
 
     private void trackCrop(BlockState state) {
-        Material type = state.getType();
-        BlockData data = state.getBlockData();
-        boolean immature = CROPS.contains(type) && data instanceof Ageable ageable
-                && ageable.getAge() < ageable.getMaximumAge();
-        immature |= STACKING_CROPS.contains(type) && isTopStackingPlant(type, state.getBlock());
-        immature |= isSapling(type) && data instanceof Sapling sapling
-                && sapling.getStage() <= sapling.getMaximumStage();
-        if (!immature) {
-            return;
-        }
         Block block = state.getBlock();
+        if (!isCropCandidate(state.getType(), state.getBlockData(), block)) {
+            untrackCrop(block);
+            return;
+        }
         IslandData island = islandService.islandAt(block.getLocation()).orElse(null);
-        if (island == null) {
+        if (island != null) {
+            addCropCandidate(island.index(), block);
+        }
+    }
+
+    private void trackCrop(Block block, long islandIndex) {
+        if (!isCropCandidate(block.getType(), block.getBlockData(), block)) {
             return;
         }
-        if (repository.get(island.index()) == null) {
+        addCropCandidate(islandIndex, block);
+    }
+
+    private boolean isCropCandidate(Material type, BlockData data, Block block) {
+        boolean immatureCrop = CROPS.contains(type) && data instanceof Ageable ageable
+                && ageable.getAge() < ageable.getMaximumAge();
+        boolean stackingCrop = STACKING_CROPS.contains(type) && isTopStackingPlant(type, block);
+        boolean sapling = isSapling(type) && data instanceof Sapling cropSapling
+                && cropSapling.getStage() <= cropSapling.getMaximumStage();
+        return immatureCrop || stackingCrop || sapling;
+    }
+
+    private boolean isTrackedPlant(Material type) {
+        return CROPS.contains(type) || STACKING_CROPS.contains(type) || isSapling(type);
+    }
+
+    private void addCropCandidate(long islandIndex, Block block) {
+        if (repository.get(islandIndex) == null) {
             return;
         }
-        cropCandidates.computeIfAbsent(island.index(), ignored -> new CropCandidates())
+        cropCandidates.computeIfAbsent(islandIndex, ignored -> new CropCandidates())
                 .add(cropPosition(block));
     }
 
     private void untrackCrop(Block block) {
-        if (!CROPS.contains(block.getType())
-                && !STACKING_CROPS.contains(block.getType())
-                && !isSapling(block.getType())) {
+        if (!isTrackedPlant(block.getType())) {
             return;
         }
         IslandData island = islandService.islandAt(block.getLocation()).orElse(null);
@@ -822,6 +951,110 @@ public final class CropGeneratorService implements Listener {
         CropCandidates candidates = cropCandidates.get(island.index());
         if (candidates != null) {
             candidates.remove(cropPosition(block));
+        }
+    }
+
+    private void refreshCropCandidatesAround(Block block) {
+        World world = block.getWorld();
+        for (int offsetX = -1; offsetX <= 1; offsetX++) {
+            for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+                int x = block.getX() + offsetX;
+                int z = block.getZ() + offsetZ;
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+                    continue;
+                }
+                Location location = new Location(world, x, block.getY(), z);
+                plugin.getServer().getRegionScheduler().runDelayed(plugin, location, task -> {
+                    for (int offsetY = -3; offsetY <= 3; offsetY++) {
+                        int y = block.getY() + offsetY;
+                        if (y >= world.getMinHeight() && y < world.getMaxHeight()) {
+                            trackCrop(world.getBlockAt(x, y, z));
+                        }
+                    }
+                }, 1L);
+            }
+        }
+    }
+
+    private void scanLoadedIslandCrops(CropGeneratorRecord generator) {
+        if (generator.state() == CondenserState.DISABLED
+                || !initialCropScans.add(generator.generatorId())) {
+            return;
+        }
+        World world = plugin.getServer().getWorld(generator.worldId());
+        if (world == null) {
+            initialCropScans.remove(generator.generatorId());
+            return;
+        }
+        IslandData island = islandService.islandAt(
+                new Location(world, generator.x(), generator.y(), generator.z())).orElse(null);
+        if (island == null) {
+            initialCropScans.remove(generator.generatorId());
+            return;
+        }
+
+        int radius = (int) Math.ceil(islandService.islandRadius());
+        int minChunkX = Math.floorDiv((int) (island.centerX() - radius), 16);
+        int maxChunkX = Math.floorDiv((int) (island.centerX() + radius), 16);
+        int minChunkZ = Math.floorDiv((int) (island.centerZ() - radius), 16);
+        int maxChunkZ = Math.floorDiv((int) (island.centerZ() + radius), 16);
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                if (world.isChunkLoaded(chunkX, chunkZ)) {
+                    scheduleChunkCropScan(generator, island, world, chunkX, chunkZ);
+                }
+            }
+        }
+    }
+
+    private void scheduleChunkCropScan(
+            CropGeneratorRecord generator, IslandData island, World world, int chunkX, int chunkZ) {
+        CropChunk cropChunk = new CropChunk(world.getUID(), chunkX, chunkZ);
+        if (!cropScansInProgress.add(cropChunk)) {
+            return;
+        }
+        int radius = (int) Math.ceil(islandService.islandRadius());
+        int minX = (int) (island.centerX() - radius);
+        int maxX = (int) (island.centerX() + radius);
+        int minZ = (int) (island.centerZ() - radius);
+        int maxZ = (int) (island.centerZ() + radius);
+        int startX = chunkX << 4;
+        int startZ = chunkZ << 4;
+        int[] nextColumn = {0};
+        Location schedulerLocation = new Location(world, startX + 8, world.getMinHeight(), startZ + 8);
+        ScheduledTask scanTask = plugin.getServer().getRegionScheduler().runAtFixedRate(
+                plugin,
+                schedulerLocation,
+                task -> {
+                    CropGeneratorRecord current = repository.getById(generator.generatorId());
+                    if (!world.isChunkLoaded(chunkX, chunkZ) || current == null) {
+                        task.cancel();
+                        cropScansInProgress.remove(cropChunk);
+                        if (current == null) {
+                            initialCropScans.remove(generator.generatorId());
+                        }
+                        return;
+                    }
+                    int endColumn = Math.min(256, nextColumn[0] + 4);
+                    for (; nextColumn[0] < endColumn; nextColumn[0]++) {
+                        int x = startX + (nextColumn[0] & 15);
+                        int z = startZ + (nextColumn[0] >> 4);
+                        if (x < minX || x > maxX || z < minZ || z > maxZ) {
+                            continue;
+                        }
+                        for (int y = world.getMinHeight(); y < world.getMaxHeight(); y++) {
+                            trackCrop(world.getBlockAt(x, y, z), generator.islandIndex());
+                        }
+                    }
+                    if (nextColumn[0] >= 256) {
+                        task.cancel();
+                        cropScansInProgress.remove(cropChunk);
+                    }
+                },
+                1L,
+                1L);
+        if (scanTask == null) {
+            cropScansInProgress.remove(cropChunk);
         }
     }
 
@@ -847,7 +1080,24 @@ public final class CropGeneratorService implements Listener {
         if (type == Material.KELP || type == Material.KELP_PLANT) {
             return above == Material.WATER;
         }
-        return above.isAir();
+        return above.isAir() && stackingPlantHeight(block, type) < maximumStackingPlantHeight(type);
+    }
+
+    private int maximumStackingPlantHeight(Material type) {
+        if (type == Material.SUGAR_CANE || type == Material.CACTUS) {
+            return 3;
+        }
+        return type == Material.BAMBOO_SAPLING ? 1 : Integer.MAX_VALUE;
+    }
+
+    private int stackingPlantHeight(Block top, Material type) {
+        int height = 0;
+        Block current = top;
+        while (current.getType() == type && height < maximumStackingPlantHeight(type)) {
+            height++;
+            current = current.getRelative(org.bukkit.block.BlockFace.DOWN);
+        }
+        return height;
     }
 
     private void applyGrowthShot(CropGeneratorRecord expected, CropPosition position) {
@@ -938,8 +1188,12 @@ public final class CropGeneratorService implements Listener {
         if (island == null || island.index() != generator.islandIndex() || !chargeGrowthShot(generator)) {
             return;
         }
-        BlockData newData = type.createBlockData();
-        destination.setBlockData(newData, false);
+        if (type == Material.BAMBOO_SAPLING) {
+            block.setType(Material.BAMBOO, false);
+            destination.setType(Material.BAMBOO, false);
+        } else {
+            destination.setBlockData(type.createBlockData(), false);
+        }
         removeCropCandidate(generator.islandIndex(), position);
         trackCrop(destination);
         showGrowthFeedback(generator, destination.getLocation());
@@ -1038,11 +1292,14 @@ public final class CropGeneratorService implements Listener {
             return;
         }
         CropCandidates candidates = cropCandidates.get(generator.islandIndex());
-        CropPosition position = candidates == null ? null : candidates.random();
+        CropPosition position = candidates == null
+                ? null
+                : candidates.randomDifferentColumn(lastShotPositions.get(generator.generatorId()));
         if (position == null) {
             growthShotsInProgress.remove(generator.generatorId());
             return;
         }
+        lastShotPositions.put(generator.generatorId(), position);
         applyGrowthShot(generator, position);
     }
 
@@ -1057,6 +1314,7 @@ public final class CropGeneratorService implements Listener {
         }
         cropLocation.getWorld().spawnParticle(
                 Particle.HAPPY_VILLAGER, cropLocation.clone().add(0.5, 0.75, 0.5), 3, 0.2, 0.2, 0.2, 0.01);
+        cropLocation.getWorld().playSound(cropLocation, growthSound, growthSoundVolume, growthSoundPitch);
     }
 
     public boolean openMenu(Player player, Entity entity) {
@@ -1271,6 +1529,8 @@ public final class CropGeneratorService implements Listener {
             visual.cancel();
         }
         shotCountdownTicks.remove(generatorId);
+        lastShotPositions.remove(generatorId);
+        initialCropScans.remove(generatorId);
         growthShotsInProgress.remove(generatorId);
     }
 
@@ -1281,6 +1541,7 @@ public final class CropGeneratorService implements Listener {
         }
         CropGeneratorRecord updated = generator.withState(generator.state().nextManualState());
         repository.update(updated);
+        scanLoadedIslandCrops(updated);
         refreshVisuals(updated);
         return true;
     }
@@ -1463,7 +1724,8 @@ public final class CropGeneratorService implements Listener {
                 display.getWorld().spawnParticle(
                         Particle.COMPOSTER, display.getLocation().add(0, 0.15, 0), 2, 0.16, 0.1, 0.16, 0.01);
             }
-        }, () -> visualTasks.remove(generatorId, taskReference[0]), 1L, animationIntervalTicks);
+        }, () -> visualTasks.remove(generatorId, taskReference[0]),
+                animationIntervalTicks, animationIntervalTicks);
         if (task == null) {
             return;
         }
@@ -1485,7 +1747,7 @@ public final class CropGeneratorService implements Listener {
                 .append(messages.parseComponent("&7Estado: " + color + stateLabel(generator.state())))
                 .append(Component.newline())
                 .append(messages.parseComponent("&7Disparo: &e"
-                        + (int) Math.ceil(remainingShotTicks(generator) / 20.0) + "s"))
+                        + CropGeneratorMath.formatSeconds(remainingShotTicks(generator) / 20.0) + "s"))
                 .append(Component.newline())
                 .append(messages.parseComponent("&7Costo: &6" + formatEnergy(energyCost(generator))
                         + "⚡ por disparo"));

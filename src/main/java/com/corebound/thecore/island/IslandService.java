@@ -319,6 +319,10 @@ public final class IslandService {
                         && Math.abs(location.getBlockZ() - island.centerZ()) <= islandRadius);
     }
 
+    public double islandRadius() {
+        return islandRadius;
+    }
+
     public boolean toggleBypass(UUID playerId) {
         if (islandBypass.remove(playerId)) {
             return false;
