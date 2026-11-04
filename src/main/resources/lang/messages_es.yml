@@ -359,7 +359,7 @@ pylon-ui:
   duplicate-cells: "&7Pueden salir células repetidas."
   click-refresh: "&eHaz clic para actualizar."
   item-name: "&bPilón de Resonancia &7[T%tier%]"
-  item-suffix: "&7[T%tier%]"
+  item-suffix: " &7[T%tier%]"
   hologram-name: "&bPilón de Resonancia &7[T%tier%]"
   equipped-cells: "&7Células equipadas: &f%count%"
   next-shot: "&7Disparo: &e%seconds%s &7/ &a+%yield%⚡"

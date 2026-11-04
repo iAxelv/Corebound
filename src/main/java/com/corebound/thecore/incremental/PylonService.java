@@ -72,7 +72,6 @@ public final class PylonService {
     private double maximumDistance;
     private double baseYieldRatio;
     private double purchaseCost;
-    private double purchaseCostMultiplier;
     private double forgeRefreshCost;
     private int forgeRouletteDurationTicks;
     private Sound forgeRouletteRollSound;
@@ -137,10 +136,11 @@ public final class PylonService {
                 if (Double.compare(loaded.getDouble("pylon.base-yield-ratio", 2.0), 0.4) == 0) {
                     loaded.set("pylon.base-yield-ratio", 2.0);
                 }
-                if (!loaded.contains("pylon.purchase-cost-multiplier", true)
-                        && Double.compare(loaded.getDouble("pylon.purchase-cost", 500.0), 150.0) == 0) {
-                    loaded.set("pylon.purchase-cost", 500.0);
+                if (Double.compare(loaded.getDouble("pylon.purchase-cost", 1000.0), 500.0) == 0
+                        && Double.compare(loaded.getDouble("pylon.purchase-cost-multiplier", 1.0), 3.5) == 0) {
+                    loaded.set("pylon.purchase-cost", 1000.0);
                 }
+                loaded.set("pylon.purchase-cost-multiplier", null);
                 loaded.save(configFile);
             }
         } catch (IOException exception) {
@@ -162,8 +162,7 @@ public final class PylonService {
         double loadedMinimumDistance = loaded.getDouble("pylon.min-distance", 3.0);
         double loadedMaximumDistance = loaded.getDouble("pylon.max-distance", 12.0);
         double loadedBaseYieldRatio = loaded.getDouble("pylon.base-yield-ratio", 2.0);
-        double loadedPurchaseCost = loaded.getDouble("pylon.purchase-cost", 500.0);
-        double loadedPurchaseCostMultiplier = loaded.getDouble("pylon.purchase-cost-multiplier", 3.5);
+        double loadedPurchaseCost = loaded.getDouble("pylon.purchase-cost", 1000.0);
         double loadedForgeRefreshCost = loaded.getDouble("pylon.cells.refresh-cost", 75.0);
         int loadedRouletteDuration = loaded.getInt("pylon.cells.roulette.duration-ticks", 40);
         Sound loadedRouletteRollSound = configuredSound(
@@ -204,9 +203,7 @@ public final class PylonService {
                 || !Double.isFinite(loadedBaseYieldRatio)
                 || loadedBaseYieldRatio <= 0
                 || !Double.isFinite(loadedPurchaseCost)
-                || loadedPurchaseCost <= 0
-                || !Double.isFinite(loadedPurchaseCostMultiplier)
-                || loadedPurchaseCostMultiplier <= 1.0) {
+                || loadedPurchaseCost <= 0) {
             throw new IllegalArgumentException("pylons.yml contains invalid distance, interval, yield, or cost.");
         }
         config = loaded;
@@ -219,7 +216,6 @@ public final class PylonService {
         maximumDistance = loadedMaximumDistance;
         baseYieldRatio = loadedBaseYieldRatio;
         purchaseCost = loadedPurchaseCost;
-        purchaseCostMultiplier = loadedPurchaseCostMultiplier;
         forgeRefreshCost = loadedForgeRefreshCost;
         forgeRouletteDurationTicks = loadedRouletteDuration;
         forgeRouletteRollSound = loadedRouletteRollSound;
@@ -262,7 +258,7 @@ public final class PylonService {
     }
 
     public double nextPurchaseCost(long islandIndex) {
-        return purchaseCost * Math.pow(purchaseCostMultiplier, ownedPylonCount(islandIndex));
+        return purchaseCost;
     }
 
     public PylonMenu menuListener() {
