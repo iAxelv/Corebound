@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -695,13 +696,15 @@ public final class CondenserService implements Listener {
             ScheduledTask task = display.getScheduler().runAtFixedRate(plugin, scheduled -> {
                 if (!display.isValid() || animationTick[0] >= 14) {
                     scheduled.cancel();
+                    generationFeedback.remove(condenser.condenserId());
                     return;
                 }
+                int currentTick = animationTick[0]++;
                 Location origin = display.getLocation();
-                double height = 0.08 + animationTick[0] * 0.045;
-                double radius = 0.2 + animationTick[0] * 0.025;
+                double height = 0.08 + currentTick * 0.045;
+                double radius = 0.2 + currentTick * 0.025;
                 for (int particleIndex = 0; particleIndex < 8; particleIndex++) {
-                    double angle = animationTick[0] * 0.48 + particleIndex * Math.PI / 4.0;
+                    double angle = currentTick * 0.48 + particleIndex * Math.PI / 4.0;
                     Location point = origin.clone().add(
                             Math.cos(angle) * radius, height, Math.sin(angle) * radius);
                     display.getWorld().spawnParticle(
@@ -714,9 +717,9 @@ public final class CondenserService implements Listener {
                                 Particle.WAX_ON, point, 1, 0.02, 0.03, 0.02, 0.01);
                     }
                 }
-                if (animationTick[0] == 13) {
+                if (currentTick == 13) {
                     Location burst = display.getLocation().add(0, 0.65, 0);
-                    display.getWorld().spawnParticle(Particle.FLASH, burst, 1);
+                    display.getWorld().spawnParticle(Particle.FLASH, burst, 1, Color.WHITE);
                     display.getWorld().spawnParticle(
                             generatedMaterial == Material.COBBLESTONE || generatedMaterial == Material.STONE
                                     ? Particle.WAX_ON
@@ -728,7 +731,6 @@ public final class CondenserService implements Listener {
                             0.35,
                             0.08);
                 }
-                animationTick[0]++;
             }, () -> generationFeedback.remove(condenser.condenserId()), 1L, 1L);
             if (task == null) {
                 generationFeedback.remove(condenser.condenserId());

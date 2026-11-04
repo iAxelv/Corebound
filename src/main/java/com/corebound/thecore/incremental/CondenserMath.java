@@ -7,7 +7,7 @@ final class CondenserMath {
 
     static double energyCost(CondenserRecord condenser, double baseCost, double costPerLevel) {
         double reduction = condenser.activeRunes().values().stream()
-                .mapToDouble(CellRecord::condenserEnergyReduction)
+                .mapToDouble(cell -> cell.condenserEnergyReduction())
                 .sum();
         return (baseCost + costPerLevel * condenser.level()) * Math.max(0.25, 1.0 - reduction);
     }
@@ -27,7 +27,7 @@ final class CondenserMath {
         }
 
         double runeBonus = condenser.activeRunes().values().stream()
-                .mapToDouble(CellRecord::condenserOreChanceBonus)
+                .mapToDouble(cell -> cell.condenserOreChanceBonus())
                 .sum();
         double totalOreChance = Math.min(
                 maximumOreChance,
