@@ -60,17 +60,10 @@ public final class PylonRepository {
         }
     }
 
-    public synchronized boolean reserveItem(long islandIndex, int capacity) {
+    public synchronized void reserveItem(long islandIndex) {
         int pending = pendingItems.getOrDefault(islandIndex, 0);
-        long total = pylons.values().stream()
-                .filter(pylon -> pylon.islandIndex() == islandIndex)
-                .count() + pending;
-        if (total >= capacity) {
-            return false;
-        }
         pendingItems.put(islandIndex, pending + 1);
         save();
-        return true;
     }
 
     public synchronized int pendingItems(long islandIndex) {
@@ -87,9 +80,9 @@ public final class PylonRepository {
                 .count();
         int pending = pendingItems.getOrDefault(islandIndex, 0);
         if (reservedItem) {
-            return pending > 0 && placed + pending <= capacity;
+            return pending > 0 && placed < capacity;
         }
-        return placed + pending < capacity;
+        return placed < capacity;
     }
 
     public synchronized void reserveReturnedItem(long islandIndex) {

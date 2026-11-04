@@ -971,6 +971,9 @@ public final class CoreService {
             for (String line : config.getStringList("text-display.lines")) {
                 String rendered = line
                         .replace("%level%", Integer.toString(core.level()))
+                        .replace("%placed_pylons%", Integer.toString(
+                                pylonService == null ? 0 : pylonService.placedPylonCount(core.islandIndex())))
+                        .replace("%pylon_capacity%", Integer.toString(core.pylonCapacity()))
                         .replace("%base_energy%", formatEnergy(core.baseEnergy()))
                         .replace("%energy%", formatEnergy(core.energy()))
                         .replace("%combo%", String.format(

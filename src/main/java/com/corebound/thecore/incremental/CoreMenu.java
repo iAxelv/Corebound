@@ -225,7 +225,8 @@ public final class CoreMenu implements Listener {
                 Map.entry("%next_level%", Integer.toString(core.level() + 1)),
                 Map.entry("%cost%", formatEnergy(core.upgradeCost())),
                 Map.entry("%next_base%", formatEnergy(Math.pow(1.25, core.level()))),
-                Map.entry("%capacity_bonus%", Integer.toString(core.upgradeCapacity() * 12)));
+                Map.entry("%capacity_bonus%", Integer.toString(core.upgradeCapacity() * 12)),
+                Map.entry("%pylons%", Integer.toString(core.pylonCapacity())));
 
         ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material", "PAPER")));
         ItemMeta meta = item.getItemMeta();
@@ -268,29 +269,21 @@ public final class CoreMenu implements Listener {
     private ItemStack createPylonItem(CoreRecord core) {
         ConfigurationSection itemConfig = config.getConfigurationSection("items.pylon");
         boolean levelUnlocked = core.level() >= 3;
-        boolean hasCapacity = pylonService == null
-                || pylonService.hasPylonCapacity(core.islandIndex(), core.pylonCapacity());
-        boolean unlocked = levelUnlocked && hasCapacity;
-        boolean atLimit = levelUnlocked && !hasCapacity;
-        String material = unlocked
+        String material = levelUnlocked
                 ? itemConfig.getString("material", "SEA_LANTERN")
                 : itemConfig.getString("locked-material", "BARRIER");
-        String displayName = unlocked
+        String displayName = levelUnlocked
                 ? itemConfig.getString("display-name")
-                : atLimit
-                        ? itemConfig.getString("limit-name")
-                        : itemConfig.getString("locked-name");
-        List<String> lore = itemConfig.getStringList(unlocked
-                ? "lore"
-                : atLimit ? "limit-lore" : "locked-lore");
+                : itemConfig.getString("locked-name");
+        List<String> lore = itemConfig.getStringList(levelUnlocked ? "lore" : "locked-lore");
         double cost = pylonService == null ? 500.0 : pylonService.nextPurchaseCost(core.islandIndex());
         Map<String, String> placeholders = Map.of(
                 "%level%", Integer.toString(core.level()),
                 "%cost%", formatEnergy(cost),
                 "%pylons%", Integer.toString(core.pylonCapacity()),
-                "%owned%", Integer.toString(pylonService == null
+                "%placed_pylons%", Integer.toString(pylonService == null
                         ? 0
-                        : pylonService.ownedPylonCount(core.islandIndex())));
+                        : pylonService.placedPylonCount(core.islandIndex())));
         ItemStack item = new ItemStack(Material.matchMaterial(material));
         ItemMeta meta = item.getItemMeta();
         meta.displayName(color(replace(displayName, placeholders)));

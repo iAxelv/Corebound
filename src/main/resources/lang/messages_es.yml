@@ -172,7 +172,7 @@ pylon-purchase-failed: "&cNo se pudo entregarte el Pilón y se restauró la ener
 pylon-purchased: "&aForjaste un Pilón por &6%cost%⚡&a."
 pylon-needs-clearance: "&cEl Pilón necesita un bloque sólido y espacio libre encima."
 pylon-place-access-denied: "&cSolo los miembros de la isla pueden colocar este Pilón."
-pylon-limit-reached: "&cYa alcanzaste el límite de Pilones de tu Núcleo, colocados o guardados."
+pylon-limit-reached: "&cYa alcanzaste el máximo de Pilones colocados permitido por el nivel de tu Núcleo."
 pylon-item-wrong-island: "&cEste Pilón fue forjado para otra isla."
 pylon-item-invalidated: "&cEste Pilón fue consumido por una Fractura Dimensional."
 pylon-distance-invalid: "&cEl Pilón debe estar entre %min% y %max% bloques del Núcleo."

@@ -21,6 +21,7 @@ items:
       - "&7Producción base: &a+%base_energy%⚡/golpe"
       - "&7Capacidad adicional: &b+%capacity_bonus%%"
       - "&7Multiplicador máximo de combo: &bx%max_combo%"
+      - "&7Pilones permitidos: &e%pylons%"
   fracture:
     material: NETHER_STAR
     slot: 51
@@ -36,7 +37,7 @@ items:
     locked-material: BARRIER
     locked-name: "&cFractura bloqueada"
     locked-lore:
-      - "&7Requiere Núcleo nivel 10."
+      - "&cRequiere Núcleo nivel &e10&c."
       - "&7Nivel actual: &e%level%"
   astral-tree:
     material: NETHERITE_UPGRADE_SMITHING_TEMPLATE
@@ -52,16 +53,13 @@ items:
     display-name: "&bForjar Pilón I"
     lore:
       - "&7Costo: &6%cost%⚡"
-      - "&7Pilones permitidos: &e%pylons%"
+      - "&7Pilones colocados: &e%placed_pylons%&7/&e%pylons%"
       - ""
       - "&eHaz clic para forjar."
     locked-material: BARRIER
     locked-name: "&cPilón bloqueado"
     locked-lore:
-      - "&cRequiere Núcleo Nivel 3."
-    limit-name: "&cLímite de Pilones alcanzado"
-    limit-lore:
-      - "&7Pilones colocados o guardados: &e%owned%&7/&e%pylons%"
+      - "&cRequiere Núcleo nivel &e3&c."
   cell-forge:
     material: ENCHANTING_TABLE
     slot: 11
@@ -73,7 +71,7 @@ items:
     locked-material: BARRIER
     locked-name: "&cForja bloqueada"
     locked-lore:
-      - "&cRequiere Núcleo Nivel 5."
+      - "&cRequiere Núcleo nivel &e5&c."
   condenser:
     material: BLAST_FURNACE
     slot: 14
@@ -82,7 +80,7 @@ items:
       - "&7Convierte generadores de piedra en minerales."
       - "&7Solo puedes colocar uno por isla a la vez."
       - "&7Puedes comprar cuantos repuestos quieras."
-      - "&7Requiere Núcleo nivel 3."
+      - "&cRequiere Núcleo nivel &e3&c."
       - "&7Costo: &6%cost%⚡"
       - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
       - ""
@@ -94,7 +92,7 @@ items:
     level-locked-material: BARRIER
     level-locked-name: "&cCondensador bloqueado"
     level-locked-lore:
-      - "&7Requiere Núcleo nivel &e%required_level%&7."
+      - "&cRequiere Núcleo nivel &e%required_level%&c."
   crop-generator:
     material: COMPOSTER
     slot: 16
@@ -106,7 +104,7 @@ items:
       - "&7El cooldown se reduce con cada nivel."
       - "&7Solo se puede colocar uno por isla."
       - "&7Puedes comprar cuantos repuestos quieras."
-      - "&7Requiere Núcleo nivel &e%required_level%&7."
+      - "&cRequiere Núcleo nivel &e%required_level%&c."
       - "&7Costo: &6%cost%⚡"
       - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
       - ""
@@ -114,7 +112,7 @@ items:
     locked-material: BARRIER
     locked-name: "&cCatalizador bloqueado"
     locked-lore:
-      - "&7Requiere Núcleo nivel &e%required_level%&7."
+      - "&cRequiere Núcleo nivel &e%required_level%&c."
   upgrade:
     material: NETHER_STAR
     slot: 47

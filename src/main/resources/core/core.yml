@@ -24,6 +24,7 @@ text-display:
   lines:
     - "&5NÚCLEO DE RESONANCIA &7[Nvl. %level%]"
     - "&e%energy%⚡ &7(&bCombo: x%combo%&7)"
+    - "&bPilones: &e%placed_pylons%/%pylon_capacity%"
     - "&8[Golpea para extraer energía]"
 combo:
   window-ms: 3000

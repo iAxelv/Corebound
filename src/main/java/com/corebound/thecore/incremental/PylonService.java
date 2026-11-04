@@ -580,8 +580,12 @@ public final class PylonService {
         return repository.forIsland(islandIndex).size() + repository.pendingItems(islandIndex);
     }
 
+    public int placedPylonCount(long islandIndex) {
+        return repository.forIsland(islandIndex).size();
+    }
+
     public boolean hasPylonCapacity(long islandIndex, int capacity) {
-        return ownedPylonCount(islandIndex) < capacity;
+        return placedPylonCount(islandIndex) < capacity;
     }
 
     public boolean canManagePylon(Player player, PylonRecord pylon) {
@@ -639,10 +643,7 @@ public final class PylonService {
             return false;
         }
         double cost = nextPurchaseCost(islandIndex);
-        if (!repository.reserveItem(islandIndex, core.pylonCapacity())) {
-            messages.send(player, "pylon-limit-reached");
-            return false;
-        }
+        repository.reserveItem(islandIndex);
         CoreRecord chargedCore = coreRepository.spendEnergy(islandIndex, cost);
         if (chargedCore == null) {
             repository.releasePendingItem(islandIndex);
@@ -718,6 +719,10 @@ public final class PylonService {
         for (ItemStack leftover : overflow.values()) {
             Item dropped = player.getWorld().dropItemNaturally(player.getLocation(), leftover);
             dropped.setPersistent(true);
+        }
+        CoreRecord core = coreRepository.core(removed.islandIndex());
+        if (core != null) {
+            coreService.refreshCore(core, System.currentTimeMillis());
         }
         messages.send(player, "pylon-picked-up");
         return true;
@@ -906,6 +911,7 @@ public final class PylonService {
             heldItem.setAmount(heldItem.getAmount() - 1);
         }
         startPulse(interaction);
+        coreService.refreshCore(core, System.currentTimeMillis());
         messages.send(player, "pylon-placed");
         return true;
     }
