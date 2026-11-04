@@ -101,7 +101,7 @@ items:
     display-name: "&aCatalizador de Cultivos"
     lore:
       - "&7Acelera el crecimiento de los cultivos de la isla."
-      - "&7Consume energía periódicamente mientras está activo."
+      - "&7Consume energía por cada etapa extra de crecimiento."
       - "&7Solo se puede colocar uno por isla."
       - "&7Puedes comprar cuantos repuestos quieras."
       - "&7Requiere Núcleo nivel &e%required_level%&7."

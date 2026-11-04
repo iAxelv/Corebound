@@ -11,9 +11,9 @@ crop-generator:
     base-cost: 400.0
     cost-multiplier: 1.7
   energy:
-    base-cost: 25.0
-    cost-per-level: 10.0
-    interval-ticks: 6000
+    cost-per-extra-stage:
+      base: 1.0
+      per-level: 0.25
   growth:
     base-extra-stages: 0.1
     extra-stages-per-level: 0.2
@@ -35,7 +35,7 @@ crop-generator:
         material: BOOK
         name: "&aCatalizador &7[Nivel %level%/%max_level%]"
         lore:
-          - "&7Consumo: &6%energy_cost%⚡ &7cada &e%interval%s"
+          - "&7Costo por etapa extra: &6%energy_cost%⚡"
           - "&7Aceleración estimada: &a+%growth%%"
           - "&7Bonificación de cosecha: &e+%harvest%%"
       state:

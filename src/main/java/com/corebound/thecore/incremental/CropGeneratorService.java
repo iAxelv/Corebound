@@ -48,7 +48,6 @@ import org.joml.Vector3f;
 
 public final class CropGeneratorService implements Listener {
     private static final long RANGE_GUIDE_PERIOD_TICKS = 12L;
-    private static final long IDLE_RETRY_INTERVAL_TICKS = 200L;
     private static final int MAX_LEVEL = 10;
     private static final Set<Material> CROPS = Set.of(
             Material.WHEAT,
@@ -102,7 +101,6 @@ public final class CropGeneratorService implements Listener {
     private double baseGrowthStages;
     private double growthStagesPerLevel;
     private double maximumHarvestBonus;
-    private long energyIntervalTicks;
     private int pickupLockCoreLevel;
 
     public CropGeneratorService(
@@ -181,9 +179,10 @@ public final class CropGeneratorService implements Listener {
         double loadedPurchaseCost = loaded.getDouble("crop-generator.purchase-cost", 750.0);
         double loadedUpgradeBaseCost = loaded.getDouble("crop-generator.upgrade.base-cost", 400.0);
         double loadedUpgradeMultiplier = loaded.getDouble("crop-generator.upgrade.cost-multiplier", 1.7);
-        double loadedBaseEnergyCost = loaded.getDouble("crop-generator.energy.base-cost", 5.0);
-        double loadedEnergyCostPerLevel = loaded.getDouble("crop-generator.energy.cost-per-level", 2.0);
-        long loadedEnergyIntervalTicks = loaded.getLong("crop-generator.energy.interval-ticks", 1200L);
+        double loadedBaseEnergyCost =
+                loaded.getDouble("crop-generator.energy.cost-per-extra-stage.base", 1.0);
+        double loadedEnergyCostPerLevel =
+                loaded.getDouble("crop-generator.energy.cost-per-extra-stage.per-level", 0.25);
         double loadedBaseGrowthStages = loaded.getDouble("crop-generator.growth.base-extra-stages", 0.1);
         double loadedGrowthStagesPerLevel =
                 loaded.getDouble("crop-generator.growth.extra-stages-per-level", 0.2);
@@ -198,7 +197,6 @@ public final class CropGeneratorService implements Listener {
                 || !Double.isFinite(loadedUpgradeMultiplier) || loadedUpgradeMultiplier <= 1.0
                 || !Double.isFinite(loadedBaseEnergyCost) || loadedBaseEnergyCost < 0
                 || !Double.isFinite(loadedEnergyCostPerLevel) || loadedEnergyCostPerLevel < 0
-                || loadedEnergyIntervalTicks < 20 || loadedEnergyIntervalTicks > 1_728_000L
                 || !Double.isFinite(loadedBaseGrowthStages) || loadedBaseGrowthStages < 0
                 || !Double.isFinite(loadedGrowthStagesPerLevel) || loadedGrowthStagesPerLevel < 0
                 || !Double.isFinite(loadedMaximumHarvestBonus) || loadedMaximumHarvestBonus < 0
@@ -222,7 +220,6 @@ public final class CropGeneratorService implements Listener {
         upgradeCostMultiplier = loadedUpgradeMultiplier;
         baseEnergyCost = loadedBaseEnergyCost;
         energyCostPerLevel = loadedEnergyCostPerLevel;
-        energyIntervalTicks = loadedEnergyIntervalTicks;
         baseGrowthStages = loadedBaseGrowthStages;
         growthStagesPerLevel = loadedGrowthStagesPerLevel;
         maximumHarvestBonus = loadedMaximumHarvestBonus;
@@ -505,7 +502,6 @@ public final class CropGeneratorService implements Listener {
         ItemDisplay itemDisplay = null;
         Interaction interaction = null;
         TextDisplay textDisplay = null;
-        double placementEnergyPaid = 0.0;
         try {
             itemDisplay = clickedBlock.getWorld().spawn(generatorLocation, ItemDisplay.class, display -> {
                 configureDisplay(display);
@@ -544,16 +540,6 @@ public final class CropGeneratorService implements Listener {
                     runeSlots,
                     runes);
             repository.add(generator, itemId);
-            if (state == CondenserState.ACTIVE) {
-                CoreRecord charged = coreRepository.spendEnergy(island.index(), energyCost(generator));
-                if (charged == null) {
-                    generator = generator.withState(CondenserState.IDLE);
-                    repository.update(generator);
-                } else {
-                    placementEnergyPaid = energyCost(generator);
-                    coreService.refreshCore(charged, System.currentTimeMillis());
-                }
-            }
             refreshVisuals(generator);
             consumeHeldItem(player, heldItem);
             startVisualAnimationFor(generatorId);
@@ -561,9 +547,6 @@ public final class CropGeneratorService implements Listener {
             messages.send(player, "crop-generator-placed");
             return true;
         } catch (RuntimeException exception) {
-            if (placementEnergyPaid > 0) {
-                coreRepository.restoreEnergy(island.index(), placementEnergyPaid);
-            }
             CropGeneratorRecord placed = repository.get(island.index());
             if (placed != null && placed.generatorId().equals(generatorId)) {
                 repository.rollbackPlacement(island.index(), generatorId, itemId);
@@ -687,7 +670,7 @@ public final class CropGeneratorService implements Listener {
         if (!CROPS.contains(block.getType())) {
             return;
         }
-        CropGeneratorRecord generator = activeGeneratorAt(block.getLocation());
+        CropGeneratorRecord generator = generatorAt(block.getLocation());
         if (generator == null) {
             return;
         }
@@ -699,8 +682,12 @@ public final class CropGeneratorService implements Listener {
         if (extraStages <= 0) {
             return;
         }
+        int appliedStages = Math.min(extraStages, crop.getMaximumAge() - crop.getAge());
+        if (appliedStages <= 0 || !chargeGrowth(generator, appliedStages)) {
+            return;
+        }
         crop.setAge((int) Math.min(
-                crop.getMaximumAge(), (long) crop.getAge() + extraStages));
+                crop.getMaximumAge(), (long) crop.getAge() + appliedStages));
         event.getNewState().setBlockData(crop);
         showGrowthFeedback(generator, block.getLocation());
     }
@@ -732,13 +719,40 @@ public final class CropGeneratorService implements Listener {
         }
     }
 
-    private CropGeneratorRecord activeGeneratorAt(Location location) {
+    private CropGeneratorRecord generatorAt(Location location) {
         IslandData island = islandService.islandAt(location).orElse(null);
         if (island == null) {
             return null;
         }
         CropGeneratorRecord generator = repository.get(island.index());
+        return generator != null && generator.state() != CondenserState.DISABLED ? generator : null;
+    }
+
+    private CropGeneratorRecord activeGeneratorAt(Location location) {
+        CropGeneratorRecord generator = generatorAt(location);
         return generator != null && generator.state() == CondenserState.ACTIVE ? generator : null;
+    }
+
+    private boolean chargeGrowth(CropGeneratorRecord generator, int extraStages) {
+        double cost = energyCost(generator) * extraStages;
+        CoreRecord chargedCore = cost > 0
+                ? coreRepository.spendEnergy(generator.islandIndex(), cost)
+                : coreRepository.core(generator.islandIndex());
+        if (chargedCore == null) {
+            if (generator.state() != CondenserState.IDLE) {
+                CropGeneratorRecord idle = generator.withState(CondenserState.IDLE);
+                repository.update(idle);
+                refreshVisuals(idle);
+            }
+            return false;
+        }
+        if (generator.state() == CondenserState.IDLE) {
+            CropGeneratorRecord active = generator.withState(CondenserState.ACTIVE);
+            repository.update(active);
+            refreshVisuals(active);
+        }
+        coreService.refreshCore(chargedCore, System.currentTimeMillis());
+        return true;
     }
 
     private void showGrowthFeedback(CropGeneratorRecord generator, Location cropLocation) {
@@ -1023,10 +1037,6 @@ public final class CropGeneratorService implements Listener {
         return (baseGrowthStages + growthStagesPerLevel * level) * 100.0;
     }
 
-    public double energyIntervalSeconds() {
-        return energyIntervalTicks / 20.0;
-    }
-
     public double harvestBonus(CropGeneratorRecord generator) {
         double runeBonus = generator.activeRunes().values().stream()
                 .filter(rune -> rune.type() == CellType.CROP_EFFICIENCY)
@@ -1099,7 +1109,6 @@ public final class CropGeneratorService implements Listener {
         }
         long islandIndex = initialRecord.islandIndex();
         float[] yaw = {0.0f};
-        long[] ticksSinceCharge = {0L};
         long[] ticksSinceParticle = {0L};
         ScheduledTask[] taskReference = new ScheduledTask[1];
         ScheduledTask task = display.getScheduler().runAtFixedRate(plugin, scheduled -> {
@@ -1123,15 +1132,6 @@ public final class CropGeneratorService implements Listener {
                 visualTasks.remove(generatorId, taskReference[0]);
                 return;
             }
-            ticksSinceCharge[0] += rotationPeriodTicks;
-            long chargeCheckInterval = generator.state() == CondenserState.IDLE
-                    ? Math.min(IDLE_RETRY_INTERVAL_TICKS, energyIntervalTicks)
-                    : energyIntervalTicks;
-            if (ticksSinceCharge[0] >= chargeCheckInterval) {
-                ticksSinceCharge[0] %= chargeCheckInterval;
-                chargeGenerator(generator);
-                generator = repository.get(islandIndex);
-            }
             ticksSinceParticle[0] += rotationPeriodTicks;
             if (ticksSinceParticle[0] >= 100L) {
                 ticksSinceParticle[0] %= 100L;
@@ -1153,28 +1153,6 @@ public final class CropGeneratorService implements Listener {
         }
     }
 
-    private void chargeGenerator(CropGeneratorRecord generator) {
-        if (generator.state() == CondenserState.DISABLED) {
-            return;
-        }
-        CoreRecord chargedCore = coreRepository.spendEnergy(
-                generator.islandIndex(), energyCost(generator));
-        if (chargedCore == null) {
-            if (generator.state() != CondenserState.IDLE) {
-                CropGeneratorRecord idle = generator.withState(CondenserState.IDLE);
-                repository.update(idle);
-                refreshVisuals(idle);
-            }
-            return;
-        }
-        if (generator.state() == CondenserState.IDLE) {
-            CropGeneratorRecord active = generator.withState(CondenserState.ACTIVE);
-            repository.update(active);
-            refreshVisuals(active);
-        }
-        coreService.refreshCore(chargedCore, System.currentTimeMillis());
-    }
-
     private Component hologram(CropGeneratorRecord generator) {
         String color = switch (generator.state()) {
             case ACTIVE -> "&a";
@@ -1188,8 +1166,8 @@ public final class CropGeneratorService implements Listener {
                 .append(messages.parseComponent("&7Aceleración: &e+" + formatEnergy(growthBonusPercent(generator))
                         + "%"))
                 .append(Component.newline())
-                .append(messages.parseComponent("&7Consumo: &6" + formatEnergy(energyCost(generator))
-                        + "⚡/&e" + formatEnergy(energyIntervalTicks / 20.0) + "s"));
+                .append(messages.parseComponent("&7Costo: &6" + formatEnergy(energyCost(generator))
+                        + "⚡ por etapa extra"));
     }
 
     private String stateLabel(CondenserState state) {

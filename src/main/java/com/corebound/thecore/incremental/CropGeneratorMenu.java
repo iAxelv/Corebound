@@ -100,7 +100,7 @@ public final class CropGeneratorMenu implements Listener {
                 "%level%", Integer.toString(generator.level()),
                 "%max_level%", Integer.toString(generators.maximumLevel()))));
         List<Component> lore = generators.menuLore("main.info.lore", List.of(
-                        "&7Consumo: &6%energy_cost%⚡ &7cada &e%interval%s",
+                        "&7Costo por etapa extra: &6%energy_cost%⚡",
                         "&7Aceleración estimada: &a+%growth%%",
                         "&7Bonificación de cosecha: &e+%harvest%%")).stream()
                 .map(line -> text(line, values(generator, generator.level())))
@@ -184,14 +184,12 @@ public final class CropGeneratorMenu implements Listener {
     }
 
     private Map<String, String> values(CropGeneratorRecord generator, int growthLevel) {
-        int intervalSeconds = (int) Math.max(1, generators.energyIntervalSeconds());
         return Map.ofEntries(
                 Map.entry("%level%", Integer.toString(generator.level())),
                 Map.entry("%max_level%", Integer.toString(generators.maximumLevel())),
                 Map.entry("%next_level%", Integer.toString(generator.level() + 1)),
                 Map.entry("%cost%", generators.formatEnergy(generators.upgradeCost(generator.level()))),
                 Map.entry("%energy_cost%", generators.formatEnergy(generators.energyCost(generator))),
-                Map.entry("%interval%", Integer.toString(intervalSeconds)),
                 Map.entry("%growth%", generators.formatEnergy(generators.growthBonusPercent(growthLevel))),
                 Map.entry("%harvest%", generators.formatEnergy(generators.harvestBonusPercent(generator))));
     }
