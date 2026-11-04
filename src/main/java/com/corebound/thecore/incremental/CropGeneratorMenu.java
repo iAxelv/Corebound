@@ -100,8 +100,8 @@ public final class CropGeneratorMenu implements Listener {
                 "%level%", Integer.toString(generator.level()),
                 "%max_level%", Integer.toString(generators.maximumLevel()))));
         List<Component> lore = generators.menuLore("main.info.lore", List.of(
-                        "&7Costo por etapa extra: &6%energy_cost%⚡",
-                        "&7Aceleración estimada: &a+%growth%%",
+                        "&7Cooldown: &e%shot_delay%s",
+                        "&7Costo por disparo: &6%energy_cost%⚡",
                         "&7Bonificación de cosecha: &e+%harvest%%")).stream()
                 .map(line -> text(line, values(generator, generator.level())))
                 .toList();
@@ -167,7 +167,7 @@ public final class CropGeneratorMenu implements Listener {
                 maxed ? "main.upgrade.max-lore" : "main.upgrade.lore",
                 maxed
                         ? List.of("&7El Catalizador ya alcanzó su nivel máximo.")
-                        : List.of("&7Costo: &6%cost%⚡", "&7Aceleración al mejorar: &a+%growth%%", "",
+                        : List.of("&7Costo: &6%cost%⚡", "&7Cooldown tras mejorar: &e%shot_delay%s", "",
                                 "&eHaz clic para mejorar."));
         int displayedGrowthLevel = maxed ? generator.level() : generator.level() + 1;
         meta.lore(lore.stream().map(line -> text(line, values(generator, displayedGrowthLevel))).toList());
@@ -183,14 +183,14 @@ public final class CropGeneratorMenu implements Listener {
         return item;
     }
 
-    private Map<String, String> values(CropGeneratorRecord generator, int growthLevel) {
+    private Map<String, String> values(CropGeneratorRecord generator, int displayedLevel) {
         return Map.ofEntries(
                 Map.entry("%level%", Integer.toString(generator.level())),
                 Map.entry("%max_level%", Integer.toString(generators.maximumLevel())),
                 Map.entry("%next_level%", Integer.toString(generator.level() + 1)),
                 Map.entry("%cost%", generators.formatEnergy(generators.upgradeCost(generator.level()))),
                 Map.entry("%energy_cost%", generators.formatEnergy(generators.energyCost(generator))),
-                Map.entry("%growth%", generators.formatEnergy(generators.growthBonusPercent(growthLevel))),
+                Map.entry("%shot_delay%", generators.formatEnergy(generators.shotDelaySeconds(displayedLevel))),
                 Map.entry("%harvest%", generators.formatEnergy(generators.harvestBonusPercent(generator))));
     }
 

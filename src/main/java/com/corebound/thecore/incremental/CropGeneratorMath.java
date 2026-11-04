@@ -4,14 +4,9 @@ public final class CropGeneratorMath {
     private CropGeneratorMath() {
     }
 
-    public static int additionalGrowthStages(
-            int level, double baseStages, double stagesPerLevel, double roll) {
-        double expectedStages = Math.max(0.0, baseStages + level * stagesPerLevel);
-        if (expectedStages >= Integer.MAX_VALUE) {
-            return Integer.MAX_VALUE;
-        }
-        int wholeStages = (int) Math.floor(expectedStages);
-        return wholeStages + (roll < expectedStages - wholeStages ? 1 : 0);
+    public static double shotDelaySeconds(
+            int level, double baseDelaySeconds, double reductionPerLevelSeconds, double minimumDelaySeconds) {
+        return Math.max(minimumDelaySeconds, baseDelaySeconds - level * reductionPerLevelSeconds);
     }
 
     public static int additionalHarvestItems(int amount, double bonusRatio, double roll) {

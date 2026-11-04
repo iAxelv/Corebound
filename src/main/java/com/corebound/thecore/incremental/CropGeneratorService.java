@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -23,9 +25,13 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
+import org.bukkit.TreeType;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.type.Sapling;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Display;
@@ -37,8 +43,11 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockDropItemEvent;
+import org.bukkit.event.block.BlockFertilizeEvent;
 import org.bukkit.event.block.BlockGrowEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -48,6 +57,7 @@ import org.joml.Vector3f;
 
 public final class CropGeneratorService implements Listener {
     private static final long RANGE_GUIDE_PERIOD_TICKS = 12L;
+    private static final long VISUAL_UPDATE_PERIOD_TICKS = 20L;
     private static final int MAX_LEVEL = 10;
     private static final Set<Material> CROPS = Set.of(
             Material.WHEAT,
@@ -63,6 +73,46 @@ public final class CropGeneratorService implements Listener {
             Material.ATTACHED_MELON_STEM,
             Material.TORCHFLOWER_CROP,
             Material.PITCHER_CROP);
+    private static final Set<Material> STACKING_CROPS = Set.of(
+            Material.CACTUS,
+            Material.SUGAR_CANE,
+            Material.BAMBOO,
+            Material.KELP,
+            Material.KELP_PLANT);
+
+    private record CropPosition(UUID worldId, int x, int y, int z) {
+    }
+
+    private static final class CropCandidates {
+        private final List<CropPosition> positions = new ArrayList<>();
+        private final Map<CropPosition, Integer> indexes = new HashMap<>();
+
+        private synchronized void add(CropPosition position) {
+            if (!indexes.containsKey(position)) {
+                indexes.put(position, positions.size());
+                positions.add(position);
+            }
+        }
+
+        private synchronized void remove(CropPosition position) {
+            Integer index = indexes.remove(position);
+            if (index == null) {
+                return;
+            }
+            int lastIndex = positions.size() - 1;
+            CropPosition last = positions.remove(lastIndex);
+            if (index != lastIndex) {
+                positions.set(index, last);
+                indexes.put(last, index);
+            }
+        }
+
+        private synchronized CropPosition random() {
+            return positions.isEmpty()
+                    ? null
+                    : positions.get(ThreadLocalRandom.current().nextInt(positions.size()));
+        }
+    }
 
     private final TheCorePlugin plugin;
     private final IslandService islandService;
@@ -85,6 +135,9 @@ public final class CropGeneratorService implements Listener {
     private final NamespacedKey entityIdKey;
     private final Map<UUID, ScheduledTask> visualTasks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastGrowthFeedback = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> shotCountdownTicks = new ConcurrentHashMap<>();
+    private final Map<Long, CropCandidates> cropCandidates = new ConcurrentHashMap<>();
+    private final Set<UUID> growthShotsInProgress = ConcurrentHashMap.newKeySet();
     private final Set<UUID> rangeGuidePlayers = ConcurrentHashMap.newKeySet();
     private final CropGeneratorMenu menu;
     private final CropGeneratorRuneMenu runeMenu;
@@ -98,8 +151,9 @@ public final class CropGeneratorService implements Listener {
     private double upgradeCostMultiplier;
     private double baseEnergyCost;
     private double energyCostPerLevel;
-    private double baseGrowthStages;
-    private double growthStagesPerLevel;
+    private double baseShotDelaySeconds;
+    private double shotDelayReductionPerLevelSeconds;
+    private double minimumShotDelaySeconds;
     private double maximumHarvestBonus;
     private int pickupLockCoreLevel;
 
@@ -144,6 +198,7 @@ public final class CropGeneratorService implements Listener {
     public void reloadConfiguration() {
         applyConfiguration(loadConfiguration(false));
         repository.all().forEach(generator -> {
+            shotCountdownTicks.put(generator.generatorId(), shotDelayTicks(generator));
             ScheduledTask visual = visualTasks.remove(generator.generatorId());
             if (visual != null) {
                 visual.cancel();
@@ -180,12 +235,15 @@ public final class CropGeneratorService implements Listener {
         double loadedUpgradeBaseCost = loaded.getDouble("crop-generator.upgrade.base-cost", 400.0);
         double loadedUpgradeMultiplier = loaded.getDouble("crop-generator.upgrade.cost-multiplier", 1.7);
         double loadedBaseEnergyCost =
-                loaded.getDouble("crop-generator.energy.cost-per-extra-stage.base", 1.0);
+                loaded.getDouble("crop-generator.energy.cost-per-shot.base", 1.0);
         double loadedEnergyCostPerLevel =
-                loaded.getDouble("crop-generator.energy.cost-per-extra-stage.per-level", 0.25);
-        double loadedBaseGrowthStages = loaded.getDouble("crop-generator.growth.base-extra-stages", 0.1);
-        double loadedGrowthStagesPerLevel =
-                loaded.getDouble("crop-generator.growth.extra-stages-per-level", 0.2);
+                loaded.getDouble("crop-generator.energy.cost-per-shot.per-level", 0.25);
+        double loadedBaseShotDelaySeconds =
+                loaded.getDouble("crop-generator.growth.shot-delay.base-seconds", 6.0);
+        double loadedShotDelayReductionPerLevelSeconds =
+                loaded.getDouble("crop-generator.growth.shot-delay.reduction-per-level-seconds", 0.5);
+        double loadedMinimumShotDelaySeconds =
+                loaded.getDouble("crop-generator.growth.shot-delay.minimum-seconds", 1.0);
         double loadedMaximumHarvestBonus = loaded.getDouble("crop-generator.runes.maximum-harvest-bonus", 1.0);
         int loadedPickupLockCoreLevel = loaded.getInt("crop-generator.pickup-lock-core-level", 10);
         if (loadedItemMaterial == null || !loadedItemMaterial.isItem()
@@ -197,8 +255,11 @@ public final class CropGeneratorService implements Listener {
                 || !Double.isFinite(loadedUpgradeMultiplier) || loadedUpgradeMultiplier <= 1.0
                 || !Double.isFinite(loadedBaseEnergyCost) || loadedBaseEnergyCost < 0
                 || !Double.isFinite(loadedEnergyCostPerLevel) || loadedEnergyCostPerLevel < 0
-                || !Double.isFinite(loadedBaseGrowthStages) || loadedBaseGrowthStages < 0
-                || !Double.isFinite(loadedGrowthStagesPerLevel) || loadedGrowthStagesPerLevel < 0
+                || !positiveFinite(loadedBaseShotDelaySeconds)
+                || !Double.isFinite(loadedShotDelayReductionPerLevelSeconds)
+                || loadedShotDelayReductionPerLevelSeconds < 0
+                || !positiveFinite(loadedMinimumShotDelaySeconds)
+                || loadedMinimumShotDelaySeconds > loadedBaseShotDelaySeconds
                 || !Double.isFinite(loadedMaximumHarvestBonus) || loadedMaximumHarvestBonus < 0
                 || loadedPickupLockCoreLevel < minimumCoreLevel()) {
             throw new IllegalArgumentException("crop_generator.yml contains invalid material, progression, or costs.");
@@ -220,8 +281,9 @@ public final class CropGeneratorService implements Listener {
         upgradeCostMultiplier = loadedUpgradeMultiplier;
         baseEnergyCost = loadedBaseEnergyCost;
         energyCostPerLevel = loadedEnergyCostPerLevel;
-        baseGrowthStages = loadedBaseGrowthStages;
-        growthStagesPerLevel = loadedGrowthStagesPerLevel;
+        baseShotDelaySeconds = loadedBaseShotDelaySeconds;
+        shotDelayReductionPerLevelSeconds = loadedShotDelayReductionPerLevelSeconds;
+        minimumShotDelaySeconds = loadedMinimumShotDelaySeconds;
         maximumHarvestBonus = loadedMaximumHarvestBonus;
         pickupLockCoreLevel = loadedPickupLockCoreLevel;
         for (CropGeneratorRecord generator : repository.all()) {
@@ -664,32 +726,24 @@ public final class CropGeneratorService implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    @EventHandler(ignoreCancelled = true)
     public void onCropGrow(BlockGrowEvent event) {
-        Block block = event.getBlock();
-        if (!CROPS.contains(block.getType())) {
-            return;
-        }
-        CropGeneratorRecord generator = generatorAt(block.getLocation());
-        if (generator == null) {
-            return;
-        }
-        if (!(event.getNewState().getBlockData() instanceof Ageable crop)) {
-            return;
-        }
-        int extraStages = CropGeneratorMath.additionalGrowthStages(
-                generator.level(), baseGrowthStages, growthStagesPerLevel, ThreadLocalRandom.current().nextDouble());
-        if (extraStages <= 0) {
-            return;
-        }
-        int appliedStages = Math.min(extraStages, crop.getMaximumAge() - crop.getAge());
-        if (appliedStages <= 0 || !chargeGrowth(generator, appliedStages)) {
-            return;
-        }
-        crop.setAge((int) Math.min(
-                crop.getMaximumAge(), (long) crop.getAge() + appliedStages));
-        event.getNewState().setBlockData(crop);
-        showGrowthFeedback(generator, block.getLocation());
+        trackCrop(event.getNewState());
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onCropPlace(BlockPlaceEvent event) {
+        trackCrop(event.getBlockPlaced());
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onCropFertilize(BlockFertilizeEvent event) {
+        event.getBlocks().forEach(this::trackCrop);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onCropBreak(BlockBreakEvent event) {
+        untrackCrop(event.getBlock());
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -719,25 +773,249 @@ public final class CropGeneratorService implements Listener {
         }
     }
 
-    private CropGeneratorRecord generatorAt(Location location) {
+    private CropGeneratorRecord activeGeneratorAt(Location location) {
         IslandData island = islandService.islandAt(location).orElse(null);
         if (island == null) {
             return null;
         }
         CropGeneratorRecord generator = repository.get(island.index());
-        return generator != null && generator.state() != CondenserState.DISABLED ? generator : null;
-    }
-
-    private CropGeneratorRecord activeGeneratorAt(Location location) {
-        CropGeneratorRecord generator = generatorAt(location);
         return generator != null && generator.state() == CondenserState.ACTIVE ? generator : null;
     }
 
-    private boolean chargeGrowth(CropGeneratorRecord generator, int extraStages) {
-        double cost = energyCost(generator) * extraStages;
-        CoreRecord chargedCore = cost > 0
-                ? coreRepository.spendEnergy(generator.islandIndex(), cost)
-                : coreRepository.core(generator.islandIndex());
+    private void trackCrop(Block block) {
+        trackCrop(block.getState());
+    }
+
+    private void trackCrop(BlockState state) {
+        Material type = state.getType();
+        BlockData data = state.getBlockData();
+        boolean immature = CROPS.contains(type) && data instanceof Ageable ageable
+                && ageable.getAge() < ageable.getMaximumAge();
+        immature |= STACKING_CROPS.contains(type) && isTopStackingPlant(type, state.getBlock());
+        immature |= isSapling(type) && data instanceof Sapling sapling
+                && sapling.getStage() <= sapling.getMaximumStage();
+        if (!immature) {
+            return;
+        }
+        Block block = state.getBlock();
+        IslandData island = islandService.islandAt(block.getLocation()).orElse(null);
+        if (island == null) {
+            return;
+        }
+        if (repository.get(island.index()) == null) {
+            return;
+        }
+        cropCandidates.computeIfAbsent(island.index(), ignored -> new CropCandidates())
+                .add(cropPosition(block));
+    }
+
+    private void untrackCrop(Block block) {
+        if (!CROPS.contains(block.getType())
+                && !STACKING_CROPS.contains(block.getType())
+                && !isSapling(block.getType())) {
+            return;
+        }
+        IslandData island = islandService.islandAt(block.getLocation()).orElse(null);
+        if (island == null) {
+            return;
+        }
+        CropCandidates candidates = cropCandidates.get(island.index());
+        if (candidates != null) {
+            candidates.remove(cropPosition(block));
+        }
+    }
+
+    private CropPosition cropPosition(Block block) {
+        return new CropPosition(
+                block.getWorld().getUID(), block.getX(), block.getY(), block.getZ());
+    }
+
+    private boolean isSapling(Material material) {
+        String name = material.name();
+        return (name.endsWith("_SAPLING") && material != Material.BAMBOO_SAPLING)
+                || material == Material.MANGROVE_PROPAGULE
+                || material == Material.AZALEA
+                || material == Material.FLOWERING_AZALEA;
+    }
+
+    private boolean isTopStackingPlant(Block block) {
+        return isTopStackingPlant(block.getType(), block);
+    }
+
+    private boolean isTopStackingPlant(Material type, Block block) {
+        Material above = block.getRelative(org.bukkit.block.BlockFace.UP).getType();
+        if (type == Material.KELP || type == Material.KELP_PLANT) {
+            return above == Material.WATER;
+        }
+        return above.isAir();
+    }
+
+    private void applyGrowthShot(CropGeneratorRecord expected, CropPosition position) {
+        World world = plugin.getServer().getWorld(position.worldId());
+        if (world == null) {
+            growthShotsInProgress.remove(expected.generatorId());
+            return;
+        }
+        Location target = new Location(world, position.x(), position.y(), position.z());
+        ScheduledTask growthTask = plugin.getServer().getRegionScheduler().run(plugin, target, task -> {
+            try {
+                if (!world.isChunkLoaded(position.x() >> 4, position.z() >> 4)) {
+                    CropCandidates candidates = cropCandidates.get(expected.islandIndex());
+                    if (candidates != null) {
+                        candidates.remove(position);
+                    }
+                    return;
+                }
+                CropGeneratorRecord generator = repository.getById(expected.generatorId());
+                if (generator == null || generator.state() == CondenserState.DISABLED) {
+                    return;
+                }
+                Block block = world.getBlockAt(position.x(), position.y(), position.z());
+                Material type = block.getType();
+                BlockData data = block.getBlockData();
+                boolean ageableCrop = CROPS.contains(type) && data instanceof Ageable ageable
+                        && ageable.getAge() < ageable.getMaximumAge();
+                boolean stackingCrop = STACKING_CROPS.contains(type) && isTopStackingPlant(block);
+                boolean saplingCrop = isSapling(type) && data instanceof Sapling sapling;
+                if (!ageableCrop && !stackingCrop && !saplingCrop) {
+                    CropCandidates candidates = cropCandidates.get(generator.islandIndex());
+                    if (candidates != null) {
+                        candidates.remove(position);
+                    }
+                    return;
+                }
+                IslandData island = islandService.islandAt(target).orElse(null);
+                if (island == null || island.index() != generator.islandIndex()) {
+                    CropCandidates candidates = cropCandidates.get(generator.islandIndex());
+                    if (candidates != null) {
+                        candidates.remove(position);
+                    }
+                    return;
+                }
+                if (saplingCrop) {
+                    growSapling(generator, block, (Sapling) data, position);
+                } else if (stackingCrop) {
+                    growStackingCrop(generator, block, position);
+                } else if (ageableCrop) {
+                    growAgeableCrop(generator, block, (Ageable) data, position);
+                }
+            } finally {
+                growthShotsInProgress.remove(expected.generatorId());
+            }
+        });
+        if (growthTask == null) {
+            growthShotsInProgress.remove(expected.generatorId());
+        }
+    }
+
+    private void growAgeableCrop(
+            CropGeneratorRecord generator, Block block, Ageable crop, CropPosition position) {
+        if (!chargeGrowthShot(generator)) {
+            return;
+        }
+        crop.setAge(crop.getAge() + 1);
+        block.setBlockData(crop, false);
+        if (crop.getAge() >= crop.getMaximumAge()) {
+            removeCropCandidate(generator.islandIndex(), position);
+        }
+        showGrowthFeedback(generator, block.getLocation());
+    }
+
+    private void growStackingCrop(CropGeneratorRecord generator, Block block, CropPosition position) {
+        Material type = block.getType();
+        Block destination = block.getRelative(org.bukkit.block.BlockFace.UP);
+        Material destinationType = destination.getType();
+        boolean kelp = type == Material.KELP || type == Material.KELP_PLANT;
+        if (kelp ? destinationType != Material.WATER : !destinationType.isAir()) {
+            removeCropCandidate(generator.islandIndex(), position);
+            return;
+        }
+        if (type == Material.CACTUS && hasSolidNeighbor(destination)) {
+            removeCropCandidate(generator.islandIndex(), position);
+            return;
+        }
+        IslandData island = islandService.islandAt(destination.getLocation()).orElse(null);
+        if (island == null || island.index() != generator.islandIndex() || !chargeGrowthShot(generator)) {
+            return;
+        }
+        BlockData newData = type.createBlockData();
+        destination.setBlockData(newData, false);
+        removeCropCandidate(generator.islandIndex(), position);
+        trackCrop(destination);
+        showGrowthFeedback(generator, destination.getLocation());
+    }
+
+    private boolean hasSolidNeighbor(Block block) {
+        for (org.bukkit.block.BlockFace face : List.of(
+                org.bukkit.block.BlockFace.NORTH,
+                org.bukkit.block.BlockFace.SOUTH,
+                org.bukkit.block.BlockFace.EAST,
+                org.bukkit.block.BlockFace.WEST)) {
+            if (block.getRelative(face).getType().isSolid()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void growSapling(
+            CropGeneratorRecord generator, Block block, Sapling sapling, CropPosition position) {
+        if (sapling.getStage() < sapling.getMaximumStage()) {
+            if (!chargeGrowthShot(generator)) {
+                return;
+            }
+            sapling.setStage(sapling.getStage() + 1);
+            block.setBlockData(sapling, false);
+            showGrowthFeedback(generator, block.getLocation());
+            return;
+        }
+        TreeType treeType = treeType(block.getType());
+        if (treeType == null || !canGrowTree(generator, block.getLocation())
+                || !chargeGrowthShot(generator)) {
+            return;
+        }
+        if (!block.getWorld().generateTree(block.getLocation(), treeType)) {
+            coreRepository.restoreEnergy(generator.islandIndex(), energyCost(generator));
+            CoreRecord restoredCore = coreRepository.core(generator.islandIndex());
+            if (restoredCore != null) {
+                coreService.refreshCore(restoredCore, System.currentTimeMillis());
+            }
+            return;
+        }
+        removeCropCandidate(generator.islandIndex(), position);
+        showGrowthFeedback(generator, block.getLocation());
+    }
+
+    private TreeType treeType(Material material) {
+        return switch (material.name()) {
+            case "BIRCH_SAPLING" -> TreeType.BIRCH;
+            case "SPRUCE_SAPLING" -> TreeType.REDWOOD;
+            case "JUNGLE_SAPLING" -> TreeType.SMALL_JUNGLE;
+            case "ACACIA_SAPLING" -> TreeType.ACACIA;
+            case "DARK_OAK_SAPLING" -> TreeType.DARK_OAK;
+            case "CHERRY_SAPLING" -> TreeType.CHERRY;
+            case "MANGROVE_PROPAGULE" -> TreeType.MANGROVE;
+            case "AZALEA", "FLOWERING_AZALEA" -> TreeType.AZALEA;
+            case "PALE_OAK_SAPLING" -> TreeType.PALE_OAK;
+            default -> TreeType.TREE;
+        };
+    }
+
+    private boolean canGrowTree(CropGeneratorRecord generator, Location location) {
+        IslandData island = islandService.islandAt(location).orElse(null);
+        return island != null && island.index() == generator.islandIndex();
+    }
+
+    private void removeCropCandidate(long islandIndex, CropPosition position) {
+        CropCandidates candidates = cropCandidates.get(islandIndex);
+        if (candidates != null) {
+            candidates.remove(position);
+        }
+    }
+
+    private boolean chargeGrowthShot(CropGeneratorRecord generator) {
+        CoreRecord chargedCore = coreRepository.spendEnergy(
+                generator.islandIndex(), energyCost(generator));
         if (chargedCore == null) {
             if (generator.state() != CondenserState.IDLE) {
                 CropGeneratorRecord idle = generator.withState(CondenserState.IDLE);
@@ -753,6 +1031,19 @@ public final class CropGeneratorService implements Listener {
         }
         coreService.refreshCore(chargedCore, System.currentTimeMillis());
         return true;
+    }
+
+    private void attemptGrowthShot(CropGeneratorRecord generator) {
+        if (generator.state() == CondenserState.DISABLED || !growthShotsInProgress.add(generator.generatorId())) {
+            return;
+        }
+        CropCandidates candidates = cropCandidates.get(generator.islandIndex());
+        CropPosition position = candidates == null ? null : candidates.random();
+        if (position == null) {
+            growthShotsInProgress.remove(generator.generatorId());
+            return;
+        }
+        applyGrowthShot(generator, position);
     }
 
     private void showGrowthFeedback(CropGeneratorRecord generator, Location cropLocation) {
@@ -936,6 +1227,7 @@ public final class CropGeneratorService implements Listener {
             return false;
         }
         CropGeneratorRecord removed = repository.removeForFracture(islandIndex);
+        cropCandidates.remove(islandIndex);
         if (removed != null) {
             cancelTasks(removed.generatorId());
             World world = plugin.getServer().getWorld(removed.worldId());
@@ -978,6 +1270,8 @@ public final class CropGeneratorService implements Listener {
         if (visual != null) {
             visual.cancel();
         }
+        shotCountdownTicks.remove(generatorId);
+        growthShotsInProgress.remove(generatorId);
     }
 
     public boolean toggleEnabled(Player player, UUID generatorId) {
@@ -1029,12 +1323,22 @@ public final class CropGeneratorService implements Listener {
         return Math.max(0.0, cost * (1.0 - Math.min(0.9, reduction)));
     }
 
-    public double growthBonusPercent(CropGeneratorRecord generator) {
-        return growthBonusPercent(generator.level());
+    public double shotDelaySeconds(CropGeneratorRecord generator) {
+        return shotDelaySeconds(generator.level());
     }
 
-    public double growthBonusPercent(int level) {
-        return (baseGrowthStages + growthStagesPerLevel * level) * 100.0;
+    public double shotDelaySeconds(int level) {
+        return CropGeneratorMath.shotDelaySeconds(
+                level, baseShotDelaySeconds, shotDelayReductionPerLevelSeconds, minimumShotDelaySeconds);
+    }
+
+    private long shotDelayTicks(CropGeneratorRecord generator) {
+        return Math.max(1L, Math.round(shotDelaySeconds(generator) * 20.0));
+    }
+
+    private long remainingShotTicks(CropGeneratorRecord generator) {
+        return Math.min(shotCountdownTicks.getOrDefault(
+                generator.generatorId(), shotDelayTicks(generator)), shotDelayTicks(generator));
     }
 
     public double harvestBonus(CropGeneratorRecord generator) {
@@ -1108,7 +1412,9 @@ public final class CropGeneratorService implements Listener {
             return;
         }
         long islandIndex = initialRecord.islandIndex();
+        long animationIntervalTicks = Math.min(VISUAL_UPDATE_PERIOD_TICKS, rotationPeriodTicks);
         float[] yaw = {0.0f};
+        shotCountdownTicks.putIfAbsent(generatorId, shotDelayTicks(initialRecord));
         long[] ticksSinceParticle = {0L};
         ScheduledTask[] taskReference = new ScheduledTask[1];
         ScheduledTask task = display.getScheduler().runAtFixedRate(plugin, scheduled -> {
@@ -1117,10 +1423,10 @@ public final class CropGeneratorService implements Listener {
                 visualTasks.remove(generatorId, taskReference[0]);
                 return;
             }
-            yaw[0] += (float) (Math.PI * 2.0 * rotationPeriodTicks / (20.0 * 8.0));
+            yaw[0] += (float) (Math.PI * 2.0 * animationIntervalTicks / (20.0 * 8.0));
             Transformation current = display.getTransformation();
             display.setInterpolationDelay(0);
-            display.setInterpolationDuration(rotationPeriodTicks);
+            display.setInterpolationDuration((int) animationIntervalTicks);
             display.setTransformation(new Transformation(
                     new Vector3f(current.getTranslation()),
                     new Quaternionf(current.getLeftRotation()),
@@ -1132,7 +1438,22 @@ public final class CropGeneratorService implements Listener {
                 visualTasks.remove(generatorId, taskReference[0]);
                 return;
             }
-            ticksSinceParticle[0] += rotationPeriodTicks;
+            if (generator.state() != CondenserState.DISABLED) {
+                long delayTicks = shotDelayTicks(generator);
+                long remainingTicks = Math.min(
+                        shotCountdownTicks.getOrDefault(generatorId, delayTicks), delayTicks);
+                remainingTicks = Math.max(0L, remainingTicks - animationIntervalTicks);
+                if (remainingTicks == 0L) {
+                    attemptGrowthShot(generator);
+                    remainingTicks = delayTicks;
+                }
+                shotCountdownTicks.put(generatorId, remainingTicks);
+            }
+            Entity textEntity = display.getWorld().getEntity(generator.textDisplayId());
+            if (textEntity instanceof TextDisplay textDisplay) {
+                textDisplay.text(hologram(generator));
+            }
+            ticksSinceParticle[0] += animationIntervalTicks;
             if (ticksSinceParticle[0] >= 100L) {
                 ticksSinceParticle[0] %= 100L;
             } else {
@@ -1142,7 +1463,7 @@ public final class CropGeneratorService implements Listener {
                 display.getWorld().spawnParticle(
                         Particle.COMPOSTER, display.getLocation().add(0, 0.15, 0), 2, 0.16, 0.1, 0.16, 0.01);
             }
-        }, () -> visualTasks.remove(generatorId, taskReference[0]), 1L, rotationPeriodTicks);
+        }, () -> visualTasks.remove(generatorId, taskReference[0]), 1L, animationIntervalTicks);
         if (task == null) {
             return;
         }
@@ -1163,11 +1484,11 @@ public final class CropGeneratorService implements Listener {
                 .append(Component.newline())
                 .append(messages.parseComponent("&7Estado: " + color + stateLabel(generator.state())))
                 .append(Component.newline())
-                .append(messages.parseComponent("&7Aceleración: &e+" + formatEnergy(growthBonusPercent(generator))
-                        + "%"))
+                .append(messages.parseComponent("&7Disparo: &e"
+                        + (int) Math.ceil(remainingShotTicks(generator) / 20.0) + "s"))
                 .append(Component.newline())
                 .append(messages.parseComponent("&7Costo: &6" + formatEnergy(energyCost(generator))
-                        + "⚡ por etapa extra"));
+                        + "⚡ por disparo"));
     }
 
     private String stateLabel(CondenserState state) {

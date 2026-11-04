@@ -11,12 +11,14 @@ crop-generator:
     base-cost: 400.0
     cost-multiplier: 1.7
   energy:
-    cost-per-extra-stage:
+    cost-per-shot:
       base: 1.0
       per-level: 0.25
   growth:
-    base-extra-stages: 0.1
-    extra-stages-per-level: 0.2
+    shot-delay:
+      base-seconds: 6.0
+      reduction-per-level-seconds: 0.5
+      minimum-seconds: 1.0
   runes:
     maximum-harvest-bonus: 1.0
     slot-required-level:
@@ -35,8 +37,8 @@ crop-generator:
         material: BOOK
         name: "&aCatalizador &7[Nivel %level%/%max_level%]"
         lore:
-          - "&7Costo por etapa extra: &6%energy_cost%⚡"
-          - "&7Aceleración estimada: &a+%growth%%"
+          - "&7Cooldown: &e%shot_delay%s"
+          - "&7Costo por disparo: &6%energy_cost%⚡"
           - "&7Bonificación de cosecha: &e+%harvest%%"
       state:
         material: LEVER
@@ -61,7 +63,7 @@ crop-generator:
         max-name: "&aNivel máximo alcanzado"
         lore:
           - "&7Costo: &6%cost%⚡"
-          - "&7Aceleración al mejorar: &a+%growth%%"
+          - "&7Cooldown tras mejorar: &e%shot_delay%s"
           - ""
           - "&eHaz clic para mejorar."
         max-lore:

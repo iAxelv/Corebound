@@ -66,11 +66,11 @@ class CellRecordTest {
     }
 
     @Test
-    void cropGeneratorMathAppliesFractionalGrowthAndYieldBonuses() {
-        assertEquals(1, CropGeneratorMath.additionalGrowthStages(0, 0.1, 0.2, 0.05));
-        assertEquals(0, CropGeneratorMath.additionalGrowthStages(0, 0.1, 0.2, 0.1));
-        assertEquals(1, CropGeneratorMath.additionalGrowthStages(3, 0.1, 0.2, 0.69));
-        assertEquals(0, CropGeneratorMath.additionalGrowthStages(3, 0.1, 0.2, 0.71));
+    void cropGeneratorShotDelayDecreasesWithLevelAndHarvestBonusIsFractional() {
+        assertEquals(6.0, CropGeneratorMath.shotDelaySeconds(0, 6.0, 0.5, 1.0), 0.0001);
+        assertEquals(4.0, CropGeneratorMath.shotDelaySeconds(4, 6.0, 0.5, 1.0), 0.0001);
+        assertEquals(1.0, CropGeneratorMath.shotDelaySeconds(10, 6.0, 0.5, 1.0), 0.0001);
+        assertEquals(1.0, CropGeneratorMath.shotDelaySeconds(12, 6.0, 0.5, 1.0), 0.0001);
         assertEquals(1, CropGeneratorMath.additionalHarvestItems(5, 0.1, 0.49));
         assertEquals(0, CropGeneratorMath.additionalHarvestItems(5, 0.1, 0.5));
         assertEquals(3, CropGeneratorMath.additionalHarvestItems(5, 0.5, 0.4));

@@ -100,8 +100,10 @@ items:
     slot: 16
     display-name: "&aCatalizador de Cultivos"
     lore:
-      - "&7Acelera el crecimiento de los cultivos de la isla."
-      - "&7Consume energía por cada etapa extra de crecimiento."
+      - "&7Acelera cultivos, cactus, caña, bambú y algas."
+      - "&7También ayuda a crecer árboles desde sus brotes."
+      - "&7Cada disparo consume energía si logra crecer algo."
+      - "&7El cooldown se reduce con cada nivel."
       - "&7Solo se puede colocar uno por isla."
       - "&7Puedes comprar cuantos repuestos quieras."
       - "&7Requiere Núcleo nivel &e%required_level%&7."
