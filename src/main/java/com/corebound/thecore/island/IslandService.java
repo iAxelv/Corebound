@@ -39,6 +39,8 @@ import org.bukkit.World;
 import org.bukkit.WorldBorder;
 import org.bukkit.block.structure.Mirror;
 import org.bukkit.block.structure.StructureRotation;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Enemy;
 import org.bukkit.entity.Player;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.WeatherType;
@@ -336,10 +338,47 @@ public final class IslandService {
     }
 
     public void refreshIslandEnvironment(IslandData island) {
+        if (!island.settings().hostileMobs()) {
+            removeHostileMobs(island);
+        }
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.getScheduler().run(plugin, task -> islandAt(player.getLocation())
                     .filter(current -> current.owner().equals(island.owner()))
                     .ifPresent(current -> applyPersonalEnvironment(player, island.settings())), null);
+        }
+    }
+
+    private void removeHostileMobs(IslandData island) {
+        int minChunkX = Math.floorDiv((int) Math.floor(island.centerX() - islandRadius), 16);
+        int maxChunkX = Math.floorDiv((int) Math.ceil(island.centerX() + islandRadius), 16);
+        int minChunkZ = Math.floorDiv((int) Math.floor(island.centerZ() - islandRadius), 16);
+        int maxChunkZ = Math.floorDiv((int) Math.ceil(island.centerZ() + islandRadius), 16);
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                int targetChunkX = chunkX;
+                int targetChunkZ = chunkZ;
+                Location location = new Location(world, chunkX * 16.0 + 8.0, world.getMinHeight(),
+                        chunkZ * 16.0 + 8.0);
+                try {
+                    plugin.getServer().getRegionScheduler().run(plugin, location, task -> {
+                        if (!world.isChunkLoaded(targetChunkX, targetChunkZ)) {
+                            return;
+                        }
+                        for (Entity entity : world.getChunkAt(targetChunkX, targetChunkZ).getEntities()) {
+                            if (entity instanceof Enemy
+                                    && islandAt(entity.getLocation())
+                                            .map(current -> current.index() == island.index())
+                                            .orElse(false)) {
+                                entity.remove();
+                            }
+                        }
+                    });
+                } catch (RuntimeException exception) {
+                    plugin.getLogger().log(Level.SEVERE,
+                            "Could not schedule hostile mob cleanup for island " + island.index() + ".",
+                            exception);
+                }
+            }
         }
     }
 

@@ -35,9 +35,10 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
-import org.bukkit.entity.Monster;
+import org.bukkit.entity.Enemy;
 import org.bukkit.entity.Projectile;
 import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.event.world.EntitiesLoadEvent;
 
 public final class IslandListener implements Listener {
     @FunctionalInterface
@@ -298,11 +299,21 @@ public final class IslandListener implements Listener {
         islandService.islandAt(event.getLocation()).ifPresent(island -> {
             IslandSettings settings = island.settings();
             if (event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.SPAWNER && !settings.spawners()
-                    || event.getEntity() instanceof Monster && !settings.hostileMobs()
-                    || !(event.getEntity() instanceof Monster) && !settings.passiveMobs()) {
+                    || event.getEntity() instanceof Enemy && !settings.hostileMobs()
+                    || !(event.getEntity() instanceof Enemy) && !settings.passiveMobs()) {
                 event.setCancelled(true);
             }
         });
+    }
+
+    @EventHandler
+    public void onEntitiesLoad(EntitiesLoadEvent event) {
+        event.getEntities().stream()
+                .filter(entity -> entity instanceof Enemy)
+                .filter(entity -> islandService.islandAt(entity.getLocation())
+                        .map(island -> !island.settings().hostileMobs())
+                        .orElse(false))
+                .forEach(org.bukkit.entity.Entity::remove);
     }
 
     private void protectBlock(Player player, Location location, Cancellation cancel) {
