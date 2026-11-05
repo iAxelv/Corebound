@@ -170,10 +170,14 @@ public final class CoreRepository {
         return upgraded;
     }
 
-    public synchronized void restoreEnergy(long islandIndex, double amount) {
+    public synchronized double restoreEnergy(long islandIndex, double amount) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null || !Double.isFinite(amount) || amount <= 0) {
-            return;
+            return 0;
+        }
+        double restored = Math.min(amount, Math.max(0, current.maxEnergy() - current.energy()));
+        if (restored <= 0) {
+            return 0;
         }
         cores.put(islandIndex, new CoreRecord(
                 current.islandIndex(),
@@ -185,7 +189,7 @@ public final class CoreRepository {
                 current.interactionId(),
                 current.textDisplayId(),
                 current.level(),
-                Math.min(current.maxEnergy(), current.energy() + amount),
+                current.energy() + restored,
                 current.hits(),
                 current.lastHitAt(),
                 current.upgradeOvercharge(),
@@ -199,6 +203,7 @@ public final class CoreRepository {
                 current.upgradeHitYield(),
                 current.upgradePylonYield()));
         save();
+        return restored;
     }
 
     public synchronized CoreRecord registerHit(long islandIndex, long now, long comboWindowMillis) {

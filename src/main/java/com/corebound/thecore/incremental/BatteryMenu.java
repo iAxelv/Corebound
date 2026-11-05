@@ -112,6 +112,12 @@ public final class BatteryMenu implements Listener {
         switch (event.getRawSlot()) {
             case CLOSE_SLOT -> player.closeInventory();
             case RUNES_SLOT -> openRunes(player, battery);
+            case ENERGY_SLOT -> {
+                if (batteries.transferEnergyToCore(player, holder.batteryId)) {
+                    player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
+                }
+                reopen(player, holder.batteryId, false);
+            }
             case UPGRADE_SLOT -> {
                 batteries.upgrade(player, holder.batteryId);
                 reopen(player, holder.batteryId, false);
@@ -394,7 +400,7 @@ public final class BatteryMenu implements Listener {
         return String.format(java.util.Locale.ROOT, "%.1f", energy);
     }
 
-    private String formatHours(double millis) {
-        return String.format(java.util.Locale.ROOT, "%.1f", millis / 3_600_000.0);
+    private String formatHours(int hours) {
+        return Integer.toString(hours);
     }
 }

@@ -625,6 +625,44 @@ public final class BatteryService {
         return withdrawnTotal;
     }
 
+    public boolean transferEnergyToCore(Player player, UUID batteryId) {
+        BatteryRecord battery = repository.get(batteryId);
+        if (battery == null || !canManage(player, battery)) {
+            return false;
+        }
+        CoreRecord core = coreRepository.core(battery.islandIndex());
+        if (core == null) {
+            messages.send(player, "core-already-placed");
+            return false;
+        }
+        double availableSpace = Math.max(0, core.maxEnergy() - core.energy());
+        if (availableSpace <= 0) {
+            messages.send(player, "battery-core-full");
+            return false;
+        }
+        if (battery.energy() <= 0) {
+            messages.send(player, "battery-empty");
+            return false;
+        }
+        double withdrawn = withdrawForCore(
+                battery.islandIndex(), Math.min(availableSpace, battery.energy()));
+        double transferred = coreRepository.restoreEnergy(battery.islandIndex(), withdrawn);
+        if (transferred < withdrawn) {
+            storeOverflow(battery.islandIndex(), withdrawn - transferred);
+        }
+        if (transferred <= 0) {
+            messages.send(player, "battery-core-full");
+            return false;
+        }
+        CoreRecord updatedCore = coreRepository.core(battery.islandIndex());
+        if (updatedCore != null) {
+            coreService.refreshCore(updatedCore, System.currentTimeMillis());
+        }
+        messages.send(player, "battery-energy-transferred", Map.of(
+                "energy", format(transferred)));
+        return true;
+    }
+
     private void refreshVisuals(BatteryRecord battery) {
         World world = plugin.getServer().getWorld(battery.worldId());
         if (world == null) {
