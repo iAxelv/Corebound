@@ -16,11 +16,13 @@ A Paper plugin for Corebound's island-world gameplay.
 
 On Windows, run `.\gradlew.bat test`.
 
-Every push runs the GitHub Actions build and tests, then uploads a downloadable
-beta JAR under the workflow run's **Artifacts** section. Names follow
-`Corebound-0.1.0-beta.N.jar`, where `N` increments for each workflow run. The
-artifact is retained for 30 days. Update the `0.1.0` base version in
-`.github/workflows/build.yml` when moving to a new release line.
+Build a beta JAR locally with an incremented version number:
+
+```powershell
+.\gradlew.bat test jar "-PpluginVersion=0.1.0-beta.1"
+```
+
+The JAR is written to `build/libs/`. Increment the beta number for each build.
 
 ## Run a local Paper server
 
