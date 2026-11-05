@@ -17,6 +17,7 @@ import com.corebound.thecore.island.IslandSounds;
 import com.corebound.thecore.island.IslandService;
 import com.corebound.thecore.listener.IslandListener;
 import com.corebound.thecore.message.Messages;
+import com.corebound.thecore.placeholder.CoreboundPlaceholderExpansion;
 import com.corebound.thecore.world.VoidChunkGenerator;
 import java.io.File;
 import java.io.IOException;
@@ -37,6 +38,7 @@ public final class TheCorePlugin extends JavaPlugin {
     private IslandSounds sounds;
     private IslandMenuManager menus;
     private IslandTopMenu topMenu;
+    private CoreboundPlaceholderExpansion placeholderExpansion;
 
     @Override
     public void onEnable() {
@@ -159,6 +161,14 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(coreService.astralTreeMenuListener(), this);
         getServer().getPluginManager().registerEvents(menus, this);
         getServer().getPluginManager().registerEvents(topMenu, this);
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            placeholderExpansion = new CoreboundPlaceholderExpansion(this, islandRepository, coreRepository);
+            if (placeholderExpansion.register()) {
+                getLogger().info("Registered PlaceholderAPI expansion.");
+            } else {
+                getLogger().severe("Could not register the PlaceholderAPI expansion.");
+            }
+        }
         coreService.initializeLoadedEntities();
         pylonService.initializeLoadedEntities();
         condenserService.initializeLoadedEntities();
@@ -169,6 +179,12 @@ public final class TheCorePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (placeholderExpansion != null) {
+            if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+                placeholderExpansion.unregister();
+            }
+            placeholderExpansion = null;
+        }
         if (islandRepository != null) {
             try {
                 islandRepository.flush();

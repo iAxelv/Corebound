@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.corebound"
-version = "0.1.0"
+version = providers.gradleProperty("pluginVersion").getOrElse("0.1.0")
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))
@@ -13,11 +13,13 @@ java {
 repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://maven.enginehub.org/repo/")
+    maven("https://repo.helpch.at/releases/")
     mavenCentral()
 }
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+    compileOnly("me.clip:placeholderapi:2.12.3")
     compileOnly("com.sk89q.worldedit:worldedit-bukkit:7.4.6")
     testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -42,10 +44,11 @@ tasks {
         minecraftVersion("26.2")
         downloadPlugins {
             modrinth("fastasyncworldedit", "JOyEqKdC")
+            modrinth("placeholderapi", "pIvQcXW8")
         }
     }
 
     jar {
-        archiveBaseName.set("TheCore")
+        archiveBaseName.set("Corebound")
     }
 }

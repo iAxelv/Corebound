@@ -5,6 +5,7 @@ api-version: '26.2'
 description: Corebound island foundation
 author: iAx3lv
 depend: [FastAsyncWorldEdit]
+softdepend: [PlaceholderAPI]
 commands:
   is:
     description: Create and manage your Corebound island

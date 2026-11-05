@@ -16,6 +16,12 @@ A Paper plugin for Corebound's island-world gameplay.
 
 On Windows, run `.\gradlew.bat test`.
 
+Every push runs the GitHub Actions build and tests, then uploads a downloadable
+beta JAR under the workflow run's **Artifacts** section. Names follow
+`Corebound-0.1.0-beta.N.jar`, where `N` increments for each workflow run. The
+artifact is retained for 30 days. Update the `0.1.0` base version in
+`.github/workflows/build.yml` when moving to a new release line.
+
 ## Run a local Paper server
 
 From the project directory, run:
@@ -25,7 +31,8 @@ From the project directory, run:
 ```
 
 The `runServer` task downloads and starts Paper 26.2 in the project's `run/`
-directory, installs the plugin, and downloads FastAsyncWorldEdit (FAWE) 2.16.2.
+directory, installs the plugin, and downloads FastAsyncWorldEdit (FAWE) 2.16.2
+and PlaceholderAPI.
 If prompted, accept the Minecraft EULA in `run/eula.txt` before starting the
 server. FAWE provides the WorldEdit API and is required to load `.schem` files.
 
@@ -52,6 +59,14 @@ weather and time are refreshed only on island entry or settings changes.
   language YAML files without restarting the server. Persistent `data/*.yml`
   files are intentionally not reloaded; changing the island world name still
   requires a restart.
+- Optional PlaceholderAPI integration. For the player passed to PlaceholderAPI,
+  `%thecore_island_name%` returns their island name (empty if they have no
+  island), `%thecore_core_energy%` returns stored Core energy,
+  `%thecore_island_energy_collected%` returns the island's accumulated energy,
+  and `%thecore_core_hits%` returns Core hits by its owner and members. Energy
+  values use compact formatting (for example, `1,2K`). Install PlaceholderAPI
+  on production servers to use them; nametag/tab plugins should resolve the
+  placeholders for the displayed player.
 - Island invitations/membership (`invite`, `accept`, `members`), coop access,
   kick/ban/unban, and owner-confirmed island deletion using a native dialog
 - Owner transfer, member ranks, rename, custom home spawn, and rank-based
