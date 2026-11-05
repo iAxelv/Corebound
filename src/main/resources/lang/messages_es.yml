@@ -324,7 +324,7 @@ crop-generator-ui:
   island-limit: "&7Solo se puede colocar uno por isla."
   pickup: "&8Mayús+clic derecho para recogerlo."
   hologram-name: "&aCatalizador de Cultivos &7[Nvl. %level%]"
-  hologram-state: "&7Estado: %color%%state%"
+  hologram-state: "&7Estado: %state%"
   hologram-shot: "&7Disparo: &e%seconds%s"
   hologram-cost: "&7Costo: &6%cost%⚡ por disparo"
   runes-title: "&bRunas del Catalizador"

@@ -1755,7 +1755,8 @@ public final class CropGeneratorService implements Listener {
                         "level", Integer.toString(generator.level()))))
                 .append(Component.newline())
                 .append(messages.parseComponent(messages.formatText("crop-generator-ui.hologram-state", Map.of(
-                        "state", stateLabel(generator.state())))))
+                        "state", stateLabel(generator.state()),
+                        "color", stateColor(generator.state())))))
                 .append(Component.newline())
                 .append(messages.parseComponent(messages.formatText("crop-generator-ui.hologram-shot", Map.of(
                         "seconds", CropGeneratorMath.formatSeconds(remainingShotTicks(generator) / 20.0)))))
@@ -1766,6 +1767,14 @@ public final class CropGeneratorService implements Listener {
 
     private String stateLabel(CondenserState state) {
         return menuText("main.state." + state.name().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private String stateColor(CondenserState state) {
+        return switch (state) {
+            case ACTIVE -> "&a";
+            case IDLE -> "&e";
+            case DISABLED -> "&c";
+        };
     }
 
     private void removeIfPresent(Entity entity) {
