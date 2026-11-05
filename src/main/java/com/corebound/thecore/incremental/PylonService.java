@@ -384,19 +384,14 @@ public final class PylonService {
 
     public CellType[] randomCellOffers() {
         CellType[] types = java.util.Arrays.stream(CellType.values())
-                .filter(type -> type.isPylonCell() || type.isBatteryRune())
-                .toArray(CellType[]::new);
-        CellType[] batteryRunes = java.util.Arrays.stream(CellType.values())
-                .filter(CellType::isBatteryRune)
+                .filter(type -> type.isPylonCell() || type.isRune())
                 .toArray(CellType[]::new);
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        CellType[] offers = new CellType[] {
+        return new CellType[] {
             types[random.nextInt(types.length)],
             types[random.nextInt(types.length)],
             types[random.nextInt(types.length)]
         };
-        offers[random.nextInt(offers.length)] = batteryRunes[random.nextInt(batteryRunes.length)];
-        return offers;
     }
 
     public CellType[] cellForgeOffers(long islandIndex) {
