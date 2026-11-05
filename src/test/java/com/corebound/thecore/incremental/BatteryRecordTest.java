@@ -33,6 +33,7 @@ class BatteryRecordTest {
                 1, UUID.randomUUID(), UUID.randomUUID(), 0, 0, 0,
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 1, 100, Map.of(), 3_600_000, 1_000);
+        battery = battery.withOfflineProgress(battery.energy(), battery.offlineMillis(), 1_000, 25);
 
         BatteryRecord checkpointed = battery.withOfflineProgress(
                 battery.energy(), battery.offlineMillis(), 61_000);
@@ -40,5 +41,9 @@ class BatteryRecordTest {
         assertEquals(100, checkpointed.energy());
         assertEquals(3_600_000, checkpointed.offlineMillis());
         assertEquals(61_000, checkpointed.lastOfflineCheck());
+        assertEquals(25, checkpointed.offlineEarnedEnergy());
+
+        BatteryRecord reset = checkpointed.withOfflineProgress(checkpointed.energy(), 0, 0, 0);
+        assertEquals(0, reset.offlineEarnedEnergy());
     }
 }

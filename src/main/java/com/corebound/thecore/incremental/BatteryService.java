@@ -67,6 +67,7 @@ public final class BatteryService {
     private final NamespacedKey entityIdKey;
     private final Set<UUID> onlinePlayers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> rangeGuidePlayers = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Long> pendingOfflineFeedbackIslands = new ConcurrentHashMap<>();
     private final Map<UUID, ScheduledTask> animationTasks = new ConcurrentHashMap<>();
     private final BatteryMenu menu;
     private volatile YamlConfiguration config;
@@ -480,11 +481,19 @@ public final class BatteryService {
     }
 
     public void onPlayerJoin(Player player) {
-        onlinePlayers.add(player.getUniqueId());
-        if (!rangeGuidePlayers.add(player.getUniqueId())) {
-            return;
+        UUID playerId = player.getUniqueId();
+        IslandData island = islandService.islandForMember(playerId).orElse(null);
+        CoreRecord core = island == null ? null : coreRepository.core(island.index());
+        boolean shouldSendOfflineFeedback = island != null
+                && core != null
+                && !repository.forIsland(island.index()).isEmpty()
+                && pylons.offlineYieldPerSecond(island.index()) > 0;
+        if (shouldSendOfflineFeedback) {
+            pendingOfflineFeedbackIslands.put(playerId, island.index());
         }
-        if (player.getScheduler().runAtFixedRate(
+        onlinePlayers.add(playerId);
+        if (rangeGuidePlayers.add(playerId)
+                && player.getScheduler().runAtFixedRate(
                         plugin,
                         task -> {
                             if (player.isOnline()
@@ -498,10 +507,35 @@ public final class BatteryService {
                 == null) {
             rangeGuidePlayers.remove(player.getUniqueId());
         }
+        if (shouldSendOfflineFeedback) {
+            World world = plugin.getServer().getWorld(core.worldId());
+            if (world == null) {
+                pendingOfflineFeedbackIslands.remove(playerId, island.index());
+                return;
+            }
+            Location location = new Location(world, core.x(), core.y(), core.z());
+            try {
+                plugin.getServer().getRegionScheduler().run(plugin, location, task -> {
+                    try {
+                        processOfflineGeneration(island, Set.copyOf(onlinePlayers), System.currentTimeMillis());
+                    } catch (RuntimeException exception) {
+                        plugin.getLogger().log(Level.SEVERE,
+                                "Could not process offline battery feedback for island " + island.index() + ".",
+                                exception);
+                    }
+                });
+            } catch (RuntimeException exception) {
+                pendingOfflineFeedbackIslands.remove(playerId, island.index());
+                plugin.getLogger().log(Level.SEVERE,
+                        "Could not schedule offline battery feedback for island " + island.index() + ".",
+                        exception);
+            }
+        }
     }
 
     public void onPlayerQuit(Player player) {
         onlinePlayers.remove(player.getUniqueId());
+        pendingOfflineFeedbackIslands.remove(player.getUniqueId());
     }
 
     private void processOfflineGeneration() {
@@ -539,21 +573,39 @@ public final class BatteryService {
 
     private void processOfflineGeneration(IslandData island, Set<UUID> onlineSnapshot, long now) {
         List<BatteryRecord> islandBatteries = repository.forIsland(island.index());
+        List<UUID> joiningPlayers = pendingOfflineFeedbackIslands.entrySet().stream()
+                .filter(entry -> entry.getValue() == island.index())
+                .map(Map.Entry::getKey)
+                .toList();
         if (islandBatteries.isEmpty()) {
+            joiningPlayers.forEach(playerId -> pendingOfflineFeedbackIslands.remove(playerId, island.index()));
             return;
         }
-        boolean islandOnline = onlineSnapshot.contains(island.owner())
-                || island.members().keySet().stream().anyMatch(onlineSnapshot::contains);
         CoreRecord core = coreRepository.core(island.index());
         if (core == null) {
+            joiningPlayers.forEach(playerId -> pendingOfflineFeedbackIslands.remove(playerId, island.index()));
+            return;
+        }
+        Set<UUID> joiningPlayerIds = Set.copyOf(joiningPlayers);
+        boolean islandOnline = onlineSnapshot.contains(island.owner())
+                || island.members().keySet().stream().anyMatch(onlineSnapshot::contains);
+        if (!joiningPlayers.isEmpty()) {
+            boolean islandWasAlreadyOnline = onlineSnapshot.contains(island.owner())
+                            && !joiningPlayerIds.contains(island.owner())
+                    || island.members().keySet().stream()
+                            .anyMatch(member -> onlineSnapshot.contains(member)
+                                    && !joiningPlayerIds.contains(member));
+            double pylonRate = pylons.offlineYieldPerSecond(island.index());
+            if (!islandWasAlreadyOnline && pylonRate > 0) {
+                generateOfflineEnergy(island.index(), islandBatteries, core, pylonRate, now);
+                sendOfflineFeedback(joiningPlayers, island, core);
+            }
+            resetOfflineProgress(repository.forIsland(island.index()));
+            joiningPlayers.forEach(playerId -> pendingOfflineFeedbackIslands.remove(playerId, island.index()));
             return;
         }
         if (islandOnline) {
-            for (BatteryRecord battery : islandBatteries) {
-                if (battery.offlineMillis() != 0 || battery.lastOfflineCheck() != 0) {
-                    repository.update(battery.withOfflineProgress(battery.energy(), 0, 0));
-                }
-            }
+            resetOfflineProgress(islandBatteries);
             return;
         }
         double pylonRate = pylons.offlineYieldPerSecond(island.index());
@@ -566,6 +618,11 @@ public final class BatteryService {
             }
             return;
         }
+        generateOfflineEnergy(island.index(), islandBatteries, core, pylonRate, now);
+    }
+
+    private void generateOfflineEnergy(
+            long islandIndex, List<BatteryRecord> islandBatteries, CoreRecord core, double pylonRate, long now) {
         long maximumOfflineMillis = maximumOfflineHours(core) * 3_600_000L;
         double perBatteryBaseRate = pylonRate / islandBatteries.size() * offlineEfficiency;
         for (BatteryRecord battery : islandBatteries) {
@@ -579,17 +636,55 @@ public final class BatteryService {
             double stored = Math.min(requested, Math.max(0, capacity - battery.energy()));
             long newOfflineMillis = Math.min(maximumOfflineMillis, battery.offlineMillis() + elapsed);
             BatteryRecord updated = battery.withOfflineProgress(
-                    battery.energy() + stored, newOfflineMillis, now);
+                    battery.energy() + stored,
+                    newOfflineMillis,
+                    now,
+                    battery.offlineEarnedEnergy() + stored);
             if (updated.energy() != battery.energy()
                     || updated.offlineMillis() != battery.offlineMillis()
-                    || updated.lastOfflineCheck() != battery.lastOfflineCheck()) {
+                    || updated.lastOfflineCheck() != battery.lastOfflineCheck()
+                    || updated.offlineEarnedEnergy() != battery.offlineEarnedEnergy()) {
                 repository.update(updated);
                 if (stored > 0) {
-                    coreRepository.recordGeneratedEnergy(island.index(), stored);
+                    coreRepository.recordGeneratedEnergy(islandIndex, stored);
                 }
                 refreshVisuals(updated);
             }
         }
+    }
+
+    private void resetOfflineProgress(List<BatteryRecord> islandBatteries) {
+        for (BatteryRecord battery : islandBatteries) {
+            if (battery.offlineMillis() != 0
+                    || battery.lastOfflineCheck() != 0
+                    || battery.offlineEarnedEnergy() != 0) {
+                repository.update(battery.withOfflineProgress(battery.energy(), 0, 0, 0));
+            }
+        }
+    }
+
+    private void sendOfflineFeedback(List<UUID> playerIds, IslandData island, CoreRecord core) {
+        List<BatteryRecord> batteries = repository.forIsland(island.index());
+        double earnedEnergy = batteries.stream().mapToDouble(BatteryRecord::offlineEarnedEnergy).sum();
+        long offlineMillis = batteries.stream().mapToLong(BatteryRecord::offlineMillis).max().orElse(0);
+        if (earnedEnergy <= 0 || offlineMillis <= 0) {
+            return;
+        }
+        Map<String, String> replacements = Map.of(
+                "hours", formatOfflineHours(offlineMillis),
+                "energy", format(earnedEnergy),
+                "maximum_hours", Integer.toString(maximumOfflineHours(core)));
+        for (UUID playerId : playerIds) {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null) {
+                player.getScheduler().run(
+                        plugin, task -> messages.send(player, "battery-offline-reward", replacements), null);
+            }
+        }
+    }
+
+    private String formatOfflineHours(long offlineMillis) {
+        return String.format(java.util.Locale.ROOT, "%.2f", offlineMillis / 3_600_000.0);
     }
 
     public double storeOverflow(long islandIndex, double amount) {

@@ -114,6 +114,7 @@ public final class BatteryRepository {
                 yaml.set(path + ".energy", battery.energy());
                 yaml.set(path + ".offline-millis", battery.offlineMillis());
                 yaml.set(path + ".last-offline-check", battery.lastOfflineCheck());
+                yaml.set(path + ".offline-earned-energy", battery.offlineEarnedEnergy());
                 for (Map.Entry<Integer, CellRecord> rune : battery.runes().entrySet()) {
                     String runePath = path + ".runes." + rune.getKey();
                     yaml.set(runePath + ".type", rune.getValue().type().name());
@@ -177,7 +178,8 @@ public final class BatteryRepository {
                     battery.getDouble("energy"),
                     runes,
                     battery.getLong("offline-millis"),
-                    battery.getLong("last-offline-check")));
+                    battery.getLong("last-offline-check"),
+                    battery.getDouble("offline-earned-energy")));
         }
     }
 }
