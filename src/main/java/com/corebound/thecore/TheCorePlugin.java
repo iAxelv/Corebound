@@ -2,6 +2,7 @@ package com.corebound.thecore;
 
 import com.corebound.thecore.command.CoreCommand;
 import com.corebound.thecore.gui.IslandMenuManager;
+import com.corebound.thecore.gui.IslandTopMenu;
 import com.corebound.thecore.incremental.CorePlaceListener;
 import com.corebound.thecore.incremental.CoreRepository;
 import com.corebound.thecore.incremental.CoreService;
@@ -26,6 +27,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class TheCorePlugin extends JavaPlugin {
     private IslandRepository islandRepository;
+    private CoreRepository coreRepository;
     private IslandService islandService;
     private CoreService coreService;
     private PylonService pylonService;
@@ -34,6 +36,7 @@ public final class TheCorePlugin extends JavaPlugin {
     private Messages messages;
     private IslandSounds sounds;
     private IslandMenuManager menus;
+    private IslandTopMenu topMenu;
 
     @Override
     public void onEnable() {
@@ -42,6 +45,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("is/is_settings.yml");
         saveResourceIfMissing("is/is_members.yml");
         saveResourceIfMissing("is/is_perms.yml");
+        saveResourceIfMissing("is/is_top.yml");
         saveResourceIfMissing("core/core.yml");
         saveResourceIfMissing("core/core_menu.yml");
         saveResourceIfMissing("core/core_upgrades.yml");
@@ -80,7 +84,7 @@ public final class TheCorePlugin extends JavaPlugin {
         sounds = new IslandSounds(this);
         islandService = new IslandService(this, islandWorld, islandRepository, messages, sounds);
         try {
-            CoreRepository coreRepository = new CoreRepository(new File(getDataFolder(), "data/cores.yml"), this);
+            coreRepository = new CoreRepository(new File(getDataFolder(), "data/cores.yml"), this);
             coreService = new CoreService(
                     this,
                     islandService,
@@ -123,7 +127,8 @@ public final class TheCorePlugin extends JavaPlugin {
             return;
         }
         menus = new IslandMenuManager(this, islandRepository, islandService, messages, sounds);
-        CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages, menus);
+        topMenu = new IslandTopMenu(this, islandRepository, coreRepository, messages);
+        CoreCommand coreCommand = new CoreCommand(this, islandService, islandRepository, messages, menus, topMenu);
         if (getCommand("is") == null) {
             getLogger().severe("The /is command is missing from plugin.yml.");
             getServer().getPluginManager().disablePlugin(this);
@@ -153,6 +158,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(coreService.upgradesMenuListener(), this);
         getServer().getPluginManager().registerEvents(coreService.astralTreeMenuListener(), this);
         getServer().getPluginManager().registerEvents(menus, this);
+        getServer().getPluginManager().registerEvents(topMenu, this);
         coreService.initializeLoadedEntities();
         pylonService.initializeLoadedEntities();
         condenserService.initializeLoadedEntities();
@@ -223,6 +229,7 @@ public final class TheCorePlugin extends JavaPlugin {
         messages.reload();
         sounds.reload();
         menus.reload();
+        topMenu.reload();
         coreService.reloadConfiguration();
         pylonService.reloadConfiguration();
         condenserService.reloadConfiguration();

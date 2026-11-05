@@ -1,6 +1,7 @@
 package com.corebound.thecore.command;
 
 import com.corebound.thecore.TheCorePlugin;
+import com.corebound.thecore.gui.IslandTopMenu;
 import com.corebound.thecore.gui.IslandMenuManager;
 import com.corebound.thecore.island.IslandData;
 import com.corebound.thecore.island.IslandPermission;
@@ -26,25 +27,28 @@ import org.bukkit.entity.Player;
 public final class CoreCommand implements CommandExecutor, TabCompleter {
     private static final List<String> SUBCOMMANDS = List.of(
             "create", "home", "visit", "invite", "accept", "coop", "open", "close",
-            "settings", "members", "delete", "leave", "kick", "ban", "unban", "bypass",
+            "settings", "members", "top", "delete", "leave", "kick", "ban", "unban", "bypass",
             "chat", "perms", "transfer", "promote", "demote", "setspawn", "rename");
     private final TheCorePlugin plugin;
     private final IslandService islandService;
     private final IslandRepository repository;
     private final Messages messages;
     private final IslandMenuManager menus;
+    private final IslandTopMenu topMenu;
 
     public CoreCommand(
             TheCorePlugin plugin,
             IslandService islandService,
             IslandRepository repository,
             Messages messages,
-            IslandMenuManager menus) {
+            IslandMenuManager menus,
+            IslandTopMenu topMenu) {
         this.plugin = plugin;
         this.islandService = islandService;
         this.repository = repository;
         this.messages = messages;
         this.menus = menus;
+        this.topMenu = topMenu;
     }
 
     @Override
@@ -93,6 +97,7 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
             case "bypass" -> bypass(player, args);
             case "settings" -> openSettings(player, args);
             case "members" -> openMembers(player, args);
+            case "top" -> openTop(player, args);
             case "delete" -> delete(player, args);
             case "leave" -> leave(player, args);
             case "kick" -> memberAction(player, args, MemberAction.KICK);
@@ -336,6 +341,14 @@ public final class CoreCommand implements CommandExecutor, TabCompleter {
         } else {
             menus.openMembers(player, island.get(), 0);
         }
+    }
+
+    private void openTop(Player player, String[] args) {
+        if (args.length != 1) {
+            messages.send(player, "usage");
+            return;
+        }
+        topMenu.open(player);
     }
 
     private void delete(Player player, String[] args) {

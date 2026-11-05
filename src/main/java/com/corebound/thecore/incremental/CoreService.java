@@ -676,7 +676,11 @@ public final class CoreService {
         long activeComboWindow = previous == null ? comboWindowMillis : previous.comboWindowMillis(comboWindowMillis);
         double eventMultiplier = energyMultiplier(islandIndex, now);
         CoreRecord.HitResult hitResult = repository.registerHitResult(
-                islandIndex, now, activeComboWindow, eventMultiplier);
+                islandIndex,
+                now,
+                activeComboWindow,
+                eventMultiplier,
+                island.owner().equals(player.getUniqueId()) || island.members().containsKey(player.getUniqueId()));
         if (hitResult == null) {
             return;
         }

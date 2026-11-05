@@ -25,6 +25,8 @@ public final class CoreRepository {
     private final Object writeLock = new Object();
     private final AtomicLong version = new AtomicLong();
     private final Map<Long, CoreRecord> cores = new HashMap<>();
+    private final Map<Long, Double> generatedEnergy = new HashMap<>();
+    private final Map<Long, Long> topHits = new HashMap<>();
     private final Set<UUID> pendingItems = new HashSet<>();
 
     public CoreRepository(File file, JavaPlugin plugin) {
@@ -43,6 +45,14 @@ public final class CoreRepository {
 
     public synchronized List<CoreRecord> allCores() {
         return List.copyOf(cores.values());
+    }
+
+    public synchronized double generatedEnergy(long islandIndex) {
+        return generatedEnergy.getOrDefault(islandIndex, 0.0);
+    }
+
+    public synchronized long topHits(long islandIndex) {
+        return topHits.getOrDefault(islandIndex, 0L);
     }
 
     public synchronized void addCore(CoreRecord core) {
@@ -170,12 +180,24 @@ public final class CoreRepository {
 
     public synchronized CoreRecord.HitResult registerHitResult(
             long islandIndex, long now, long comboWindowMillis, double yieldRatio) {
+        return registerHitResult(islandIndex, now, comboWindowMillis, yieldRatio, true);
+    }
+
+    public synchronized CoreRecord.HitResult registerHitResult(
+            long islandIndex, long now, long comboWindowMillis, double yieldRatio, boolean countForTop) {
         CoreRecord current = cores.get(islandIndex);
         if (current == null) {
             return null;
         }
         CoreRecord.HitResult result = current.withHitResult(now, comboWindowMillis, yieldRatio);
         cores.put(islandIndex, result.core());
+        double energyGained = result.core().energy() - current.energy();
+        if (energyGained > 0) {
+            generatedEnergy.merge(islandIndex, energyGained, Double::sum);
+        }
+        if (countForTop) {
+            topHits.merge(islandIndex, 1L, Long::sum);
+        }
         save();
         return result;
     }
@@ -187,6 +209,10 @@ public final class CoreRepository {
         }
         CoreRecord updated = current.withPassiveEnergy(amount);
         cores.put(islandIndex, updated);
+        double energyGained = updated.energy() - current.energy();
+        if (energyGained > 0) {
+            generatedEnergy.merge(islandIndex, energyGained, Double::sum);
+        }
         save();
         return updated;
     }
@@ -235,7 +261,8 @@ public final class CoreRepository {
     }
 
     private Snapshot snapshot() {
-        return new Snapshot(Map.copyOf(cores), Set.copyOf(pendingItems));
+        return new Snapshot(
+                Map.copyOf(cores), Map.copyOf(generatedEnergy), Map.copyOf(topHits), Set.copyOf(pendingItems));
     }
 
     private void writeSnapshot(Snapshot snapshot, long snapshotVersion) throws IOException {
@@ -267,6 +294,12 @@ public final class CoreRepository {
                 yaml.set(path + ".upgrade-capacity", core.upgradeCapacity());
                 yaml.set(path + ".upgrade-hit-yield", core.upgradeHitYield());
                 yaml.set(path + ".upgrade-pylon-yield", core.upgradePylonYield());
+            }
+            for (Map.Entry<Long, Double> entry : snapshot.generatedEnergy().entrySet()) {
+                yaml.set("island-stats." + entry.getKey() + ".generated-energy", entry.getValue());
+            }
+            for (Map.Entry<Long, Long> entry : snapshot.topHits().entrySet()) {
+                yaml.set("island-stats." + entry.getKey() + ".core-hits", entry.getValue());
             }
             yaml.set("pending-items", snapshot.pendingItems().stream().map(id -> id.toString()).toList());
             Path target = file.toPath();
@@ -324,11 +357,33 @@ public final class CoreRepository {
                         core.getInt("upgrade-pylon-yield", 0)));
             }
         }
+        ConfigurationSection stats = yaml.getConfigurationSection("island-stats");
+        if (stats != null) {
+            for (String indexKey : stats.getKeys(false)) {
+                ConfigurationSection islandStats = stats.getConfigurationSection(indexKey);
+                if (islandStats == null) {
+                    continue;
+                }
+                long index = Long.parseLong(indexKey);
+                double energy = islandStats.getDouble("generated-energy", 0.0);
+                long hits = islandStats.getLong("core-hits", 0L);
+                if (Double.isFinite(energy) && energy > 0) {
+                    generatedEnergy.put(index, energy);
+                }
+                if (hits > 0) {
+                    topHits.put(index, hits);
+                }
+            }
+        }
         for (String playerId : yaml.getStringList("pending-items")) {
             pendingItems.add(UUID.fromString(playerId));
         }
     }
 
-    private record Snapshot(Map<Long, CoreRecord> cores, Set<UUID> pendingItems) {
+    private record Snapshot(
+            Map<Long, CoreRecord> cores,
+            Map<Long, Double> generatedEnergy,
+            Map<Long, Long> topHits,
+            Set<UUID> pendingItems) {
     }
 }
