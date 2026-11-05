@@ -1,4 +1,4 @@
-title: "&5Gestión del Núcleo"
+title: "&5Core Management"
 rows: 6
 items:
   upgrades:
@@ -6,165 +6,165 @@ items:
     slot: 10
     display-name: "&dUpgrades"
     lore:
-      - "&7Permite mejorar aspectos del Núcleo."
+      - "&7Upgrade different aspects of the Core."
       - ""
-      - "&eHaz clic para mejorar el Núcleo."
+      - "&eClick to upgrade the Core."
   statistics:
     material: CRYING_OBSIDIAN
     slot: 4
-    display-name: "&dEstado del Núcleo"
+    display-name: "&dCore Status"
     lore:
-      - "&7Nivel: &e%level%&7/&e%max_level%"
-      - "&7Fracturas: &d%prestige% &8(&a+%prestige_bonus%% producción&8)"
-      - "&7Fragmentos del Núcleo: &b%fragments%"
-      - "&7Energía: &6%energy%&7/&6%max_energy%⚡"
-      - "&7Producción base: &a+%base_energy%⚡/golpe"
-      - "&7Capacidad adicional: &b+%capacity_bonus%%"
-      - "&7Multiplicador máximo de combo: &bx%max_combo%"
-      - "&7Pilones permitidos: &e%pylons%"
+      - "&7Level: &e%level%&7/&e%max_level%"
+      - "&7Fractures: &d%prestige% &8(&a+%prestige_bonus%% production&8)"
+      - "&7Core Fragments: &b%fragments%"
+      - "&7Energy: &6%energy%&7/&6%max_energy%⚡"
+      - "&7Base production: &a+%base_energy%⚡/hit"
+      - "&7Bonus capacity: &b+%capacity_bonus%%"
+      - "&7Maximum combo multiplier: &bx%max_combo%"
+      - "&7Pylons allowed: &e%pylons%"
   fracture:
     material: NETHER_STAR
     slot: 51
-    display-name: "&d&lFRACTURA DIMENSIONAL"
+    display-name: "&d&lDIMENSIONAL FRACTURE"
     lore:
-      - "&7Reinicia tu Núcleo a Nivel 1."
-      - "&aBonus permanente: +50% de producción global."
-      - "&7Prestigios: &d%prestige%"
-      - "&7Fragmentos del Núcleo: &b%fragments%"
-      - "&cLos Pilones y sus células serán destruidos."
+      - "&7Resets your Core to Level 1."
+      - "&aPermanent bonus: +50% global production."
+      - "&7Prestiges: &d%prestige%"
+      - "&7Core Fragments: &b%fragments%"
+      - "&cPylons and their Cells will be destroyed."
       - ""
-      - "&eHaz clic para colapsar el Núcleo."
+      - "&eClick to fracture the Core."
     locked-material: BARRIER
-    locked-name: "&cFractura bloqueada"
+    locked-name: "&cFracture Locked"
     locked-lore:
-      - "&cRequiere Núcleo nivel &e%max_level%&c."
-      - "&7Nivel actual: &e%level%"
+      - "&cRequires Core level &e%max_level%&c."
+      - "&7Current level: &e%level%"
   astral-tree:
     material: NETHERITE_UPGRADE_SMITHING_TEMPLATE
     slot: 12
-    display-name: "&5Árbol de Fracturas"
+    display-name: "&5Fracture Tree"
     lore:
-      - "&7Desbloquea habilidades astrales con Fragmentos del Núcleo."
+      - "&7Unlock astral skills with Core Fragments."
       - ""
-      - "&eHaz clic para explorar el árbol."
+      - "&eClick to explore the tree."
   pylon:
     material: SEA_LANTERN
     slot: 15
-    display-name: "&bForjar Pilón I"
+    display-name: "&bForge Pylon I"
     lore:
-      - "&7Costo: &6%cost%⚡"
-      - "&7Pilones colocados: &e%placed_pylons%&7/&e%pylons%"
+      - "&7Cost: &6%cost%⚡"
+      - "&7Pylons placed: &e%placed_pylons%&7/&e%pylons%"
       - ""
-      - "&eHaz clic para forjar."
+      - "&eClick to forge."
     locked-material: BARRIER
-    locked-name: "&cPilón bloqueado"
+    locked-name: "&cPylon Locked"
     locked-lore:
-      - "&cRequiere Núcleo nivel &e3&c."
+      - "&cRequires Core level &e3&c."
   cell-forge:
     material: ENCHANTING_TABLE
     slot: 11
-    display-name: "&5Forja Elemental"
+    display-name: "&5Elemental Forge"
     lore:
-      - "&7Sintetiza células elementales y runas."
+      - "&7Forge elemental Cells and Runes."
       - ""
-      - "&eHaz clic para abrir la forja."
+      - "&eClick to open the forge."
     locked-material: BARRIER
-    locked-name: "&cForja bloqueada"
+    locked-name: "&cForge Locked"
     locked-lore:
-      - "&cRequiere Núcleo nivel &e5&c."
+      - "&cRequires Core level &e5&c."
   condenser:
     material: BLAST_FURNACE
     slot: 14
-    display-name: "&bCondensador de Materia"
+    display-name: "&bMatter Condenser"
     lore:
-      - "&7Convierte generadores de piedra en minerales."
-      - "&7Solo puedes colocar uno por isla a la vez."
-      - "&7Puedes comprar cuantos repuestos quieras."
-      - "&7Costo: &6%cost%⚡"
-      - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
+      - "&7Turns cobblestone generators into ores."
+      - "&7Only one can be placed per island at a time."
+      - "&7You can buy as many replacements as you like."
+      - "&7Cost: &6%cost%⚡"
+      - "&7Placement range: &e%min_distance%-%max_distance% blocks"
       - ""
-      - "&eHaz clic para comprar un condensador."
+      - "&eClick to buy a Condenser."
     locked-material: BARRIER
-    locked-name: "&cCondensador ya colocado"
+    locked-name: "&cCondenser Already Placed"
     locked-lore:
-      - "&7Solo se permite uno por isla."
+      - "&7Only one is allowed per island."
     level-locked-material: BARRIER
-    level-locked-name: "&cCondensador bloqueado"
+    level-locked-name: "&cCondenser Locked"
     level-locked-lore:
-      - "&cRequiere Núcleo nivel &e%required_level%&c."
+      - "&cRequires Core level &e%required_level%&c."
   crop-generator:
     material: COMPOSTER
     slot: 16
-    display-name: "&aCatalizador de Cultivos"
+    display-name: "&aCrop Catalyst"
     lore:
-      - "&7Acelera cultivos, cactus, caña, bambú y algas."
-      - "&7También ayuda a crecer árboles desde sus brotes."
-      - "&7Cada disparo consume energía si logra crecer algo."
-      - "&7El cooldown se reduce con cada nivel."
-      - "&7Solo se puede colocar uno por isla."
-      - "&7Puedes comprar cuantos repuestos quieras."
-      - "&7Costo: &6%cost%⚡"
-      - "&7Rango de colocación: &e%min_distance%-%max_distance% bloques"
+      - "&7Accelerates crops, cacti, sugar cane, bamboo, and kelp."
+      - "&7Also helps trees grow from their saplings."
+      - "&7Each shot consumes energy if it grows something."
+      - "&7Cooldown decreases with each level."
+      - "&7Only one can be placed per island."
+      - "&7You can buy as many replacements as you like."
+      - "&7Cost: &6%cost%⚡"
+      - "&7Placement range: &e%min_distance%-%max_distance% blocks"
       - ""
-      - "&eHaz clic para comprar."
+      - "&eClick to buy."
     locked-material: BARRIER
-    locked-name: "&cCatalizador bloqueado"
+    locked-name: "&cCatalyst Locked"
     locked-lore:
-      - "&cRequiere Núcleo nivel &e%required_level%&c."
+      - "&cRequires Core level &e%required_level%&c."
   sacrifice:
     material: SCULK_CATALYST
     slot: 21
-    display-name: "&5Sacrificio"
+    display-name: "&5Sacrifice"
     lore:
-      - "&7Intercambia minerales y cultivos por esencias."
+      - "&7Exchange minerals and crops for Essence."
       - ""
       - "&7Balance: &b%mineral_balance% %mineral_name%"
       - "&7Balance: &a%vegetal_balance% %vegetal_name%"
       - ""
-    preview-header: "&eMateriales en tu inventario:"
+    preview-header: "&eMaterials in your inventory:"
     preview-item: "&7%name% x%amount% &8→ &f%value% %essence_name%"
-    empty-preview: "&8No tienes materiales para sacrificar."
-    total-mineral: "&7Recibirás: &b%value% %mineral_name%"
-    total-vegetal: "&7Recibirás: &a%value% %vegetal_name%"
+    empty-preview: "&8You have no materials to sacrifice."
+    total-mineral: "&7You will receive: &b%value% %mineral_name%"
+    total-vegetal: "&7You will receive: &a%value% %vegetal_name%"
     click-lore:
       - ""
-      - "&eHaz clic para sacrificar los materiales."
+      - "&eClick to sacrifice the materials."
   battery:
     material: COPPER_BLOCK
     slot: 23
-    display-name: "&bBatería de Resonancia"
+    display-name: "&bResonance Battery"
     lore:
-      - "&7Almacena energía cuando el Núcleo está lleno."
-      - "&7Cada batería guarda el 50% de la capacidad del Núcleo."
-      - "&7Energía offline: &e75% &7durante un máximo de &e%offline_hours%h&7."
-      - "&7Baterías colocadas: &e%placed%&7/&e%capacity%"
-      - "&7Costo: &6%cost%⚡"
+      - "&7Stores energy when the Core is full."
+      - "&7Each Battery stores 50% of the Core's capacity."
+      - "&7Offline energy: &e75% &7for up to &e%offline_hours%h&7."
+      - "&7Batteries placed: &e%placed%&7/&e%capacity%"
+      - "&7Cost: &6%cost%⚡"
       - ""
-      - "&eHaz clic para comprar una batería."
+      - "&eClick to buy a Battery."
     locked-material: BARRIER
-    locked-name: "&cBatería bloqueada"
+    locked-name: "&cBattery Locked"
     locked-lore:
-      - "&cRequiere Núcleo nivel &e%required_level%&c."
+      - "&cRequires Core level &e%required_level%&c."
   upgrade:
     material: NETHER_STAR
     slot: 47
-    display-name: "&aMejorar Núcleo &7(Nvl. %next_level%)"
+    display-name: "&aUpgrade Core &7(Lv. %next_level%)"
     lore-enough:
-      - "&7Costo: &6%cost%⚡"
-      - "&7Nueva base: &a+%next_base%⚡/golpe"
+      - "&7Cost: &6%cost%⚡"
+      - "&7New base: &a+%next_base%⚡/hit"
       - " "
-      - "&e¡Haz clic para mejorar!"
+      - "&eClick to upgrade!"
     lore-insufficient:
-      - "&7Costo: &6%cost%⚡"
-      - "&7Nueva base: &a+%next_base%⚡/golpe"
+      - "&7Cost: &6%cost%⚡"
+      - "&7New base: &a+%next_base%⚡/hit"
       - " "
-      - "&cEnergía insuficiente."
-    display-name-max-level: "&aNúcleo al máximo &7(%max_level%)"
+      - "&cNot enough energy."
+    display-name-max-level: "&aCore Maxed &7(%max_level%)"
     lore-max-level:
-      - "&7Has alcanzado el nivel máximo del Núcleo."
+      - "&7You have reached the Core's maximum level."
   close:
     material: ARROW
     slot: 49
-    display-name: "&cCerrar"
+    display-name: "&cClose"
     lore:
-      - "&7Cierra el menú del Núcleo."
+      - "&7Close the Core menu."

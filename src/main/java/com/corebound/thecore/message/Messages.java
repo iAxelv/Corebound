@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.Map;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import net.kyori.adventure.text.Component;
@@ -15,27 +17,43 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 public final class Messages {
-    private final File file;
-    private final YamlConfiguration defaults;
+    private static final Set<String> SUPPORTED_LANGUAGES = Set.of("EN_en", "ES_es");
+    private final File directory;
+    private final JavaPlugin plugin;
     private YamlConfiguration messages;
 
-    public Messages(File file, InputStream defaults) {
-        this.file = file;
-        if (defaults == null) {
-            throw new IllegalStateException("Bundled default messages are missing.");
-        }
-        try (InputStreamReader reader = new InputStreamReader(defaults, StandardCharsets.UTF_8)) {
-            this.defaults = YamlConfiguration.loadConfiguration(reader);
-        } catch (IOException exception) {
-            throw new IllegalStateException("Could not load bundled default messages.", exception);
-        }
-        reload();
+    public Messages(File directory, JavaPlugin plugin, String language) {
+        this.directory = directory;
+        this.plugin = plugin;
+        reload(language);
     }
 
-    public void reload() {
+    public void reload(String language) {
+        validateLanguage(language);
+        File file = new File(directory, language + ".yml");
         YamlConfiguration loaded = ConfigFiles.load(file);
-        loaded.setDefaults(defaults);
+        loaded.setDefaults(loadDefaults(language));
         messages = loaded;
+    }
+
+    public static void validateLanguage(String language) {
+        if (!SUPPORTED_LANGUAGES.contains(language)) {
+            throw new IllegalArgumentException(
+                    "Unsupported language '" + language + "'. Supported languages: " + SUPPORTED_LANGUAGES + ".");
+        }
+    }
+
+    private YamlConfiguration loadDefaults(String language) {
+        validateLanguage(language);
+        InputStream input = plugin.getResource("lang/" + language + ".yml");
+        if (input == null) {
+            throw new IllegalStateException("Bundled default messages are missing for " + language + ".");
+        }
+        try (InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
+            return YamlConfiguration.loadConfiguration(reader);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not load bundled default messages for " + language + ".", exception);
+        }
     }
 
     public void send(CommandSender recipient, String key) {

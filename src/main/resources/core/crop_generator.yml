@@ -30,7 +30,7 @@ crop-generator:
       '3': 6
   menus:
     main:
-      title: "&5Catalizador de Cultivos"
+      title: "&5Crop Catalyst"
       slots:
         info: 4
         state: 20
@@ -39,44 +39,44 @@ crop-generator:
         close: 40
       info:
         material: BOOK
-        name: "&aCatalizador &7[Nivel %level%/%max_level%]"
+        name: "&aCatalyst &7[Level %level%/%max_level%]"
         lore:
           - "&7Cooldown: &e%shot_delay%s"
-          - "&7Costo por disparo: &6%energy_cost%⚡"
-          - "&7Bonificación de cosecha: &e+%harvest%%"
+          - "&7Cost per shot: &6%energy_cost%⚡"
+          - "&7Harvest bonus: &e+%harvest%%"
       state:
         material: LEVER
-        name: "&aEstado del generador"
+        name: "&aGenerator Status"
         active: "&aACTIVE"
         idle: "&eIDLE"
-        disabled: "&cDISABLE"
-        enable-lore: "&eHaz clic para activar."
-        disable-lore: "&eHaz clic para desactivar."
+        disabled: "&cDISABLED"
+        enable-lore: "&eClick to enable."
+        disable-lore: "&eClick to disable."
       runes:
         material: GREEN_STAINED_GLASS_PANE
-        name: "&aRunas de Cultivo"
+        name: "&aCrop Runes"
         lore:
-          - "&7Ranuras: &e%runes%/%slots%"
-          - "&7Mejoran la cosecha y reducen el consumo."
+          - "&7Slots: &e%runes%/%slots%"
+          - "&7Improve harvest yield and reduce energy use."
           - ""
-          - "&eHaz clic para administrar las runas."
+          - "&eClick to manage Runes."
       upgrade:
         material: ANVIL
         max-material: NETHER_STAR
-        name: "&eMejorar al nivel %next_level%"
-        max-name: "&aNivel máximo alcanzado"
+        name: "&eUpgrade to level %next_level%"
+        max-name: "&aMaximum Level Reached"
         lore:
-          - "&7Costo: &6%cost%⚡"
-          - "&7Cooldown tras mejorar: &e%shot_delay%s"
+          - "&7Cost: &6%cost%⚡"
+          - "&7Cooldown after upgrade: &e%shot_delay%s"
           - ""
-          - "&eHaz clic para mejorar."
+          - "&eClick to upgrade."
         max-lore:
-          - "&7El Catalizador ya alcanzó su nivel máximo."
+          - "&7The Catalyst has reached its maximum level."
       close:
         material: ARROW
-        name: "&cCerrar"
+        name: "&cClose"
     runes:
-      title: "&5Runas del Catalizador"
+      title: "&5Catalyst Runes"
       progression-slot: 22
       back-slot: 26
       slot-layout:
@@ -85,27 +85,27 @@ crop-generator:
         '3': [11, 13, 15]
       empty-slot:
         material: GRAY_STAINED_GLASS_PANE
-        name: "&bRanura de runa"
+        name: "&bRune Slot"
         lore:
-          - "&7Mayús+clic en una runa de tu inventario"
-          - "&7para instalarla."
+          - "&7Shift-click a Rune in your inventory"
+          - "&7to install it."
           - ""
-          - "&7Haz clic en una runa instalada"
-          - "&7para devolverla a tu inventario."
+          - "&7Click an installed Rune"
+          - "&7to return it to your inventory."
       progression:
         locked-material: BARRIER
         unlocked-material: ANVIL
         max-material: NETHER_STAR
-        locked-name: "&cMejora bloqueada"
-        unlocked-name: "&aRanura desbloqueada"
-        max-name: "&aRanuras de runa al máximo"
+        locked-name: "&cUpgrade Locked"
+        unlocked-name: "&aSlot Unlocked"
+        max-name: "&aRune Slots Maxed"
         locked-lore:
-          - "&cRequiere Catalizador nivel &e%required_level%&c."
-          - "&7Ranuras al mejorar: &e%slots_current% &7→ &e%slots_next%"
+          - "&cRequires Catalyst level &e%required_level%&c."
+          - "&7Slots after upgrade: &e%slots_current% &7→ &e%slots_next%"
         unlocked-lore:
-          - "&7Ranuras desbloqueadas: &e%slots_current%"
+          - "&7Slots unlocked: &e%slots_current%"
         max-lore:
-          - "&7El Catalizador ya tiene sus tres ranuras."
+          - "&7The Catalyst already has all three slots."
       back:
         material: ARROW
-        name: "&cVolver al Catalizador"
+        name: "&cBack to Catalyst"

@@ -61,6 +61,9 @@ weather and time are refreshed only on island entry or settings changes.
   language YAML files without restarting the server. Persistent `data/*.yml`
   files are intentionally not reloaded; changing the island world name still
   requires a restart.
+- The default language is English (`lang: EN_en`) in
+  `plugins/Corebound/config.yml`. Set `lang: ES_es` to use Spanish, then run
+  `/core reload` to apply the language change in-game.
 - Optional PlaceholderAPI integration. For the player passed to PlaceholderAPI,
   `%thecore_island_name%` returns their island name (empty if they have no
   island), `%thecore_core_energy%` returns stored Core energy,
@@ -74,7 +77,8 @@ weather and time are refreshed only on island entry or settings changes.
 - Owner transfer, member ranks, rename, custom home spawn, and rank-based
   permission menus with per-member overrides
 - Configurable settings, member, and permission menus in `plugins/Corebound/is/`, with
-  ampersand-colored translations in `plugins/Corebound/lang/messages_es.yml`
+  ampersand-colored translations in `plugins/Corebound/lang/EN_en.yml` and
+  `plugins/Corebound/lang/ES_es.yml`
 - Per-island combat, damage, weather/time visuals, explosions, fluids,
   redstone, mob and spawner controls
 - Island Core with persistent animation, combo-reactive scaling, hit feedback,

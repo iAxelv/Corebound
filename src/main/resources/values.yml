@@ -2,32 +2,32 @@ items:
   raw_copper:
     material: RAW_COPPER
     type: ores
-    name: "Cobre en bruto"
+    name: "Raw Copper"
     value: 1.0
   raw_iron:
     material: RAW_IRON
     type: ores
-    name: "Hierro en bruto"
+    name: "Raw Iron"
     value: 2.0
   raw_gold:
     material: RAW_GOLD
     type: ores
-    name: "Oro en bruto"
+    name: "Raw Gold"
     value: 3.0
   coal:
     material: COAL
     type: ores
-    name: "Carbón"
+    name: "Coal"
     value: 1.2
   emerald:
     material: EMERALD
     type: ores
-    name: "Esmeralda"
+    name: "Emerald"
     value: 4.0
   lapis_lazuli:
     material: LAPIS_LAZULI
     type: ores
-    name: "Lapislázuli"
+    name: "Lapis Lazuli"
     value: 1.4
   redstone:
     material: REDSTONE
@@ -37,22 +37,22 @@ items:
   diamond:
     material: DIAMOND
     type: ores
-    name: "Diamante"
+    name: "Diamond"
     value: 6.0
   ancient_debris:
     material: ANCIENT_DEBRIS
     type: ores
-    name: "Escombros ancestrales"
+    name: "Ancient Debris"
     value: 10.0
   sugar_cane:
     material: SUGAR_CANE
     type: vegetals
-    name: "Caña de azúcar"
+    name: "Sugar Cane"
     value: 0.2
   bamboo:
     material: BAMBOO
     type: vegetals
-    name: "Bambú"
+    name: "Bamboo"
     value: 0.25
   cactus:
     material: CACTUS
@@ -62,20 +62,20 @@ items:
   kelp:
     material: KELP
     type: vegetals
-    name: "Alga"
+    name: "Kelp"
     value: 0.35
   carrot:
     material: CARROT
     type: vegetals
-    name: "Zanahoria"
+    name: "Carrot"
     value: 0.5
   potato:
     material: POTATO
     type: vegetals
-    name: "Papa"
+    name: "Potato"
     value: 0.6
   beetroot:
     material: BEETROOT
     type: vegetals
-    name: "Remolacha"
+    name: "Beetroot"
     value: 0.7

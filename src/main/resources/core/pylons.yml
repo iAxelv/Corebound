@@ -1,12 +1,12 @@
 pylon:
   item:
     material: SEA_LANTERN
-    display-name: "&bPilón de Resonancia"
+    display-name: "&bResonance Pylon"
     lore:
-      - "&7Estructura de extracción pasiva."
-      - "&7Dispara pulsos de energía hacia el Núcleo."
+      - "&7Passive extraction structure."
+      - "&7Fires energy pulses at the Core."
       - ""
-      - "&eColócalo entre %min% y %max% bloques del Núcleo."
+      - "&ePlace it between %min% and %max% blocks from the Core."
   display:
     base-material: SEA_LANTERN
     material: END_ROD

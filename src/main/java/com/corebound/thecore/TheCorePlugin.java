@@ -25,6 +25,8 @@ import com.corebound.thecore.placeholder.CoreboundPlaceholderExpansion;
 import com.corebound.thecore.world.VoidChunkGenerator;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -49,7 +51,9 @@ public final class TheCorePlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        saveResourceIfMissing("lang/messages_es.yml");
+        migrateLegacyLanguageFile();
+        saveResourceIfMissing("lang/EN_en.yml");
+        saveResourceIfMissing("lang/ES_es.yml");
         saveResourceIfMissing("is/is_settings.yml");
         saveResourceIfMissing("is/is_members.yml");
         saveResourceIfMissing("is/is_perms.yml");
@@ -77,7 +81,9 @@ public final class TheCorePlugin extends JavaPlugin {
         }
 
         messages = new Messages(
-                new File(getDataFolder(), "lang/messages_es.yml"), getResource("lang/messages_es.yml"));
+                new File(getDataFolder(), "lang"),
+                this,
+                getConfig().getString("lang", "EN_en"));
         islandRepository = new IslandRepository(new File(getDataFolder(), "data/islands.yml"), this);
 
         String worldName = getConfig().getString("world.name", "core_void_world");
@@ -278,6 +284,7 @@ public final class TheCorePlugin extends JavaPlugin {
             throw new IOException("config.yml contains invalid YAML.", exception);
         }
         validateIslandSpacing(candidate);
+        Messages.validateLanguage(candidate.getString("lang", "EN_en"));
         String configuredWorld = candidate.getString("world.name", "core_void_world");
         if (!islandService.islandWorld().getName().equals(configuredWorld)) {
             throw new IllegalArgumentException("Changing world.name requires a server restart.");
@@ -286,7 +293,7 @@ public final class TheCorePlugin extends JavaPlugin {
         reloadConfig();
         validateIslandSpacing();
         islandService.reloadConfiguration();
-        messages.reload();
+        messages.reload(getConfig().getString("lang", "EN_en"));
         sounds.reload();
         menus.reload();
         topMenu.reload();
@@ -311,6 +318,20 @@ public final class TheCorePlugin extends JavaPlugin {
         File destination = new File(getDataFolder(), resourcePath.replace('/', File.separatorChar));
         if (!destination.isFile()) {
             saveResource(resourcePath, false);
+        }
+    }
+
+    private void migrateLegacyLanguageFile() {
+        File legacyFile = new File(getDataFolder(), "lang/messages_es.yml");
+        File localizedFile = new File(getDataFolder(), "lang/ES_es.yml");
+        if (legacyFile.isFile() && !localizedFile.exists()) {
+            try {
+                Files.createDirectories(localizedFile.toPath().getParent());
+                Files.move(legacyFile.toPath(), localizedFile.toPath());
+            } catch (IOException exception) {
+                throw new IllegalStateException(
+                        "Could not migrate lang/messages_es.yml to lang/ES_es.yml.", exception);
+            }
         }
     }
 }

@@ -1,3 +1,7 @@
+# Language for in-game messages: EN_en or ES_es.
+# Change this value, then run /core reload to apply it without restarting.
+lang: EN_en
+
 world:
   name: "core_void_world"
   distance-between-islands: 3000

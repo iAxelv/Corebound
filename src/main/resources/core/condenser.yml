@@ -31,24 +31,24 @@ condenser:
     energy-cost-per-level: 0.5
   runes:
     empty-slot:
-      display-name: "&bRanura de runa"
+      display-name: "&bRune Slot"
       lore:
-        - "&7Mayús+clic en una runa de tu inventario"
-        - "&7para instalarla."
+        - "&7Shift-click a Rune in your inventory"
+        - "&7to install it."
         - ""
-        - "&7Haz clic en una runa instalada"
-        - "&7para devolverla a tu inventario."
+        - "&7Click an installed Rune"
+        - "&7to return it to your inventory."
     menu:
-      locked-name: "&cMejora bloqueada"
+      locked-name: "&cUpgrade Locked"
       locked-lore:
-        - "&cRequiere Condensador nivel &e%required_level%&c."
-        - "&7Ranuras al mejorar: &e%slots_current% &7→ &e%slots_next%"
-      unlocked-name: "&aRanura desbloqueada"
+        - "&cRequires Condenser level &e%required_level%&c."
+        - "&7Slots after upgrade: &e%slots_current% &7→ &e%slots_next%"
+      unlocked-name: "&aSlot Unlocked"
       unlocked-lore:
-        - "&7Ranuras desbloqueadas: &e%slots_current%"
-      max-name: "&aRanuras de runa al máximo"
+        - "&7Slots unlocked: &e%slots_current%"
+      max-name: "&aRune Slots Maxed"
       max-lore:
-        - "&7El Condensador ya tiene sus tres ranuras."
+        - "&7The Condenser already has all three slots."
     slot-required-level:
       '2': 3
       '3': 6
