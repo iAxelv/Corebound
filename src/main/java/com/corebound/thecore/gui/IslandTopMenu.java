@@ -13,6 +13,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -20,8 +21,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -76,7 +79,8 @@ public final class IslandTopMenu implements Listener {
         }
     }
 
-    private record RankedIsland(IslandData island, CoreRecord core) {
+    private record RankedIsland(
+            IslandData island, CoreRecord core, double generatedEnergy, long hits) {
     }
 
     private record RankedMember(UUID playerId, IslandRank rank) {
@@ -89,6 +93,7 @@ public final class IslandTopMenu implements Listener {
     private final java.io.File configFile;
     private YamlConfiguration config;
     private URL defaultSkinUrl;
+    private volatile Map<SortMode, List<RankedIsland>> topCache = Map.of();
 
     public IslandTopMenu(
             JavaPlugin plugin, IslandRepository islands, CoreRepository cores, Messages messages) {
@@ -98,6 +103,8 @@ public final class IslandTopMenu implements Listener {
         this.messages = messages;
         configFile = new java.io.File(plugin.getDataFolder(), "is/is_top.yml");
         reload();
+        plugin.getServer().getAsyncScheduler().runAtFixedRate(
+                plugin, task -> refreshTopCache(), 0, 60, TimeUnit.SECONDS);
     }
 
     public void reload() {
@@ -170,11 +177,7 @@ public final class IslandTopMenu implements Listener {
     }
 
     private void setRankedIslands(Inventory inventory, SortMode sortMode) {
-        List<RankedIsland> ranked = islands.all().stream()
-                .map(island -> new RankedIsland(island, cores.core(island.index())))
-                .sorted(comparator(sortMode))
-                .limit(DEFAULT_RANK_SLOTS.size())
-                .toList();
+        List<RankedIsland> ranked = topCache.getOrDefault(sortMode, List.of());
         List<Integer> slots = config.getIntegerList("rank-slots");
         for (int i = 0; i < slots.size(); i++) {
             int rank = i + 1;
@@ -183,6 +186,32 @@ public final class IslandTopMenu implements Listener {
             } else {
                 setEmptyHead(inventory, slots.get(i), rank);
             }
+        }
+    }
+
+    private void refreshTopCache() {
+        try {
+            Map<Long, CoreRepository.IslandTopStats> stats = cores.topStatsSnapshot();
+            List<RankedIsland> snapshot = islands.all().stream()
+                    .map(island -> {
+                        CoreRepository.IslandTopStats islandStats = stats.get(island.index());
+                        return new RankedIsland(
+                                island,
+                                islandStats == null ? null : islandStats.core(),
+                                islandStats == null ? 0 : islandStats.generatedEnergy(),
+                                islandStats == null ? 0 : islandStats.hits());
+                    })
+                    .toList();
+            Map<SortMode, List<RankedIsland>> updated = new EnumMap<>(SortMode.class);
+            for (SortMode mode : SortMode.values()) {
+                updated.put(mode, snapshot.stream()
+                        .sorted(comparator(mode))
+                        .limit(DEFAULT_RANK_SLOTS.size())
+                        .toList());
+            }
+            topCache = Map.copyOf(updated);
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(Level.SEVERE, "Could not refresh the island top cache.", exception);
         }
     }
 
@@ -196,9 +225,9 @@ public final class IslandTopMenu implements Listener {
     private double score(RankedIsland entry, SortMode sortMode) {
         return switch (sortMode) {
             case CORE_LEVEL -> entry.core() == null ? 0 : entry.core().level();
-            case ENERGY -> cores.generatedEnergy(entry.island().index());
+            case ENERGY -> entry.generatedEnergy();
             case FRACTURE -> entry.core() == null ? 0 : entry.core().prestigeCount();
-            case HITS -> cores.topHits(entry.island().index());
+            case HITS -> entry.hits();
         };
     }
 

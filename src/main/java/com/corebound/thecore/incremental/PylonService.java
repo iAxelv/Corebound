@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -71,6 +72,7 @@ public final class PylonService {
     private double minimumDistance;
     private double maximumDistance;
     private double baseYieldRatio;
+    private volatile Map<Integer, Double> tierYieldMultipliers = Map.of(1, 1.0, 2, 2.0, 3, 3.0);
     private double purchaseCost;
     private double forgeRefreshCost;
     private int forgeRouletteDurationTicks;
@@ -137,8 +139,14 @@ public final class PylonService {
                 if (loaded.getInt("pylon.tier-required-core-levels.3", 8) == 10) {
                     loaded.set("pylon.tier-required-core-levels.3", 8);
                 }
+                if (Double.compare(loaded.getDouble("pylon.tier-upgrade-costs.2", 2500.0), 500.0) == 0) {
+                    loaded.set("pylon.tier-upgrade-costs.2", 2500.0);
+                }
                 if (Double.compare(loaded.getDouble("pylon.tier-upgrade-costs.3", 1500.0), 2000.0) == 0) {
                     loaded.set("pylon.tier-upgrade-costs.3", 1500.0);
+                }
+                if (Double.compare(loaded.getDouble("pylon.tier-upgrade-costs.3", 7500.0), 1500.0) == 0) {
+                    loaded.set("pylon.tier-upgrade-costs.3", 7500.0);
                 }
                 if (Double.compare(loaded.getDouble("pylon.base-yield-ratio", 2.0), 0.4) == 0) {
                     loaded.set("pylon.base-yield-ratio", 3.0);
@@ -171,6 +179,16 @@ public final class PylonService {
         double loadedMinimumDistance = loaded.getDouble("pylon.min-distance", 3.0);
         double loadedMaximumDistance = loaded.getDouble("pylon.max-distance", 12.0);
         double loadedBaseYieldRatio = loaded.getDouble("pylon.base-yield-ratio", 3.0);
+        Map<Integer, Double> loadedTierYieldMultipliers = new java.util.HashMap<>();
+        loadedTierYieldMultipliers.put(1, 1.0);
+        for (int tier = 2; tier <= 3; tier++) {
+            double multiplier = loaded.getDouble("pylon.tier-yield-multipliers." + tier, tier);
+            if (!Double.isFinite(multiplier) || multiplier <= 0) {
+                throw new IllegalArgumentException(
+                        "pylons.yml pylon.tier-yield-multipliers." + tier + " must be a positive finite number.");
+            }
+            loadedTierYieldMultipliers.put(tier, multiplier);
+        }
         double loadedPurchaseCost = loaded.getDouble("pylon.purchase-cost", 1000.0);
         double loadedForgeRefreshCost = loaded.getDouble("pylon.cells.refresh-cost", 75.0);
         int loadedRouletteDuration = loaded.getInt("pylon.cells.roulette.duration-ticks", 40);
@@ -226,6 +244,7 @@ public final class PylonService {
         minimumDistance = loadedMinimumDistance;
         maximumDistance = loadedMaximumDistance;
         baseYieldRatio = loadedBaseYieldRatio;
+        tierYieldMultipliers = Map.copyOf(loadedTierYieldMultipliers);
         purchaseCost = loadedPurchaseCost;
         forgeRefreshCost = loadedForgeRefreshCost;
         forgeRouletteDurationTicks = loadedRouletteDuration;
@@ -520,6 +539,7 @@ public final class PylonService {
         repository.update(upgraded);
         coreService.refreshCore(charged, System.currentTimeMillis());
         refreshPylon(upgraded);
+        refreshIslandPulses(upgraded.islandIndex());
         messages.send(player, "pylon-upgraded", Map.of(
                 "tier", Integer.toString(nextTier),
                 "cost", formatEnergy(cost)));
@@ -582,7 +602,7 @@ public final class PylonService {
     }
 
     public double estimatedPulseYield(CoreRecord core, PylonRecord pylon) {
-        return estimatedPulseYield(core, pylon.equippedCells(), lightningMultiplier(pylon));
+        return estimatedPulseYield(core, pylon.tier(), pylon.equippedCells(), lightningMultiplier(pylon));
     }
 
     public int ownedPylonCount(long islandIndex) {
@@ -714,6 +734,7 @@ public final class PylonService {
             return false;
         }
         stopPulse(pylonId);
+        refreshIslandPulses(removed.islandIndex());
         World world = plugin.getServer().getWorld(removed.worldId());
         if (world != null) {
             removeEntity(world.getEntity(removed.itemDisplayId()));
@@ -979,7 +1000,14 @@ public final class PylonService {
                 ? null
                 : UUID.fromString(interaction.getPersistentDataContainer().get(pylonIdKey, PersistentDataType.STRING));
         PylonRecord pylon = pylonId == null ? null : repository.get(pylonId);
-        if (pylon == null || activePylons.containsKey(pylonId)) {
+        if (pylon == null) {
+            return;
+        }
+        if (!isPulseEligible(pylon)) {
+            stopPulse(pylonId);
+            return;
+        }
+        if (activePylons.containsKey(pylonId)) {
             return;
         }
         long[] remainingTicks = {effectiveIntervalTicks(pylon)};
@@ -1048,6 +1076,32 @@ public final class PylonService {
         });
     }
 
+    public void refreshIslandPulses(long islandIndex) {
+        for (PylonRecord pylon : repository.forIsland(islandIndex)) {
+            if (isPulseEligible(pylon)) {
+                restartPulse(pylon);
+            } else {
+                stopPulse(pylon.pylonId());
+            }
+        }
+    }
+
+    private boolean isPulseEligible(PylonRecord pylon) {
+        CoreRecord core = coreRepository.core(pylon.islandIndex());
+        if (core == null) {
+            return false;
+        }
+        int capacity = core.pylonCapacity();
+        if (capacity <= 0) {
+            return false;
+        }
+        return repository.forIsland(pylon.islandIndex()).stream()
+                .sorted(Comparator.comparingInt(PylonRecord::tier).reversed()
+                        .thenComparing(PylonRecord::pylonId))
+                .limit(Math.min(capacity, CoreRecord.MAX_PYLON_CAPACITY))
+                .anyMatch(eligible -> eligible.pylonId().equals(pylon.pylonId()));
+    }
+
     private void firePulse(Interaction interaction, UUID pylonId) {
         PylonRecord pylon = repository.get(pylonId);
         if (pylon == null) {
@@ -1067,6 +1121,7 @@ public final class PylonService {
         drawPulseLine(world, source, target, dominantCell(pylon));
         drawLightningLinks(pylon, world);
         double yieldRatio = baseYieldRatio * lightningMultiplier(pylon)
+                * tierYieldMultipliers.getOrDefault(pylon.tier(), 1.0)
                 * pylonEnergyMultiplier(pylon.equippedCells())
                 * core.pylonYieldMultiplier()
                 * coreService.energyMultiplier(pylon.islandIndex(), System.currentTimeMillis());
@@ -1156,11 +1211,12 @@ public final class PylonService {
     }
 
     private double estimatedPulseYield(
-            CoreRecord core, Map<Integer, CellRecord> cells, double lightningMultiplier) {
+            CoreRecord core, int tier, Map<Integer, CellRecord> cells, double lightningMultiplier) {
         double expectedCriticalMultiplier = 1.0 + criticalChance(cells) * 2.5;
         return core.baseEnergy()
                 * baseYieldRatio
                 * lightningMultiplier
+                * tierYieldMultipliers.getOrDefault(tier, 1.0)
                 * pylonEnergyMultiplier(cells)
                 * core.pylonYieldMultiplier()
                 * core.astralPylonMultiplier()
@@ -1282,7 +1338,7 @@ public final class PylonService {
             text = text.append(Component.newline()).append(messages.parseComponent(
                     messages.formatText("pylon-ui.equipped-cells", Map.of("count", Integer.toString(cells.size())))));
         }
-        double yield = estimatedPulseYield(core, cells, lightningMultiplier);
+        double yield = estimatedPulseYield(core, tier, cells, lightningMultiplier);
         double remainingSeconds = Math.max(0L, remainingTicks) / 20.0;
         return text.append(Component.newline())
                 .append(messages.parseComponent(messages.formatText("pylon-ui.next-shot", Map.of(

@@ -55,6 +55,21 @@ public final class CoreRepository {
         return topHits.getOrDefault(islandIndex, 0L);
     }
 
+    public synchronized Map<Long, IslandTopStats> topStatsSnapshot() {
+        Set<Long> islandIndexes = new HashSet<>(cores.keySet());
+        islandIndexes.addAll(generatedEnergy.keySet());
+        islandIndexes.addAll(topHits.keySet());
+
+        Map<Long, IslandTopStats> snapshot = new HashMap<>();
+        for (long islandIndex : islandIndexes) {
+            snapshot.put(islandIndex, new IslandTopStats(
+                    cores.get(islandIndex),
+                    generatedEnergy.getOrDefault(islandIndex, 0.0),
+                    topHits.getOrDefault(islandIndex, 0L)));
+        }
+        return Map.copyOf(snapshot);
+    }
+
     public synchronized void addCore(CoreRecord core) {
         if (cores.putIfAbsent(core.islandIndex(), core) != null) {
             throw new IllegalStateException("An island core is already registered for island " + core.islandIndex());
@@ -385,5 +400,8 @@ public final class CoreRepository {
             Map<Long, Double> generatedEnergy,
             Map<Long, Long> topHits,
             Set<UUID> pendingItems) {
+    }
+
+    public record IslandTopStats(CoreRecord core, double generatedEnergy, long hits) {
     }
 }

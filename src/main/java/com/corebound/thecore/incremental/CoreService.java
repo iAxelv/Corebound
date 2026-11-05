@@ -455,6 +455,9 @@ public final class CoreService {
             messages.send(player, "core-upgrade-insufficient");
             return true;
         }
+        if (pylonService != null) {
+            pylonService.refreshIslandPulses(islandIndex);
+        }
         updateCoreVisuals(upgraded, System.currentTimeMillis());
         player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.2f);
         messages.send(player, "core-upgrade-success", Map.of(

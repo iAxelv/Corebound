@@ -27,6 +27,7 @@ public record CoreRecord(
         int upgradeHitYield,
         int upgradePylonYield) {
     public static final int MAX_LEVEL = 25;
+    public static final int MAX_PYLON_CAPACITY = 8;
 
     public CoreRecord {
         level = Math.max(1, level);
@@ -407,7 +408,7 @@ public record CoreRecord(
         if (level < 3) {
             return 0;
         }
-        return Math.min(17, 3 + 2 * ((Math.min(level, 24) - 3) / 3));
+        return Math.min(MAX_PYLON_CAPACITY, 3 + 2 * ((Math.min(level, 24) - 3) / 3));
     }
 
     public record HitResult(CoreRecord core, boolean critical) {

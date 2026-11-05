@@ -17,8 +17,11 @@ pylon:
   base-yield-ratio: 3.0
   purchase-cost: 1000.0
   tier-upgrade-costs:
-    '2': 500.0
-    '3': 1500.0
+    '2': 2500.0
+    '3': 7500.0
+  tier-yield-multipliers:
+    '2': 2.0
+    '3': 3.0
   tier-required-core-levels:
     '2': 5
     '3': 8
