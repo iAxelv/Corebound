@@ -386,12 +386,17 @@ public final class PylonService {
         CellType[] types = java.util.Arrays.stream(CellType.values())
                 .filter(type -> type.isPylonCell() || type.isBatteryRune())
                 .toArray(CellType[]::new);
+        CellType[] batteryRunes = java.util.Arrays.stream(CellType.values())
+                .filter(CellType::isBatteryRune)
+                .toArray(CellType[]::new);
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        return new CellType[] {
+        CellType[] offers = new CellType[] {
             types[random.nextInt(types.length)],
             types[random.nextInt(types.length)],
             types[random.nextInt(types.length)]
         };
+        offers[random.nextInt(offers.length)] = batteryRunes[random.nextInt(batteryRunes.length)];
+        return offers;
     }
 
     public CellType[] cellForgeOffers(long islandIndex) {
@@ -465,7 +470,9 @@ public final class PylonService {
         coreService.refreshCore(charged, System.currentTimeMillis());
         String forgedMessage = type.isCropGeneratorRune()
                 ? "crop-generator-rune-forged"
-                : type.isCondenserRune() ? "condenser-rune-forged" : "cell-forged";
+                : type.isCondenserRune()
+                        ? "condenser-rune-forged"
+                        : type.isBatteryRune() ? "battery-rune-forged" : "cell-forged";
         messages.send(player, forgedMessage, Map.of(
                 "cell", type.displayName(messages),
                 "cost", formatEnergy(cost)));

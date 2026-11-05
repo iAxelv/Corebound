@@ -18,9 +18,9 @@ public enum CellType {
     CROP_ENERGY_EFFICIENCY(
             Material.WHEAT_SEEDS, "&2", Material.COMPOSTER, Particle.COMPOSTER),
     BATTERY_CAPACITY(
-            Material.COPPER_INGOT, "&b", Material.COPPER_BLOCK, Particle.ELECTRIC_SPARK),
+            Material.COPPER_NUGGET, "&b", Material.COPPER_BLOCK, Particle.ELECTRIC_SPARK),
     BATTERY_OFFLINE(
-            Material.AMETHYST_SHARD, "&d", Material.COPPER_BLOCK, Particle.END_ROD);
+            Material.ECHO_SHARD, "&d", Material.COPPER_BLOCK, Particle.END_ROD);
 
     private static final java.util.Set<CellType> CONDENSER_TYPES =
             java.util.Set.of(CONDENSER_EFFICIENCY, CONDENSER_YIELD);

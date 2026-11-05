@@ -270,9 +270,9 @@ public final class BatteryService {
         ItemMeta meta = item.getItemMeta();
         meta.displayName(messages.component("battery-ui.item-name"));
         meta.lore(List.of(
-                messages.parseComponent(messages.formatText("battery-ui.item-tier", Map.of(
-                        "tier", Integer.toString(tier),
-                        "max_tier", Integer.toString(MAX_TIER)))),
+                messages.parseComponent(messages.formatText("battery-ui.item-level", Map.of(
+                        "level", Integer.toString(tier),
+                        "max_level", Integer.toString(MAX_TIER)))),
                 messages.parseComponent(messages.formatText("battery-ui.item-energy", Map.of(
                         "energy", format(energy)))),
                 messages.parseComponent(messages.formatText("battery-ui.item-placement", Map.of(
@@ -653,7 +653,7 @@ public final class BatteryService {
         return messages.parseComponent(messages.formatText("battery-ui.hologram", Map.of(
                 "energy", format(battery.energy()),
                 "capacity", format(capacity(battery, core)),
-                "tier", Integer.toString(battery.tier()))));
+                "level", Integer.toString(battery.tier()))));
     }
 
     private void configureDisplay(ItemDisplay display, long islandIndex, UUID batteryId) {
@@ -748,7 +748,7 @@ public final class BatteryService {
         return true;
     }
 
-    private boolean canManage(Player player, BatteryRecord battery) {
+    public boolean canManage(Player player, BatteryRecord battery) {
         IslandData island = islandService.islandAt(player.getLocation()).orElse(null);
         if (island == null || island.index() != battery.islandIndex()
                 || !island.canBuild(player.getUniqueId())) {
