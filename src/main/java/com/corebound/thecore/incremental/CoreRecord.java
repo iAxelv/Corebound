@@ -223,16 +223,15 @@ public record CoreRecord(
         double updatedCombo = Math.min(maxCombo(), 1.0 + updatedHits * 0.04);
         boolean critical = ThreadLocalRandom.current().nextDouble() < criticalChance();
         double criticalMultiplier = critical ? 3.0 : 1.0;
-        double updatedEnergy = Math.min(
-                maxEnergy(),
-                energy + baseEnergy() * updatedCombo * yieldRatio * criticalMultiplier * prestigeMultiplier()
-                        * astralResonanceMultiplier() * hitYieldMultiplier());
+        double requestedEnergy = baseEnergy() * updatedCombo * yieldRatio * criticalMultiplier * prestigeMultiplier()
+                * astralResonanceMultiplier() * hitYieldMultiplier();
+        double updatedEnergy = Math.min(maxEnergy(), energy + requestedEnergy);
         CoreRecord updated = new CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, updatedEnergy, updatedHits, now,
                 upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments,
                 astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield);
-        return new HitResult(updated, critical);
+        return new HitResult(updated, critical, Math.max(0, energy + requestedEnergy - maxEnergy()));
     }
 
     public CoreRecord withPassiveEnergy(double amount) {
@@ -284,7 +283,7 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, energy - cost, hits, lastHitAt,
                 upgradeOvercharge + (enhancement == CoreEnhancement.OVERCHARGE ? 1 : 0),
-                upgradeWindow,
+                upgradeWindow + (enhancement == CoreEnhancement.OFFLINE_HOURS ? 1 : 0),
                 upgradeCritical + (enhancement == CoreEnhancement.CRITICAL ? 1 : 0),
                 prestigeCount, coreFragments, astralResonance, astralPylonAttunement,
                 upgradeCapacity + (enhancement == CoreEnhancement.CAPACITY ? 1 : 0),
@@ -336,6 +335,7 @@ public record CoreRecord(
             case CAPACITY -> upgradeCapacity;
             case HIT_YIELD -> upgradeHitYield;
             case PYLON_YIELD -> upgradePylonYield;
+            case OFFLINE_HOURS -> upgradeWindow;
         };
     }
 
@@ -411,6 +411,6 @@ public record CoreRecord(
         return Math.min(MAX_PYLON_CAPACITY, 3 + 2 * ((Math.min(level, 24) - 3) / 3));
     }
 
-    public record HitResult(CoreRecord core, boolean critical) {
+    public record HitResult(CoreRecord core, boolean critical, double overflowEnergy) {
     }
 }

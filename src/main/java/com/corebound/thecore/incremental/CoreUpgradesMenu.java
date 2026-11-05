@@ -33,7 +33,8 @@ public final class CoreUpgradesMenu implements Listener {
             CoreEnhancement.CRITICAL, 21,
             CoreEnhancement.CAPACITY, 22,
             CoreEnhancement.HIT_YIELD, 23,
-            CoreEnhancement.PYLON_YIELD, 24);
+            CoreEnhancement.PYLON_YIELD, 24,
+            CoreEnhancement.OFFLINE_HOURS, 25);
 
     private static final class Holder implements InventoryHolder {
         private final long islandIndex;
@@ -193,6 +194,7 @@ public final class CoreUpgradesMenu implements Listener {
                         Map.entry("%combo%", String.format(java.util.Locale.ROOT, "%.2f", core.maxCombo())),
                         Map.entry("%yield%", Integer.toString(core.upgradeHitYield() * 8)),
                         Map.entry("%pylon_yield%", Integer.toString(core.upgradePylonYield() * 15)),
+                        Map.entry("%offline_hours%", Integer.toString(3 + core.upgradeWindow())),
                         Map.entry("%required_level%", Integer.toString(requiredCoreLevel)),
                         Map.entry("%status%", status))))
                 .map(messages::parseComponent)
@@ -268,6 +270,7 @@ public final class CoreUpgradesMenu implements Listener {
             case CAPACITY -> "capacity";
             case HIT_YIELD -> "hit-yield";
             case PYLON_YIELD -> "pylon-yield";
+            case OFFLINE_HOURS -> "offline-hours";
         };
     }
 

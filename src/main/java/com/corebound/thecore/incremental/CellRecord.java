@@ -67,4 +67,12 @@ public record CellRecord(CellType type, int tier) {
     public double cropHarvestBonus() {
         return type == CellType.CROP_EFFICIENCY ? 0.10 * tier : 0.0;
     }
+
+    public double batteryCapacityBonus() {
+        return type == CellType.BATTERY_CAPACITY ? 0.10 * tier : 0.0;
+    }
+
+    public double batteryOfflineBonus() {
+        return type == CellType.BATTERY_OFFLINE ? 0.10 * tier : 0.0;
+    }
 }

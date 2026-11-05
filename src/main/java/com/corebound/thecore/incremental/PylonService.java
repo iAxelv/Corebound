@@ -359,6 +359,10 @@ public final class PylonService {
     }
 
     public void showPlacementRange(Player player) {
+        showPlacementRange(player, minimumDistance, maximumDistance);
+    }
+
+    public void showPlacementRange(Player player, double minDistance, double maxDistance) {
         if (!player.isOnline()) {
             return;
         }
@@ -374,13 +378,13 @@ public final class PylonService {
         if (world == null || !world.getUID().equals(player.getWorld().getUID())) {
             return;
         }
-        drawRangeCircle(world, core, minimumDistance, Particle.FLAME);
-        drawRangeCircle(world, core, maximumDistance, Particle.END_ROD);
+        drawRangeCircle(world, core, minDistance, Particle.FLAME);
+        drawRangeCircle(world, core, maxDistance, Particle.END_ROD);
     }
 
     public CellType[] randomCellOffers() {
         CellType[] types = java.util.Arrays.stream(CellType.values())
-                .filter(CellType::isPylonCell)
+                .filter(type -> type.isPylonCell() || type.isBatteryRune())
                 .toArray(CellType[]::new);
         ThreadLocalRandom random = ThreadLocalRandom.current();
         return new CellType[] {
@@ -603,6 +607,21 @@ public final class PylonService {
 
     public double estimatedPulseYield(CoreRecord core, PylonRecord pylon) {
         return estimatedPulseYield(core, pylon.tier(), pylon.equippedCells(), lightningMultiplier(pylon));
+    }
+
+    public double offlineYieldPerSecond(long islandIndex) {
+        CoreRecord core = coreRepository.core(islandIndex);
+        if (core == null) {
+            return 0;
+        }
+        List<PylonRecord> eligible = repository.forIsland(islandIndex).stream()
+                .sorted(Comparator.comparingInt(PylonRecord::tier).reversed()
+                        .thenComparing(PylonRecord::pylonId))
+                .limit(Math.min(core.pylonCapacity(), CoreRecord.MAX_PYLON_CAPACITY))
+                .toList();
+        return eligible.stream()
+                .mapToDouble(pylon -> estimatedPulseYield(core, pylon) * 20.0 / effectiveIntervalTicks(pylon))
+                .sum();
     }
 
     public int ownedPylonCount(long islandIndex) {
@@ -1442,6 +1461,8 @@ public final class PylonService {
             case CONDENSER_YIELD -> cell.condenserOreChanceBonus() * 100.0;
             case CROP_EFFICIENCY -> cell.cropHarvestBonus() * 100.0;
             case CROP_ENERGY_EFFICIENCY -> cell.cropEnergyReduction() * 100.0;
+            case BATTERY_CAPACITY -> cell.batteryCapacityBonus() * 100.0;
+            case BATTERY_OFFLINE -> cell.batteryOfflineBonus() * 100.0;
         };
         String formattedValue = String.format(java.util.Locale.ROOT,
                 cell.type() == CellType.FIRE ? "%.1f" : "%.0f", value);

@@ -28,6 +28,7 @@ public final class CorePlaceListener implements Listener {
     private final PylonService pylonService;
     private final CondenserService condenserService;
     private final CropGeneratorService cropGeneratorService;
+    private final BatteryService batteryService;
     private final Set<InteractionAttempt> interactionAttempts = ConcurrentHashMap.newKeySet();
     private final Set<PylonPlacementAttempt> pylonPlacementAttempts = ConcurrentHashMap.newKeySet();
 
@@ -39,12 +40,14 @@ public final class CorePlaceListener implements Listener {
             CoreService coreService,
             PylonService pylonService,
             CondenserService condenserService,
-            CropGeneratorService cropGeneratorService) {
+            CropGeneratorService cropGeneratorService,
+            BatteryService batteryService) {
         this.plugin = plugin;
         this.coreService = coreService;
         this.pylonService = pylonService;
         this.condenserService = condenserService;
         this.cropGeneratorService = cropGeneratorService;
+        this.batteryService = batteryService;
     }
 
     @EventHandler
@@ -58,6 +61,12 @@ public final class CorePlaceListener implements Listener {
         pylonService.onPlayerJoin(event.getPlayer());
         condenserService.onPlayerJoin(event.getPlayer());
         cropGeneratorService.onPlayerJoin(event.getPlayer());
+        batteryService.onPlayerJoin(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        batteryService.onPlayerQuit(event.getPlayer());
     }
 
     @EventHandler
@@ -67,6 +76,7 @@ public final class CorePlaceListener implements Listener {
             pylonService.onEntityLoad(entity);
             condenserService.onEntityLoad(entity);
             cropGeneratorService.onEntityLoad(entity);
+            batteryService.onEntityLoad(entity);
         });
     }
 
@@ -75,7 +85,8 @@ public final class CorePlaceListener implements Listener {
         if (event.getHand() == EquipmentSlot.OFF_HAND) {
             if (coreService.isCoreItem(event.getItem()) || pylonService.isPylonItem(event.getItem())
                     || condenserService.isCondenserItem(event.getItem())
-                    || cropGeneratorService.isGeneratorItem(event.getItem())) {
+                    || cropGeneratorService.isGeneratorItem(event.getItem())
+                    || batteryService.isBatteryItem(event.getItem())) {
                 event.setCancelled(true);
             }
             return;
@@ -149,6 +160,28 @@ public final class CorePlaceListener implements Listener {
                             () -> pylonPlacementAttempts.remove(attempt),
                             1L);
                     cropGeneratorService.place(player, block);
+                }
+            }
+            return;
+        }
+        if (batteryService.isBatteryItem(event.getItem())) {
+            event.setCancelled(true);
+            if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getClickedBlock() != null) {
+                Player player = event.getPlayer();
+                org.bukkit.block.Block block = event.getClickedBlock();
+                PylonPlacementAttempt attempt = new PylonPlacementAttempt(
+                        player.getUniqueId(),
+                        block.getWorld().getUID(),
+                        block.getX(),
+                        block.getY(),
+                        block.getZ());
+                if (pylonPlacementAttempts.add(attempt)) {
+                    player.getScheduler().runDelayed(
+                            plugin,
+                            task -> pylonPlacementAttempts.remove(attempt),
+                            () -> pylonPlacementAttempts.remove(attempt),
+                            1L);
+                    batteryService.place(player, block);
                 }
             }
         }
@@ -239,6 +272,24 @@ public final class CorePlaceListener implements Listener {
                     }
                 }
             }
+        } else if (batteryService.isBatteryEntity(entity)) {
+            event.setCancelled(true);
+            if (hand == EquipmentSlot.HAND) {
+                Player player = event.getPlayer();
+                InteractionAttempt attempt = new InteractionAttempt(player.getUniqueId(), entity.getUniqueId());
+                if (interactionAttempts.add(attempt)) {
+                    player.getScheduler().runDelayed(
+                            plugin,
+                            task -> interactionAttempts.remove(attempt),
+                            () -> interactionAttempts.remove(attempt),
+                            1L);
+                    if (player.isSneaking()) {
+                        batteryService.pickup(player, entity);
+                    } else {
+                        batteryService.openMenu(player, entity);
+                    }
+                }
+            }
         }
     }
 
@@ -256,7 +307,8 @@ public final class CorePlaceListener implements Listener {
     public void onCoreEntityDamage(EntityDamageEvent event) {
         if (coreService.isCoreEntity(event.getEntity()) || pylonService.isPylonEntity(event.getEntity())
                 || condenserService.isCondenserEntity(event.getEntity())
-                || cropGeneratorService.isGeneratorEntity(event.getEntity())) {
+                || cropGeneratorService.isGeneratorEntity(event.getEntity())
+                || batteryService.isBatteryEntity(event.getEntity())) {
             event.setCancelled(true);
         }
     }

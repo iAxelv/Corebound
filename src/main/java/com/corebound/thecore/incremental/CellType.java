@@ -16,12 +16,18 @@ public enum CellType {
     CROP_EFFICIENCY(
             Material.GOLDEN_CARROT, "&a", Material.COMPOSTER, Particle.HAPPY_VILLAGER),
     CROP_ENERGY_EFFICIENCY(
-            Material.WHEAT_SEEDS, "&2", Material.COMPOSTER, Particle.COMPOSTER);
+            Material.WHEAT_SEEDS, "&2", Material.COMPOSTER, Particle.COMPOSTER),
+    BATTERY_CAPACITY(
+            Material.COPPER_INGOT, "&b", Material.COPPER_BLOCK, Particle.ELECTRIC_SPARK),
+    BATTERY_OFFLINE(
+            Material.AMETHYST_SHARD, "&d", Material.COPPER_BLOCK, Particle.END_ROD);
 
     private static final java.util.Set<CellType> CONDENSER_TYPES =
             java.util.Set.of(CONDENSER_EFFICIENCY, CONDENSER_YIELD);
     private static final java.util.Set<CellType> CROP_GENERATOR_TYPES =
             java.util.Set.of(CROP_EFFICIENCY, CROP_ENERGY_EFFICIENCY);
+    private static final java.util.Set<CellType> BATTERY_TYPES =
+            java.util.Set.of(BATTERY_CAPACITY, BATTERY_OFFLINE);
 
     private final Material itemMaterial;
     private final String color;
@@ -67,8 +73,12 @@ public enum CellType {
         return CROP_GENERATOR_TYPES.contains(this);
     }
 
+    public boolean isBatteryRune() {
+        return BATTERY_TYPES.contains(this);
+    }
+
     public boolean isRune() {
-        return isCondenserRune() || isCropGeneratorRune();
+        return isCondenserRune() || isCropGeneratorRune() || isBatteryRune();
     }
 
     public boolean isPylonCell() {

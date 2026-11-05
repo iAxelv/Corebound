@@ -111,6 +111,22 @@ items:
     locked-name: "&cCatalizador bloqueado"
     locked-lore:
       - "&cRequiere Núcleo nivel &e%required_level%&c."
+  battery:
+    material: COPPER_BLOCK
+    slot: 23
+    display-name: "&bBatería de Resonancia"
+    lore:
+      - "&7Almacena energía cuando el Núcleo está lleno."
+      - "&7Cada batería guarda el 50% de la capacidad del Núcleo."
+      - "&7Energía offline: &e75% &7durante un máximo de &e%offline_hours%h&7."
+      - "&7Baterías colocadas: &e%placed%&7/&e%capacity%"
+      - "&7Costo: &6%cost%⚡"
+      - ""
+      - "&eHaz clic para comprar una batería."
+    locked-material: BARRIER
+    locked-name: "&cBatería bloqueada"
+    locked-lore:
+      - "&cRequiere Núcleo nivel &e%required_level%&c."
   upgrade:
     material: NETHER_STAR
     slot: 47

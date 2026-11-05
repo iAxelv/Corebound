@@ -34,6 +34,7 @@ public final class CoreMenu implements Listener {
     private PylonService pylonService;
     private CondenserService condenserService;
     private CropGeneratorService cropGeneratorService;
+    private BatteryService batteryService;
 
     private static final class MenuHolder implements InventoryHolder {
         private final long islandIndex;
@@ -112,6 +113,7 @@ public final class CoreMenu implements Listener {
         validateItem(loaded, "items.pylon");
         validateItem(loaded, "items.condenser");
         validateItem(loaded, "items.crop-generator");
+        validateItem(loaded, "items.battery");
         validateItem(loaded, "items.cell-forge");
         validateItem(loaded, "items.upgrade");
         validateItem(loaded, "items.close");
@@ -148,6 +150,10 @@ public final class CoreMenu implements Listener {
         this.cropGeneratorService = cropGeneratorService;
     }
 
+    public void attachBatteryService(BatteryService batteryService) {
+        this.batteryService = batteryService;
+    }
+
     public void open(Player player, CoreRecord core) {
         MenuHolder holder = new MenuHolder(core.islandIndex(), menuSlots());
         holder.inventory = Bukkit.createInventory(
@@ -162,6 +168,7 @@ public final class CoreMenu implements Listener {
         holder.inventory.setItem(slot("pylon"), createPylonItem(core));
         holder.inventory.setItem(slot("condenser"), createCondenserItem(core));
         holder.inventory.setItem(slot("crop-generator"), createCropGeneratorItem(core));
+        holder.inventory.setItem(slot("battery"), createBatteryItem(core));
         holder.inventory.setItem(slot("upgrade"), createItem(
                 config.getConfigurationSection("items.upgrade"), core,
                 core.level() < CoreRecord.MAX_LEVEL && core.energy() >= core.upgradeCost()));
@@ -194,6 +201,9 @@ public final class CoreMenu implements Listener {
             if (cropGeneratorService.buy(player, holder.islandIndex)) {
                 coreService.openCoreMenu(player, holder.islandIndex);
             }
+        } else if (event.getRawSlot() == holder.slot("battery") && batteryService != null) {
+            batteryService.buy(player, holder.islandIndex);
+            coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("astral-tree")) {
             coreService.openAstralTree(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("fracture")) {
@@ -383,6 +393,33 @@ public final class CoreMenu implements Listener {
         return item;
     }
 
+    private ItemStack createBatteryItem(CoreRecord core) {
+        ConfigurationSection itemConfig = config.getConfigurationSection("items.battery");
+        int requiredLevel = batteryService == null ? 5 : batteryService.minimumCoreLevel();
+        boolean unlocked = batteryService != null && core.level() >= requiredLevel;
+        String material = itemConfig.getString(unlocked ? "material" : "locked-material",
+                unlocked ? "COPPER_BLOCK" : "BARRIER");
+        String displayName = itemConfig.getString(unlocked ? "display-name" : "locked-name");
+        List<String> lore = itemConfig.getStringList(unlocked ? "lore" : "locked-lore");
+        int placed = batteryService == null ? 0
+                : batteryService.placedBatteryCount(core.islandIndex());
+        int capacity = batteryService == null ? 0
+                : batteryService.maxBatteriesForLevel(core.level());
+        Map<String, String> placeholders = Map.of(
+                "%required_level%", Integer.toString(requiredLevel),
+                "%cost%", formatEnergy(batteryService == null ? 1000 : batteryService.purchaseCost()),
+                "%placed%", Integer.toString(placed),
+                "%capacity%", Integer.toString(capacity),
+                "%offline_hours%", Integer.toString(
+                        batteryService == null ? 3 : batteryService.maximumOfflineHours(core.islandIndex())));
+        ItemStack item = new ItemStack(Material.matchMaterial(material));
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(color(replace(displayName, placeholders)));
+        meta.lore(lore.stream().map(line -> color(replace(line, placeholders))).toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+
     private void validateItem(YamlConfiguration loaded, String path) {
         ConfigurationSection section = loaded.getConfigurationSection(path);
         int slot = section == null ? -1 : section.getInt("slot", -1);
@@ -394,7 +431,8 @@ public final class CoreMenu implements Listener {
         }
         for (String otherPath : List.of(
                 "items.upgrades", "items.statistics", "items.fracture", "items.astral-tree", "items.pylon",
-                "items.condenser", "items.crop-generator", "items.cell-forge", "items.upgrade", "items.close")) {
+                "items.condenser", "items.crop-generator", "items.battery", "items.cell-forge",
+                "items.upgrade", "items.close")) {
             if (!otherPath.equals(path)
                     && loaded.getInt(otherPath + ".slot", -1) == slot) {
                 throw new IllegalArgumentException("core_menu.yml item slots must be unique.");
@@ -407,17 +445,18 @@ public final class CoreMenu implements Listener {
     }
 
     private Map<String, Integer> menuSlots() {
-        return Map.of(
-                "upgrades", slot("upgrades"),
-                "statistics", slot("statistics"),
-                "fracture", slot("fracture"),
-                "astral-tree", slot("astral-tree"),
-                "pylon", slot("pylon"),
-                "condenser", slot("condenser"),
-                "crop-generator", slot("crop-generator"),
-                "cell-forge", slot("cell-forge"),
-                "upgrade", slot("upgrade"),
-                "close", slot("close"));
+        return Map.ofEntries(
+                Map.entry("upgrades", slot("upgrades")),
+                Map.entry("statistics", slot("statistics")),
+                Map.entry("fracture", slot("fracture")),
+                Map.entry("astral-tree", slot("astral-tree")),
+                Map.entry("pylon", slot("pylon")),
+                Map.entry("condenser", slot("condenser")),
+                Map.entry("crop-generator", slot("crop-generator")),
+                Map.entry("battery", slot("battery")),
+                Map.entry("cell-forge", slot("cell-forge")),
+                Map.entry("upgrade", slot("upgrade")),
+                Map.entry("close", slot("close")));
     }
 
     private String replace(String text, Map<String, String> placeholders) {

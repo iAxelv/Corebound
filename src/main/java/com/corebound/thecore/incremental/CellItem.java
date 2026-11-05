@@ -52,12 +52,18 @@ public final class CellItem {
                     "bonus", formatNumber(cell.cropHarvestBonus() * 100)));
             case CROP_ENERGY_EFFICIENCY -> messages.formatText("cell-item.improvement.crop-energy-efficiency", Map.of(
                     "bonus", formatNumber(cell.cropEnergyReduction() * 100)));
+            case BATTERY_CAPACITY -> messages.formatText("cell-item.improvement.battery-capacity", Map.of(
+                    "bonus", formatNumber(cell.batteryCapacityBonus() * 100)));
+            case BATTERY_OFFLINE -> messages.formatText("cell-item.improvement.battery-offline", Map.of(
+                    "bonus", formatNumber(cell.batteryOfflineBonus() * 100)));
         };
-        String installKey = cell.type().isCropGeneratorRune()
-                ? "cell-item.install-crop-generator"
-                : cell.type().isCondenserRune()
-                        ? "cell-item.install-condenser"
-                        : "cell-item.install-pylon";
+        String installKey = cell.type().isBatteryRune()
+                ? "cell-item.install-battery"
+                : cell.type().isCropGeneratorRune()
+                        ? "cell-item.install-crop-generator"
+                        : cell.type().isCondenserRune()
+                                ? "cell-item.install-condenser"
+                                : "cell-item.install-pylon";
         return List.of(
                 messages.legacy(installKey),
                 messages.legacy(cell.type().isRune() ? "cell-item.slot-rune" : "cell-item.slot-cell"),

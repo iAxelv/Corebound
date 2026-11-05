@@ -5,5 +5,6 @@ public enum CoreEnhancement {
     CRITICAL,
     CAPACITY,
     HIT_YIELD,
-    PYLON_YIELD
+    PYLON_YIELD,
+    OFFLINE_HOURS
 }

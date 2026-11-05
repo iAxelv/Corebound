@@ -28,6 +28,7 @@ public final class CoreRepository {
     private final Map<Long, Double> generatedEnergy = new HashMap<>();
     private final Map<Long, Long> topHits = new HashMap<>();
     private final Set<UUID> pendingItems = new HashSet<>();
+    private BatteryService batteryService;
 
     public CoreRepository(File file, JavaPlugin plugin) {
         this.file = file;
@@ -86,7 +87,7 @@ public final class CoreRepository {
     }
 
     public synchronized CoreRecord upgradeCore(long islandIndex, double cost) {
-        CoreRecord current = cores.get(islandIndex);
+        CoreRecord current = ensureEnergyForCost(islandIndex, cost);
         if (current == null) {
             return null;
         }
@@ -99,7 +100,7 @@ public final class CoreRepository {
     }
 
     public synchronized CoreRecord spendEnergy(long islandIndex, double cost) {
-        CoreRecord current = cores.get(islandIndex);
+        CoreRecord current = ensureEnergyForCost(islandIndex, cost);
         if (current == null) {
             return null;
         }
@@ -113,7 +114,7 @@ public final class CoreRepository {
 
     public synchronized CoreRecord upgradeEnhancement(
             long islandIndex, CoreEnhancement enhancement, double cost, int maxLevel, int requiredCoreLevel) {
-        CoreRecord current = cores.get(islandIndex);
+        CoreRecord current = ensureEnergyForCost(islandIndex, cost);
         if (current == null) {
             return null;
         }
@@ -123,6 +124,24 @@ public final class CoreRepository {
             save();
         }
         return updated;
+    }
+
+    public synchronized void attachBatteryService(BatteryService batteryService) {
+        this.batteryService = batteryService;
+    }
+
+    private CoreRecord ensureEnergyForCost(long islandIndex, double cost) {
+        CoreRecord current = cores.get(islandIndex);
+        if (current == null || !Double.isFinite(cost) || cost <= current.energy() || batteryService == null) {
+            return current;
+        }
+        double missing = Math.min(cost - current.energy(), current.maxEnergy() - current.energy());
+        double transferred = batteryService.withdrawForCore(islandIndex, missing);
+        if (transferred > 0) {
+            restoreEnergy(islandIndex, transferred);
+            current = cores.get(islandIndex);
+        }
+        return current;
     }
 
     public synchronized CoreRecord fractureCore(long islandIndex) {
@@ -230,6 +249,14 @@ public final class CoreRepository {
         }
         save();
         return updated;
+    }
+
+    public synchronized void recordGeneratedEnergy(long islandIndex, double amount) {
+        if (!Double.isFinite(amount) || amount <= 0) {
+            return;
+        }
+        generatedEnergy.merge(islandIndex, amount, Double::sum);
+        save();
     }
 
     public synchronized CoreRecord expireCombo(long islandIndex, long expectedLastHitAt) {

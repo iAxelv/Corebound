@@ -89,6 +89,22 @@ items:
     cost-multiplier: 2.0
     max-level: 5
     required-core-levels: [3, 6, 9, 12, 15]
+  offline-hours:
+    material: CLOCK
+    locked-material: BARRIER
+    slot: 25
+    display-name: "&bAlmacenamiento Offline &7[Nvl. %level%/%max%]"
+    lore:
+      - "&7Aumenta el tiempo máximo de generación offline de las baterías."
+      - "&7Tiempo máximo actual: &b%offline_hours% horas"
+      - "&7Bonus por rango: &b+1 hora"
+      - ""
+      - "&7Costo: &6%cost%⚡"
+      - "%status%"
+    base-cost: 1000.0
+    cost-multiplier: 2.0
+    max-level: 5
+    required-core-levels: [2, 4, 6, 8, 10]
   back:
     material: ARROW
     slot: 40

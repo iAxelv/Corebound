@@ -73,6 +73,7 @@ public final class CoreService {
     private PylonService pylonService;
     private CondenserService condenserService;
     private CropGeneratorService cropGeneratorService;
+    private BatteryService batteryService;
 
     private static final class DisplayAnimation {
         private float yaw;
@@ -277,6 +278,11 @@ public final class CoreService {
         coreMenu.attachCropGeneratorService(cropGeneratorService);
     }
 
+    public void attachBatteryService(BatteryService batteryService) {
+        this.batteryService = batteryService;
+        coreMenu.attachBatteryService(batteryService);
+    }
+
     public void openCoreMenu(Player player, org.bukkit.entity.Entity entity) {
         Long islandIndex = entity.getPersistentDataContainer().get(islandIndexKey, PersistentDataType.LONG);
         if (islandIndex == null) {
@@ -412,6 +418,9 @@ public final class CoreService {
             return false;
         }
         if (cropGeneratorService != null && !cropGeneratorService.destroyForFracture(player, islandIndex)) {
+            return false;
+        }
+        if (batteryService != null && !batteryService.destroyForFracture(player, islandIndex)) {
             return false;
         }
         CoreRecord fractured = repository.fractureCore(islandIndex);
@@ -688,6 +697,10 @@ public final class CoreService {
             return;
         }
         CoreRecord updated = hitResult.core();
+        if (batteryService != null && hitResult.overflowEnergy() > 0) {
+            double stored = batteryService.storeOverflow(islandIndex, hitResult.overflowEnergy());
+            repository.recordGeneratedEnergy(islandIndex, stored);
+        }
         double gainedEnergy = previous == null ? 0.0 : updated.energy() - previous.energy();
         float pitch = 1.0f + Math.min(updated.hits(), updated.maxComboHits())
                 / (float) updated.maxComboHits();
@@ -877,6 +890,11 @@ public final class CoreService {
         double amount = core.baseEnergy() * yieldRatio * core.astralPylonMultiplier();
         CoreRecord updated = repository.addPassiveEnergy(islandIndex, amount);
         if (updated != null) {
+            double overflow = Math.max(0, amount * core.prestigeMultiplier() - (updated.energy() - core.energy()));
+            if (batteryService != null && overflow > 0) {
+                double stored = batteryService.storeOverflow(islandIndex, overflow);
+                repository.recordGeneratedEnergy(islandIndex, stored);
+            }
             updateCoreVisuals(updated, System.currentTimeMillis());
         }
         return updated;
