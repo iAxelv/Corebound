@@ -201,7 +201,8 @@ public final class CoreRepository {
                 current.astralPylonAttunement(),
                 current.upgradeCapacity(),
                 current.upgradeHitYield(),
-                current.upgradePylonYield()));
+                current.upgradePylonYield(),
+                current.upgradeOfflineHours()));
         save();
         return restored;
     }
@@ -341,6 +342,7 @@ public final class CoreRepository {
                 yaml.set(path + ".upgrade-capacity", core.upgradeCapacity());
                 yaml.set(path + ".upgrade-hit-yield", core.upgradeHitYield());
                 yaml.set(path + ".upgrade-pylon-yield", core.upgradePylonYield());
+                yaml.set(path + ".upgrade-offline-hours", core.upgradeOfflineHours());
             }
             for (Map.Entry<Long, Double> entry : snapshot.generatedEnergy().entrySet()) {
                 yaml.set("island-stats." + entry.getKey() + ".generated-energy", entry.getValue());
@@ -379,6 +381,8 @@ public final class CoreRepository {
                     continue;
                 }
                 long index = Long.parseLong(indexKey);
+                // Older saves stored offline-hour upgrades in upgrade-window.
+                int offlineHours = core.getInt("upgrade-offline-hours", core.getInt("upgrade-window", 0));
                 cores.put(index, new CoreRecord(
                         index,
                         UUID.fromString(core.getString("world")),
@@ -401,7 +405,8 @@ public final class CoreRepository {
                         core.getInt("astral-pylon-attunement", 0),
                         core.getInt("upgrade-capacity", 0),
                         core.getInt("upgrade-hit-yield", 0),
-                        core.getInt("upgrade-pylon-yield", 0)));
+                        core.getInt("upgrade-pylon-yield", 0),
+                        offlineHours));
             }
         }
         ConfigurationSection stats = yaml.getConfigurationSection("island-stats");

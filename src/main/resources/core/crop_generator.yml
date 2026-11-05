@@ -30,7 +30,7 @@ crop-generator:
       '3': 6
   menus:
     main:
-      title: "&2Catalizador de Cultivos"
+      title: "&5Catalizador de Cultivos"
       slots:
         info: 4
         state: 20
@@ -85,7 +85,7 @@ crop-generator:
         '3': [11, 13, 15]
       empty-slot:
         material: GRAY_STAINED_GLASS_PANE
-        name: "&aRanura de runa"
+        name: "&bRanura de runa"
         lore:
           - "&7Mayús+clic en una runa de tu inventario"
           - "&7para instalarla."

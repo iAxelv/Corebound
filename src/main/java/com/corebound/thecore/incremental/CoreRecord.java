@@ -25,7 +25,8 @@ public record CoreRecord(
         int astralPylonAttunement,
         int upgradeCapacity,
         int upgradeHitYield,
-        int upgradePylonYield) {
+        int upgradePylonYield,
+        int upgradeOfflineHours) {
     public static final int MAX_LEVEL = 25;
     public static final int MAX_PYLON_CAPACITY = 8;
 
@@ -42,10 +43,40 @@ public record CoreRecord(
         upgradeCapacity = Math.max(0, Math.min(5, upgradeCapacity));
         upgradeHitYield = Math.max(0, Math.min(5, upgradeHitYield));
         upgradePylonYield = Math.max(0, Math.min(5, upgradePylonYield));
+        upgradeOfflineHours = Math.max(0, Math.min(5, upgradeOfflineHours));
         double capacity = maxEnergy(level, upgradeCapacity);
         energy = Double.isNaN(energy)
                 ? 0.0
                 : Math.max(0.0, Math.min(capacity, energy));
+    }
+
+    public CoreRecord(
+            long islandIndex,
+            UUID worldId,
+            double x,
+            double y,
+            double z,
+            UUID itemDisplayId,
+            UUID interactionId,
+            UUID textDisplayId,
+            int level,
+            double energy,
+            int hits,
+            long lastHitAt,
+            int upgradeOvercharge,
+            int upgradeWindow,
+            int upgradeCritical,
+            int prestigeCount,
+            int coreFragments,
+            int astralResonance,
+            int astralPylonAttunement,
+            int upgradeCapacity,
+            int upgradeHitYield,
+            int upgradePylonYield) {
+        this(islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
+                level, energy, hits, lastHitAt, upgradeOvercharge, upgradeWindow, upgradeCritical,
+                prestigeCount, coreFragments, astralResonance, astralPylonAttunement,
+                upgradeCapacity, upgradeHitYield, upgradePylonYield, 0);
     }
 
     public CoreRecord(
@@ -230,7 +261,8 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, updatedEnergy, updatedHits, now,
                 upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments,
-                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield);
+                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield,
+                upgradeOfflineHours);
         return new HitResult(updated, critical, Math.max(0, energy + requestedEnergy - maxEnergy()));
     }
 
@@ -239,7 +271,8 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, Math.min(maxEnergy(), energy + amount * prestigeMultiplier()), hits, lastHitAt,
                 upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments,
-                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield);
+                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield,
+                upgradeOfflineHours);
     }
 
     public CoreRecord withoutCombo() {
@@ -247,7 +280,7 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, energy, 0, 0, upgradeOvercharge, upgradeWindow, upgradeCritical,
                 prestigeCount, coreFragments, astralResonance, astralPylonAttunement,
-                upgradeCapacity, upgradeHitYield, upgradePylonYield);
+                upgradeCapacity, upgradeHitYield, upgradePylonYield, upgradeOfflineHours);
     }
 
     public CoreRecord upgrade(double cost) {
@@ -258,7 +291,8 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level + 1, energy - cost, hits, lastHitAt,
                 upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments,
-                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield);
+                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield,
+                upgradeOfflineHours);
     }
 
     public CoreRecord spendEnergy(double cost) {
@@ -269,7 +303,8 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, energy - cost, hits, lastHitAt,
                 upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments,
-                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield);
+                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield,
+                upgradeOfflineHours);
     }
 
     public CoreRecord upgradeEnhancement(
@@ -283,12 +318,13 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 level, energy - cost, hits, lastHitAt,
                 upgradeOvercharge + (enhancement == CoreEnhancement.OVERCHARGE ? 1 : 0),
-                upgradeWindow + (enhancement == CoreEnhancement.OFFLINE_HOURS ? 1 : 0),
+                upgradeWindow,
                 upgradeCritical + (enhancement == CoreEnhancement.CRITICAL ? 1 : 0),
                 prestigeCount, coreFragments, astralResonance, astralPylonAttunement,
                 upgradeCapacity + (enhancement == CoreEnhancement.CAPACITY ? 1 : 0),
                 upgradeHitYield + (enhancement == CoreEnhancement.HIT_YIELD ? 1 : 0),
-                upgradePylonYield + (enhancement == CoreEnhancement.PYLON_YIELD ? 1 : 0));
+                upgradePylonYield + (enhancement == CoreEnhancement.PYLON_YIELD ? 1 : 0),
+                upgradeOfflineHours + (enhancement == CoreEnhancement.OFFLINE_HOURS ? 1 : 0));
     }
 
     public CoreRecord upgradeEnhancement(CoreEnhancement enhancement, double cost, int maxLevel) {
@@ -310,7 +346,7 @@ public record CoreRecord(
                 prestigeCount, coreFragments - fragmentCost,
                 astralResonance + (skill == AstralSkill.RESONANCE ? 1 : 0),
                 astralPylonAttunement + (skill == AstralSkill.PYLON_ATTUNEMENT ? 1 : 0),
-                upgradeCapacity, upgradeHitYield, upgradePylonYield);
+                upgradeCapacity, upgradeHitYield, upgradePylonYield, upgradeOfflineHours);
     }
 
     public int astralSkillLevel(AstralSkill skill) {
@@ -335,7 +371,7 @@ public record CoreRecord(
             case CAPACITY -> upgradeCapacity;
             case HIT_YIELD -> upgradeHitYield;
             case PYLON_YIELD -> upgradePylonYield;
-            case OFFLINE_HOURS -> upgradeWindow;
+            case OFFLINE_HOURS -> upgradeOfflineHours;
         };
     }
 
@@ -395,7 +431,8 @@ public record CoreRecord(
                 islandIndex, worldId, x, y, z, itemDisplayId, interactionId, textDisplayId,
                 1, 0.0, 0, 0,
                 upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount + 1, coreFragments + 1,
-                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield);
+                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield, upgradePylonYield,
+                upgradeOfflineHours);
     }
 
     public static double maxEnergy(int level, int upgradeCapacity) {

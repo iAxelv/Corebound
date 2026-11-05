@@ -6,7 +6,7 @@ pylon:
       - "&7Estructura de extracción pasiva."
       - "&7Dispara pulsos de energía hacia el Núcleo."
       - ""
-      - "&eColócalo entre 3 y 12 bloques del Núcleo."
+      - "&eColócalo entre %min% y %max% bloques del Núcleo."
   display:
     base-material: SEA_LANTERN
     material: END_ROD

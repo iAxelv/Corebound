@@ -26,4 +26,19 @@ class BatteryRecordTest {
         assertEquals(1, tierOne.tier());
         assertEquals(Map.of(0, new CellRecord(CellType.BATTERY_CAPACITY, 2)), tierOne.runes());
     }
+
+    @Test
+    void offlineCheckpointCanAdvanceWithoutResettingAccumulatedTime() {
+        BatteryRecord battery = new BatteryRecord(
+                1, UUID.randomUUID(), UUID.randomUUID(), 0, 0, 0,
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                1, 100, Map.of(), 3_600_000, 1_000);
+
+        BatteryRecord checkpointed = battery.withOfflineProgress(
+                battery.energy(), battery.offlineMillis(), 61_000);
+
+        assertEquals(100, checkpointed.energy());
+        assertEquals(3_600_000, checkpointed.offlineMillis());
+        assertEquals(61_000, checkpointed.lastOfflineCheck());
+    }
 }

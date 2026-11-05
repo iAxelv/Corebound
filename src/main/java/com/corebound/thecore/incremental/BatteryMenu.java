@@ -244,6 +244,8 @@ public final class BatteryMenu implements Listener {
                 messages.parseComponent(messages.formatText("battery-ui.capacity", Map.of(
                         "energy", format(battery.energy()),
                         "capacity", format(capacity)))),
+                messages.parseComponent(messages.formatText("battery-ui.transferable", Map.of(
+                        "energy", format(batteries.transferableEnergyToCore(battery.islandIndex()))))),
                 Component.empty(),
                 messages.component("battery-ui.energy-description")));
         item.setItemMeta(meta);

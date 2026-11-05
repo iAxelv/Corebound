@@ -1418,6 +1418,8 @@ public final class PylonService {
         meta.displayName(messages.parseComponent(config.getString("pylon.item.display-name")
                 + messages.formatText("pylon-ui.item-suffix", Map.of("tier", Integer.toString(tier)))));
         List<Component> lore = new ArrayList<>(config.getStringList("pylon.item.lore").stream()
+                .map(line -> line.replace("%min%", formatEnergy(minimumDistance))
+                        .replace("%max%", formatEnergy(maximumDistance)))
                 .map(messages::parseComponent)
                 .toList());
         lore.add(messages.parseComponent(""));

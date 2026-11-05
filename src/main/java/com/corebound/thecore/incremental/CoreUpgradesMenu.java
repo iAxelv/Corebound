@@ -194,7 +194,7 @@ public final class CoreUpgradesMenu implements Listener {
                         Map.entry("%combo%", String.format(java.util.Locale.ROOT, "%.2f", core.maxCombo())),
                         Map.entry("%yield%", Integer.toString(core.upgradeHitYield() * 8)),
                         Map.entry("%pylon_yield%", Integer.toString(core.upgradePylonYield() * 15)),
-                        Map.entry("%offline_hours%", Integer.toString(3 + core.upgradeWindow())),
+                        Map.entry("%offline_hours%", Integer.toString(3 + core.upgradeOfflineHours())),
                         Map.entry("%required_level%", Integer.toString(requiredCoreLevel)),
                         Map.entry("%status%", status))))
                 .map(messages::parseComponent)

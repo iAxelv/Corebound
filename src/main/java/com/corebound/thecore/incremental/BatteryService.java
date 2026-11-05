@@ -278,7 +278,8 @@ public final class BatteryService {
                 messages.parseComponent(messages.formatText("battery-ui.item-placement", Map.of(
                         "min", format(minDistance),
                         "max", format(maxDistance)))),
-                messages.component("battery-ui.item-place")));
+                messages.component("battery-ui.item-place"),
+                messages.component("battery-ui.pickup")));
         meta.getPersistentDataContainer().set(itemKey, PersistentDataType.BYTE, (byte) 1);
         meta.getPersistentDataContainer().set(itemIslandKey, PersistentDataType.LONG, islandIndex);
         meta.getPersistentDataContainer().set(itemTierKey, PersistentDataType.INTEGER, tier);
@@ -507,11 +508,31 @@ public final class BatteryService {
         long now = System.currentTimeMillis();
         Set<UUID> onlineSnapshot = Set.copyOf(onlinePlayers);
         for (IslandData island : islandService.allIslands()) {
+            CoreRecord core = coreRepository.core(island.index());
+            if (core == null) {
+                continue;
+            }
+            World world = plugin.getServer().getWorld(core.worldId());
+            if (world == null) {
+                continue;
+            }
+            Location location = new Location(world, core.x(), core.y(), core.z());
             try {
-                processOfflineGeneration(island, onlineSnapshot, now);
+                plugin.getServer().getRegionScheduler().run(plugin, location, task -> {
+                    try {
+                        processOfflineGeneration(island, onlineSnapshot, now);
+                    } catch (RuntimeException exception) {
+                        plugin.getLogger().log(Level.SEVERE,
+                                "Could not process offline battery generation for island "
+                                        + island.index() + ".",
+                                exception);
+                    }
+                });
             } catch (RuntimeException exception) {
                 plugin.getLogger().log(Level.SEVERE,
-                        "Could not process offline battery generation for island " + island.index() + ".", exception);
+                        "Could not schedule offline battery generation for island "
+                                + island.index() + ".",
+                        exception);
             }
         }
     }
@@ -538,8 +559,9 @@ public final class BatteryService {
         double pylonRate = pylons.offlineYieldPerSecond(island.index());
         if (pylonRate <= 0) {
             for (BatteryRecord battery : islandBatteries) {
-                if (battery.lastOfflineCheck() != 0) {
-                    repository.update(battery.withOfflineProgress(battery.energy(), 0, 0));
+                if (battery.lastOfflineCheck() != now) {
+                    repository.update(battery.withOfflineProgress(
+                            battery.energy(), battery.offlineMillis(), now));
                 }
             }
             return;
@@ -688,7 +710,7 @@ public final class BatteryService {
     }
 
     private Component batteryHologram(BatteryRecord battery, CoreRecord core) {
-        return messages.parseComponent(messages.formatText("battery-ui.hologram", Map.of(
+        return messages.parseComponent(messages.formatText("battery-ui.hologram-name", Map.of(
                 "energy", format(battery.energy()),
                 "capacity", format(capacity(battery, core)),
                 "level", Integer.toString(battery.tier()))));
@@ -806,6 +828,31 @@ public final class BatteryService {
 
     public double capacity(BatteryRecord battery, CoreRecord core) {
         return battery.capacity(core, capacityRuneBonusPerTier);
+    }
+
+    public double totalEnergy(long islandIndex) {
+        return repository.forIsland(islandIndex).stream()
+                .mapToDouble(BatteryRecord::energy)
+                .sum();
+    }
+
+    public double totalCapacity(long islandIndex) {
+        CoreRecord core = coreRepository.core(islandIndex);
+        if (core == null) {
+            return 0;
+        }
+        return repository.forIsland(islandIndex).stream()
+                .mapToDouble(battery -> capacity(battery, core))
+                .sum();
+    }
+
+    public double transferableEnergyToCore(long islandIndex) {
+        CoreRecord core = coreRepository.core(islandIndex);
+        if (core == null) {
+            return 0;
+        }
+        double coreSpace = Math.max(0, core.maxEnergy() - core.energy());
+        return Math.min(coreSpace, totalEnergy(islandIndex));
     }
 
     public int placedBatteryCount(long islandIndex) {
@@ -959,7 +1006,7 @@ public final class BatteryService {
     }
 
     private int maximumOfflineHours(CoreRecord core) {
-        return Math.min(maximumOfflineHours, baseOfflineHours + core.upgradeWindow());
+        return Math.min(maximumOfflineHours, baseOfflineHours + core.upgradeOfflineHours());
     }
 
     public boolean destroyForFracture(Player player, long islandIndex) {

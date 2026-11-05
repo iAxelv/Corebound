@@ -146,6 +146,31 @@ public final class CoreItem {
             int upgradeCapacity,
             int upgradeHitYield,
             int upgradePylonYield) {
+        return create(config, messages, itemKey, level, energy, hits, lastHitAt,
+                upgradeOvercharge, upgradeWindow, upgradeCritical, prestigeCount, coreFragments,
+                astralResonance, astralPylonAttunement, upgradeCapacity, upgradeHitYield,
+                upgradePylonYield, 0);
+    }
+
+    public static ItemStack create(
+            YamlConfiguration config,
+            Messages messages,
+            NamespacedKey itemKey,
+            int level,
+            double energy,
+            int hits,
+            long lastHitAt,
+            int upgradeOvercharge,
+            int upgradeWindow,
+            int upgradeCritical,
+            int prestigeCount,
+            int coreFragments,
+            int astralResonance,
+            int astralPylonAttunement,
+            int upgradeCapacity,
+            int upgradeHitYield,
+            int upgradePylonYield,
+            int upgradeOfflineHours) {
         Material material = Material.matchMaterial(config.getString("item.material", "NETHERITE_BLOCK"));
         if (material == null || !material.isItem() || !material.isBlock()) {
             throw new IllegalArgumentException("core.yml item.material must be a valid block item.");
@@ -181,6 +206,8 @@ public final class CoreItem {
                 hitYieldUpgradeKey(itemKey), PersistentDataType.INTEGER, upgradeHitYield);
         meta.getPersistentDataContainer().set(
                 pylonYieldUpgradeKey(itemKey), PersistentDataType.INTEGER, upgradePylonYield);
+        meta.getPersistentDataContainer().set(
+                offlineHoursUpgradeKey(itemKey), PersistentDataType.INTEGER, upgradeOfflineHours);
         item.setItemMeta(meta);
         return item;
     }
@@ -231,7 +258,12 @@ public final class CoreItem {
                 meta.getPersistentDataContainer().getOrDefault(
                         hitYieldUpgradeKey(itemKey), PersistentDataType.INTEGER, 0),
                 meta.getPersistentDataContainer().getOrDefault(
-                        pylonYieldUpgradeKey(itemKey), PersistentDataType.INTEGER, 0));
+                        pylonYieldUpgradeKey(itemKey), PersistentDataType.INTEGER, 0),
+                meta.getPersistentDataContainer().getOrDefault(
+                        offlineHoursUpgradeKey(itemKey),
+                        PersistentDataType.INTEGER,
+                        meta.getPersistentDataContainer().getOrDefault(
+                                windowKey(itemKey), PersistentDataType.INTEGER, 0)));
     }
 
     private static NamespacedKey levelKey(NamespacedKey itemKey) {
@@ -290,6 +322,10 @@ public final class CoreItem {
         return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_upgrade_pylon_yield");
     }
 
+    private static NamespacedKey offlineHoursUpgradeKey(NamespacedKey itemKey) {
+        return new NamespacedKey(itemKey.getNamespace(), itemKey.getKey() + "_upgrade_offline_hours");
+    }
+
     private static String replaceStats(String text, int level, double baseEnergy) {
         return text
                 .replace("%level%", Integer.toString(level))
@@ -319,6 +355,7 @@ public final class CoreItem {
             int astralPylonAttunement,
             int upgradeCapacity,
             int upgradeHitYield,
-            int upgradePylonYield) {
+            int upgradePylonYield,
+            int upgradeOfflineHours) {
     }
 }

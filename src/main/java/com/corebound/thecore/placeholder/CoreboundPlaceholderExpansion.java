@@ -1,6 +1,7 @@
 package com.corebound.thecore.placeholder;
 
 import com.corebound.thecore.TheCorePlugin;
+import com.corebound.thecore.incremental.BatteryService;
 import com.corebound.thecore.incremental.CoreRepository;
 import com.corebound.thecore.island.IslandData;
 import com.corebound.thecore.island.IslandRepository;
@@ -15,12 +16,14 @@ public final class CoreboundPlaceholderExpansion extends PlaceholderExpansion {
     private final TheCorePlugin plugin;
     private final IslandRepository islands;
     private final CoreRepository cores;
+    private final BatteryService batteries;
 
     public CoreboundPlaceholderExpansion(
-            TheCorePlugin plugin, IslandRepository islands, CoreRepository cores) {
+            TheCorePlugin plugin, IslandRepository islands, CoreRepository cores, BatteryService batteries) {
         this.plugin = plugin;
         this.islands = islands;
         this.cores = cores;
+        this.batteries = batteries;
     }
 
     @Override
@@ -61,6 +64,12 @@ public final class CoreboundPlaceholderExpansion extends PlaceholderExpansion {
                     .orElse("0");
             case "island_energy_collected" -> island
                     .map(data -> PlaceholderEnergyFormat.format(cores.generatedEnergy(data.index())))
+                    .orElse("0");
+            case "battery_energy" -> island
+                    .map(data -> PlaceholderEnergyFormat.format(batteries.totalEnergy(data.index())))
+                    .orElse("0");
+            case "battery_capacity" -> island
+                    .map(data -> PlaceholderEnergyFormat.format(batteries.totalCapacity(data.index())))
                     .orElse("0");
             case "core_hits" -> island
                     .map(data -> Long.toString(cores.topHits(data.index())))

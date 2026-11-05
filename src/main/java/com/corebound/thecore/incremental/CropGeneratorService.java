@@ -517,7 +517,8 @@ public final class CropGeneratorService implements Listener {
                         "level", Integer.toString(level),
                         "max_level", Integer.toString(MAX_LEVEL)))),
                 messages.parseComponent(messages.formatText("crop-generator-ui.state", Map.of(
-                        "state", stateLabel(state)))),
+                        "state", stateLabel(state),
+                        "color", stateColor(state)))),
                 messages.component("crop-generator-ui.description"),
                 messages.component("crop-generator-ui.island-limit"),
                 messages.component("crop-generator-ui.pickup")));

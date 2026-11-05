@@ -271,17 +271,37 @@ class CoreRecordTest {
 
     @Test
     void offlineStorageUpgradeAddsOneHourPerLevelAndCapsAtEightHours() {
-        CoreRecord core = createCore(10, 10_000);
+        CoreRecord core = new CoreRecord(
+                1,
+                UUID.randomUUID(),
+                0,
+                64,
+                0,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                10,
+                10_000,
+                0,
+                0,
+                0,
+                3,
+                0);
 
         for (int level = 1; level <= 5; level++) {
             core = core.upgradeEnhancement(CoreEnhancement.OFFLINE_HOURS, 0, 5, 10);
             assertNotNull(core);
-            assertEquals(level, core.upgradeWindow());
-            assertEquals(3 + level, Math.min(8, 3 + core.upgradeWindow()));
+            assertEquals(3, core.upgradeWindow());
+            assertEquals(level, core.upgradeOfflineHours());
+            assertEquals(3 + level, Math.min(8, 3 + core.upgradeOfflineHours()));
         }
 
         assertNull(core.upgradeEnhancement(CoreEnhancement.OFFLINE_HOURS, 0, 5, 10));
-        assertEquals(8, Math.min(8, 3 + core.upgradeWindow()));
+        assertEquals(3, core.upgradeWindow());
+        assertEquals(8, Math.min(8, 3 + core.upgradeOfflineHours()));
+        assertEquals(5, core.spendEnergy(0).upgradeOfflineHours());
+        assertEquals(5, core.withPassiveEnergy(1).upgradeOfflineHours());
+        assertEquals(5, core.withoutCombo().upgradeOfflineHours());
     }
 
     @Test

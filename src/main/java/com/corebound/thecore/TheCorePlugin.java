@@ -179,7 +179,8 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(menus, this);
         getServer().getPluginManager().registerEvents(topMenu, this);
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            placeholderExpansion = new CoreboundPlaceholderExpansion(this, islandRepository, coreRepository);
+            placeholderExpansion = new CoreboundPlaceholderExpansion(
+                    this, islandRepository, coreRepository, batteryService);
             if (placeholderExpansion.register()) {
                 getLogger().info("Registered PlaceholderAPI expansion.");
             } else {

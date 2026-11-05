@@ -1,6 +1,6 @@
 item:
   material: CRYING_OBSIDIAN
-  display-name: "&5Corebound Core &7[Nvl. %level%]"
+  display-name: "&5Núcleo de Resonancia &7[Nivel %level%]"
   lore:
     - "&8Núcleo de Resonancia"
     - ""
@@ -22,7 +22,7 @@ text-display:
   offset-y: 1.1
   line-width: 200
   lines:
-    - "&5NÚCLEO DE RESONANCIA &7[Nvl. %level%]"
+    - "&5NÚCLEO DE RESONANCIA &7[Nivel %level%]"
     - "&e%energy%⚡ &7(&bCombo: x%combo%&7)"
     - "&bPilones: &e%placed_pylons%/%pylon_capacity%"
     - "&8[Golpea para extraer energía]"
