@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import net.kyori.adventure.text.Component;
@@ -35,6 +36,7 @@ public final class CoreMenu implements Listener {
     private CondenserService condenserService;
     private CropGeneratorService cropGeneratorService;
     private BatteryService batteryService;
+    private EssenceService essenceService;
 
     private static final class MenuHolder implements InventoryHolder {
         private final long islandIndex;
@@ -114,6 +116,7 @@ public final class CoreMenu implements Listener {
         validateItem(loaded, "items.condenser");
         validateItem(loaded, "items.crop-generator");
         validateItem(loaded, "items.battery");
+        validateItem(loaded, "items.sacrifice");
         validateItem(loaded, "items.cell-forge");
         validateItem(loaded, "items.upgrade");
         validateItem(loaded, "items.close");
@@ -154,6 +157,10 @@ public final class CoreMenu implements Listener {
         this.batteryService = batteryService;
     }
 
+    public void attachEssenceService(EssenceService essenceService) {
+        this.essenceService = essenceService;
+    }
+
     public void open(Player player, CoreRecord core) {
         MenuHolder holder = new MenuHolder(core.islandIndex(), menuSlots());
         holder.inventory = Bukkit.createInventory(
@@ -169,6 +176,7 @@ public final class CoreMenu implements Listener {
         holder.inventory.setItem(slot("condenser"), createCondenserItem(core));
         holder.inventory.setItem(slot("crop-generator"), createCropGeneratorItem(core));
         holder.inventory.setItem(slot("battery"), createBatteryItem(core));
+        holder.inventory.setItem(slot("sacrifice"), createSacrificeItem(player));
         holder.inventory.setItem(slot("upgrade"), createItem(
                 config.getConfigurationSection("items.upgrade"), core,
                 core.level() < CoreRecord.MAX_LEVEL && core.energy() >= core.upgradeCost()));
@@ -203,6 +211,9 @@ public final class CoreMenu implements Listener {
             }
         } else if (event.getRawSlot() == holder.slot("battery") && batteryService != null) {
             batteryService.buy(player, holder.islandIndex);
+            coreService.openCoreMenu(player, holder.islandIndex);
+        } else if (event.getRawSlot() == holder.slot("sacrifice") && essenceService != null) {
+            essenceService.sell(player);
             coreService.openCoreMenu(player, holder.islandIndex);
         } else if (event.getRawSlot() == holder.slot("astral-tree")) {
             coreService.openAstralTree(player, holder.islandIndex);
@@ -420,6 +431,51 @@ public final class CoreMenu implements Listener {
         return item;
     }
 
+    private ItemStack createSacrificeItem(Player player) {
+        ConfigurationSection itemConfig = config.getConfigurationSection("items.sacrifice");
+        EssenceService.Quote quote = essenceService.quote(player);
+        EssenceRepository.Balance balance = essenceService.balance(player.getUniqueId());
+        String mineralName = messages.legacy("essence.mineral-name");
+        String vegetalName = messages.legacy("essence.vegetal-name");
+        Map<String, String> placeholders = Map.of(
+                "%mineral_balance%", essenceService.format(balance.mineral()),
+                "%vegetal_balance%", essenceService.format(balance.vegetal()),
+                "%mineral_name%", mineralName,
+                "%vegetal_name%", vegetalName);
+        List<Component> lore = new ArrayList<>(itemConfig.getStringList("lore").stream()
+                .map(line -> color(replace(line, placeholders)))
+                .toList());
+        lore.add(color(itemConfig.getString("preview-header")));
+        if (quote.isEmpty()) {
+            lore.add(color(itemConfig.getString("empty-preview")));
+        } else {
+            quote.items().forEach(item -> {
+                String essenceName = messages.legacy(item.type() == EssenceService.Type.ORES
+                        ? "essence.mineral-name"
+                        : "essence.vegetal-name");
+                lore.add(color(replace(itemConfig.getString("preview-item"), Map.of(
+                        "%name%", item.name(),
+                        "%amount%", Integer.toString(item.amount()),
+                        "%value%", essenceService.format(item.essence()),
+                        "%essence_name%", essenceName))));
+            });
+        }
+        lore.add(color(replace(itemConfig.getString("total-mineral"), Map.of(
+                "%value%", essenceService.format(quote.mineral()),
+                "%mineral_name%", mineralName))));
+        lore.add(color(replace(itemConfig.getString("total-vegetal"), Map.of(
+                "%value%", essenceService.format(quote.vegetal()),
+                "%vegetal_name%", vegetalName))));
+        lore.addAll(itemConfig.getStringList("click-lore").stream().map(this::color).toList());
+
+        ItemStack item = new ItemStack(Material.matchMaterial(itemConfig.getString("material")));
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(color(itemConfig.getString("display-name")));
+        meta.lore(lore);
+        item.setItemMeta(meta);
+        return item;
+    }
+
     private void validateItem(YamlConfiguration loaded, String path) {
         ConfigurationSection section = loaded.getConfigurationSection(path);
         int slot = section == null ? -1 : section.getInt("slot", -1);
@@ -432,7 +488,7 @@ public final class CoreMenu implements Listener {
         for (String otherPath : List.of(
                 "items.upgrades", "items.statistics", "items.fracture", "items.astral-tree", "items.pylon",
                 "items.condenser", "items.crop-generator", "items.battery", "items.cell-forge",
-                "items.upgrade", "items.close")) {
+                "items.sacrifice", "items.upgrade", "items.close")) {
             if (!otherPath.equals(path)
                     && loaded.getInt(otherPath + ".slot", -1) == slot) {
                 throw new IllegalArgumentException("core_menu.yml item slots must be unique.");
@@ -454,6 +510,7 @@ public final class CoreMenu implements Listener {
                 Map.entry("condenser", slot("condenser")),
                 Map.entry("crop-generator", slot("crop-generator")),
                 Map.entry("battery", slot("battery")),
+                Map.entry("sacrifice", slot("sacrifice")),
                 Map.entry("cell-forge", slot("cell-forge")),
                 Map.entry("upgrade", slot("upgrade")),
                 Map.entry("close", slot("close")));

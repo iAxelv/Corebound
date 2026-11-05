@@ -3,6 +3,7 @@ package com.corebound.thecore.placeholder;
 import com.corebound.thecore.TheCorePlugin;
 import com.corebound.thecore.incremental.BatteryService;
 import com.corebound.thecore.incremental.CoreRepository;
+import com.corebound.thecore.incremental.EssenceService;
 import com.corebound.thecore.island.IslandData;
 import com.corebound.thecore.island.IslandRepository;
 import java.util.Locale;
@@ -17,13 +18,19 @@ public final class CoreboundPlaceholderExpansion extends PlaceholderExpansion {
     private final IslandRepository islands;
     private final CoreRepository cores;
     private final BatteryService batteries;
+    private final EssenceService essences;
 
     public CoreboundPlaceholderExpansion(
-            TheCorePlugin plugin, IslandRepository islands, CoreRepository cores, BatteryService batteries) {
+            TheCorePlugin plugin,
+            IslandRepository islands,
+            CoreRepository cores,
+            BatteryService batteries,
+            EssenceService essences) {
         this.plugin = plugin;
         this.islands = islands;
         this.cores = cores;
         this.batteries = batteries;
+        this.essences = essences;
     }
 
     @Override
@@ -71,6 +78,14 @@ public final class CoreboundPlaceholderExpansion extends PlaceholderExpansion {
             case "battery_capacity" -> island
                     .map(data -> PlaceholderEnergyFormat.format(batteries.totalCapacity(data.index())))
                     .orElse("0");
+            case "mineral_essence" -> essences.balance(player.getUniqueId())
+                    .mineral()
+                    .stripTrailingZeros()
+                    .toPlainString();
+            case "vegetal_essence" -> essences.balance(player.getUniqueId())
+                    .vegetal()
+                    .stripTrailingZeros()
+                    .toPlainString();
             case "core_hits" -> island
                     .map(data -> Long.toString(cores.topHits(data.index())))
                     .orElse("0");

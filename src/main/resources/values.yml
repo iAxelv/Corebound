@@ -1,0 +1,81 @@
+items:
+  raw_copper:
+    material: RAW_COPPER
+    type: ores
+    name: "Cobre en bruto"
+    value: 1.0
+  raw_iron:
+    material: RAW_IRON
+    type: ores
+    name: "Hierro en bruto"
+    value: 2.0
+  raw_gold:
+    material: RAW_GOLD
+    type: ores
+    name: "Oro en bruto"
+    value: 3.0
+  coal:
+    material: COAL
+    type: ores
+    name: "Carbón"
+    value: 1.2
+  emerald:
+    material: EMERALD
+    type: ores
+    name: "Esmeralda"
+    value: 4.0
+  lapis_lazuli:
+    material: LAPIS_LAZULI
+    type: ores
+    name: "Lapislázuli"
+    value: 1.4
+  redstone:
+    material: REDSTONE
+    type: ores
+    name: "Redstone"
+    value: 1.5
+  diamond:
+    material: DIAMOND
+    type: ores
+    name: "Diamante"
+    value: 6.0
+  ancient_debris:
+    material: ANCIENT_DEBRIS
+    type: ores
+    name: "Escombros ancestrales"
+    value: 10.0
+  sugar_cane:
+    material: SUGAR_CANE
+    type: vegetals
+    name: "Caña de azúcar"
+    value: 0.2
+  bamboo:
+    material: BAMBOO
+    type: vegetals
+    name: "Bambú"
+    value: 0.25
+  cactus:
+    material: CACTUS
+    type: vegetals
+    name: "Cactus"
+    value: 0.3
+  kelp:
+    material: KELP
+    type: vegetals
+    name: "Alga"
+    value: 0.35
+  carrot:
+    material: CARROT
+    type: vegetals
+    name: "Zanahoria"
+    value: 0.5
+  potato:
+    material: POTATO
+    type: vegetals
+    name: "Papa"
+    value: 0.6
+  beetroot:
+    material: BEETROOT
+    type: vegetals
+    name: "Remolacha"
+    value: 0.7

@@ -111,6 +111,24 @@ items:
     locked-name: "&cCatalizador bloqueado"
     locked-lore:
       - "&cRequiere Núcleo nivel &e%required_level%&c."
+  sacrifice:
+    material: SCULK_CATALYST
+    slot: 21
+    display-name: "&5Sacrificio"
+    lore:
+      - "&7Intercambia minerales y cultivos por esencias."
+      - ""
+      - "&7Balance: &b%mineral_balance% %mineral_name%"
+      - "&7Balance: &a%vegetal_balance% %vegetal_name%"
+      - ""
+    preview-header: "&eMateriales en tu inventario:"
+    preview-item: "&7%name% x%amount% &8→ &f%value% %essence_name%"
+    empty-preview: "&8No tienes materiales para sacrificar."
+    total-mineral: "&7Recibirás: &b%value% %mineral_name%"
+    total-vegetal: "&7Recibirás: &a%value% %vegetal_name%"
+    click-lore:
+      - ""
+      - "&eHaz clic para sacrificar los materiales."
   battery:
     material: COPPER_BLOCK
     slot: 23

@@ -283,6 +283,10 @@ public final class CoreService {
         coreMenu.attachBatteryService(batteryService);
     }
 
+    public void attachEssenceService(EssenceService essenceService) {
+        coreMenu.attachEssenceService(essenceService);
+    }
+
     public void openCoreMenu(Player player, org.bukkit.entity.Entity entity) {
         Long islandIndex = entity.getPersistentDataContainer().get(islandIndexKey, PersistentDataType.LONG);
         if (islandIndex == null) {

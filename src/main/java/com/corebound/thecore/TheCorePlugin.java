@@ -6,6 +6,8 @@ import com.corebound.thecore.gui.IslandTopMenu;
 import com.corebound.thecore.incremental.CorePlaceListener;
 import com.corebound.thecore.incremental.CoreRepository;
 import com.corebound.thecore.incremental.CoreService;
+import com.corebound.thecore.incremental.EssenceRepository;
+import com.corebound.thecore.incremental.EssenceService;
 import com.corebound.thecore.incremental.BatteryRepository;
 import com.corebound.thecore.incremental.BatteryService;
 import com.corebound.thecore.incremental.CondenserRepository;
@@ -37,6 +39,7 @@ public final class TheCorePlugin extends JavaPlugin {
     private CondenserService condenserService;
     private CropGeneratorService cropGeneratorService;
     private BatteryService batteryService;
+    private EssenceService essenceService;
     private Messages messages;
     private IslandSounds sounds;
     private IslandMenuManager menus;
@@ -59,6 +62,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("core/condenser.yml");
         saveResourceIfMissing("core/crop_generator.yml");
         saveResourceIfMissing("core/battery.yml");
+        saveResourceIfMissing("values.yml");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");
@@ -90,6 +94,11 @@ public final class TheCorePlugin extends JavaPlugin {
         sounds = new IslandSounds(this);
         islandService = new IslandService(this, islandWorld, islandRepository, messages, sounds);
         try {
+            essenceService = new EssenceService(
+                    this,
+                    messages,
+                    new EssenceRepository(new File(getDataFolder(), "data/essences.yml")),
+                    new File(getDataFolder(), "values.yml"));
             coreRepository = new CoreRepository(new File(getDataFolder(), "data/cores.yml"), this);
             coreService = new CoreService(
                     this,
@@ -136,6 +145,7 @@ public final class TheCorePlugin extends JavaPlugin {
                     pylonService,
                     messages,
                     new File(getDataFolder(), "core/battery.yml"));
+            coreService.attachEssenceService(essenceService);
             coreRepository.attachBatteryService(batteryService);
             coreService.attachBatteryService(batteryService);
         } catch (IllegalArgumentException exception) {
@@ -180,7 +190,7 @@ public final class TheCorePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(topMenu, this);
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             placeholderExpansion = new CoreboundPlaceholderExpansion(
-                    this, islandRepository, coreRepository, batteryService);
+                    this, islandRepository, coreRepository, batteryService, essenceService);
             if (placeholderExpansion.register()) {
                 getLogger().info("Registered PlaceholderAPI expansion.");
             } else {
@@ -223,6 +233,13 @@ public final class TheCorePlugin extends JavaPlugin {
                     pylonService.flush();
                 } catch (IOException exception) {
                     getLogger().severe("Could not save pylon data: " + exception.getMessage());
+                }
+            }
+            if (essenceService != null) {
+                try {
+                    essenceService.flush();
+                } catch (IOException exception) {
+                    getLogger().severe("Could not save essence data: " + exception.getMessage());
                 }
             }
             if (condenserService != null) {
@@ -278,6 +295,7 @@ public final class TheCorePlugin extends JavaPlugin {
         condenserService.reloadConfiguration();
         cropGeneratorService.reloadConfiguration();
         batteryService.reloadConfiguration();
+        essenceService.reload();
     }
 
     private void validateIslandSpacing(org.bukkit.configuration.ConfigurationSection config) throws IOException {
