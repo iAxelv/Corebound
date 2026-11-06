@@ -83,8 +83,6 @@ public final class CondenserRuneMenu implements Listener {
             if (event.isShiftClick()) {
                 event.setCancelled(true);
                 installFromInventory(player, event, condenser, holder);
-            } else {
-                fuseInventoryRunes(player, event, condenser);
             }
             return;
         }
@@ -139,31 +137,6 @@ public final class CondenserRuneMenu implements Listener {
             reopen(player, holder.condenserId);
             player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
         }
-    }
-
-    private void fuseInventoryRunes(Player player, InventoryClickEvent event, CondenserRecord condenser) {
-        if (event.getClickedInventory() == null) {
-            return;
-        }
-        ItemStack cursor = event.getCursor();
-        ItemStack target = event.getCurrentItem();
-        CellRecord first = CellItem.read(cursor);
-        CellRecord second = CellItem.read(target);
-        if (first == null || second == null || !first.type().isCondenserRune()
-                || first.type() != second.type() || cursor.getAmount() != 1 || target.getAmount() != 1) {
-            return;
-        }
-        CellRecord fused = first.fuse(second);
-        if (fused == null || !condensers.canUseRuneTier(player, condenser, fused.tier())) {
-            return;
-        }
-        event.setCancelled(true);
-        player.setItemOnCursor(CellItem.create(fused, pylons.baseIntervalTicks(), messages));
-        event.getClickedInventory().setItem(event.getSlot(), null);
-        player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.8f);
-        messages.send(player, "condenser-rune-fused", java.util.Map.of(
-                "cell", first.type().displayName(messages),
-                "tier", Integer.toString(fused.tier())));
     }
 
     private void reopen(Player player, UUID condenserId) {

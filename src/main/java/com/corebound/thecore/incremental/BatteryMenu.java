@@ -144,8 +144,6 @@ public final class BatteryMenu implements Listener {
                     player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
                     reopen(player, holder.batteryId, true);
                 }
-            } else if (event.getClickedInventory() != null) {
-                fuseInventoryRunes(player, event);
             }
             return;
         }
@@ -171,30 +169,6 @@ public final class BatteryMenu implements Listener {
                 reopen(player, holder.batteryId, true);
             }
         }
-    }
-
-    private void fuseInventoryRunes(Player player, InventoryClickEvent event) {
-        ItemStack cursor = event.getCursor();
-        ItemStack target = event.getCurrentItem();
-        CellRecord first = CellItem.read(cursor);
-        CellRecord second = CellItem.read(target);
-        if (first == null || second == null || !first.type().isBatteryRune()
-                || first.type() != second.type() || first.tier() != second.tier()
-                || cursor.getAmount() != 1 || target.getAmount() != 1
-                || first.tier() >= CellRecord.MAX_TIER) {
-            return;
-        }
-        CellRecord fused = first.fuse(second);
-        if (fused == null || !batteries.canFuseRuneTier(player, fused.tier())) {
-            return;
-        }
-        event.setCancelled(true);
-        player.setItemOnCursor(CellItem.create(fused, batteries.baseIntervalTicks(), messages));
-        event.getClickedInventory().setItem(event.getSlot(), null);
-        player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.8f);
-        messages.send(player, "battery-rune-fused", Map.of(
-                "rune", fused.type().displayName(messages),
-                "tier", Integer.toString(fused.tier())));
     }
 
     @EventHandler

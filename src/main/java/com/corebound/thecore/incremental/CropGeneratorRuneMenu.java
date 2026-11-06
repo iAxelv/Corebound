@@ -81,8 +81,6 @@ public final class CropGeneratorRuneMenu implements Listener {
             if (event.isShiftClick()) {
                 event.setCancelled(true);
                 installFromInventory(player, event, generator, holder);
-            } else {
-                fuseInventoryRunes(player, event, generator);
             }
             return;
         }
@@ -136,31 +134,6 @@ public final class CropGeneratorRuneMenu implements Listener {
             reopen(player, holder.generatorId);
             player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6f, 1.5f);
         }
-    }
-
-    private void fuseInventoryRunes(Player player, InventoryClickEvent event, CropGeneratorRecord generator) {
-        if (event.getClickedInventory() == null) {
-            return;
-        }
-        ItemStack cursor = event.getCursor();
-        ItemStack target = event.getCurrentItem();
-        CellRecord first = CellItem.read(cursor);
-        CellRecord second = CellItem.read(target);
-        if (first == null || second == null || !first.type().isCropGeneratorRune()
-                || first.type() != second.type() || cursor.getAmount() != 1 || target.getAmount() != 1) {
-            return;
-        }
-        CellRecord fused = first.fuse(second);
-        if (fused == null || !generators.canUseRuneTier(player, generator, fused.tier())) {
-            return;
-        }
-        event.setCancelled(true);
-        player.setItemOnCursor(CellItem.create(fused, pylons.baseIntervalTicks(), messages));
-        event.getClickedInventory().setItem(event.getSlot(), null);
-        player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.8f);
-        messages.send(player, "crop-generator-rune-fused", Map.of(
-                "cell", first.type().displayName(messages),
-                "tier", Integer.toString(fused.tier())));
     }
 
     private void reopen(Player player, UUID generatorId) {

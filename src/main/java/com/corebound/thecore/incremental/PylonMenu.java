@@ -14,11 +14,13 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 
 public final class PylonMenu implements Listener {
@@ -100,13 +102,13 @@ public final class PylonMenu implements Listener {
         holder.inventory.setItem(FORGE_REFRESH_SLOT, refreshItem());
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
         if (!(event.getView().getTopInventory().getHolder(false) instanceof Holder holder)) {
-            fuseInventoryCells(event);
+            fuseInventoryCells(event, player);
             return;
         }
         int rawSlot = event.getRawSlot();
@@ -119,7 +121,7 @@ public final class PylonMenu implements Listener {
                 if (event.isShiftClick()) {
                     event.setCancelled(true);
                 } else {
-                    fuseInventoryCells(event);
+                    fuseInventoryCells(event, player);
                 }
                 return;
             }
@@ -161,7 +163,7 @@ public final class PylonMenu implements Listener {
                 event.setCancelled(true);
                 equipCellFromInventory(player, event, holder.inventory, pylon);
             } else {
-                fuseInventoryCells(event);
+                fuseInventoryCells(event, player);
             }
             return;
         }
@@ -332,10 +334,10 @@ public final class PylonMenu implements Listener {
         return item;
     }
 
-    private void fuseInventoryCells(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)
-                || event.getClickedInventory() == null
-                || event.getClickedInventory() == event.getView().getTopInventory()) {
+    private void fuseInventoryCells(InventoryClickEvent event, Player player) {
+        if ((event.getClick() != ClickType.LEFT && event.getClick() != ClickType.RIGHT)
+                || !(event.getClickedInventory() instanceof PlayerInventory clickedInventory)
+                || clickedInventory == event.getView().getTopInventory()) {
             return;
         }
         ItemStack cursor = event.getCursor();
@@ -343,9 +345,6 @@ public final class PylonMenu implements Listener {
         CellRecord cursorCell = CellItem.read(cursor);
         CellRecord targetCell = CellItem.read(target);
         if (cursorCell == null || targetCell == null) {
-            return;
-        }
-        if (!cursorCell.type().isPylonCell() || !targetCell.type().isPylonCell()) {
             return;
         }
         if (cursor.getAmount() != 1 || target.getAmount() != 1
@@ -363,9 +362,20 @@ public final class PylonMenu implements Listener {
         player.setItemOnCursor(CellItem.create(fusedCell, pylons.baseIntervalTicks(), messages));
         event.getClickedInventory().setItem(event.getSlot(), null);
         player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.8f, 1.8f);
-        messages.send(player, "cell-fused", Map.of(
-                "cell", cursorCell.type().displayName(messages),
-                "tier", Integer.toString(fusedCell.tier())));
+        String tier = Integer.toString(fusedCell.tier());
+        if (cursorCell.type().isBatteryRune()) {
+            messages.send(player, "battery-rune-fused", Map.of(
+                    "rune", cursorCell.type().displayName(messages), "tier", tier));
+        } else if (cursorCell.type().isCondenserRune()) {
+            messages.send(player, "condenser-rune-fused", Map.of(
+                    "cell", cursorCell.type().displayName(messages), "tier", tier));
+        } else if (cursorCell.type().isCropGeneratorRune()) {
+            messages.send(player, "crop-generator-rune-fused", Map.of(
+                    "cell", cursorCell.type().displayName(messages), "tier", tier));
+        } else {
+            messages.send(player, "cell-fused", Map.of(
+                    "cell", cursorCell.type().displayName(messages), "tier", tier));
+        }
     }
 
     private ItemStack statisticsItem(PylonRecord pylon) {
