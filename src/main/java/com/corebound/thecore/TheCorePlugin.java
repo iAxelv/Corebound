@@ -67,6 +67,7 @@ public final class TheCorePlugin extends JavaPlugin {
         saveResourceIfMissing("core/crop_generator.yml");
         saveResourceIfMissing("core/battery.yml");
         saveResourceIfMissing("values.yml");
+        saveResourceIfMissing("schematics/default.schem");
 
         try {
             File schematicsFolder = new File(getDataFolder(), "schematics");

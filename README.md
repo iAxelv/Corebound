@@ -38,9 +38,11 @@ and PlaceholderAPI.
 If prompted, accept the Minecraft EULA in `run/eula.txt` before starting the
 server. FAWE provides the WorldEdit API and is required to load `.schem` files.
 
-The default structure is `default.schem` in
-`run/plugins/Corebound/schematics/`. Minecraft structure `.nbt` files are also
-supported through Paper's built-in `StructureManager`.
+The plugin includes a default `default.schem` structure and copies it to
+`plugins/Corebound/schematics/` on first startup. Existing schematic files are
+preserved, so server owners can replace it with a custom structure. Minecraft
+structure `.nbt` files are also supported through Paper's built-in
+`StructureManager`.
 
 Schematic files are loaded and pasted asynchronously through FAWE so large
 creations do not block the server's main tick. Paste duration still depends on
